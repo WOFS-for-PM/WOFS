@@ -1,0 +1,41 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/lib/gcc/x86_64-redhat-linux/8/include",
+                "/lib/modules/5.1.0/build/arch/x86/include",
+                "/lib/modules/5.1.0/build/arch/x86/include/generated",
+                "/lib/modules/5.1.0/build/include",
+                "/lib/modules/5.1.0/build/arch/x86/include/uapi",
+                "/lib/modules/5.1.0/build/arch/x86/include/generated/uapi",
+                "/lib/modules/5.1.0/build/include/uapi",
+                "/lib/modules/5.1.0/build/include/generated/uapi"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "CONFIG_X86_X32_ABI",
+                "CONFIG_AS_CFI=1",
+                "CONFIG_AS_CFI_SIGNAL_FRAME=1",
+                "CONFIG_AS_CFI_SECTIONS=1",
+                "CONFIG_AS_SSSE3=1",
+                "CONFIG_AS_AVX=1",
+                "CONFIG_AS_AVX2=1",
+                "CONFIG_AS_AVX512=1",
+                "CONFIG_AS_SHA1_NI=1",
+                "CONFIG_AS_SHA256_NI=1",
+                "CC_USING_FENTRY",
+                "CONFIG_64BIT=1",
+                "MODULE"],
+            "compilerPath": "/usr/bin/gcc",
+            "compilerArgs": [
+                "-nostdinc",
+                "-m64"
+            ],
+            "cStandard": "c99",
+            "intelliSenseMode": "${default}"
+        }
+    ],
+    "version": 4
+}

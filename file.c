@@ -157,9 +157,9 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
 	unsigned long				irq_flags = 0;
 	INIT_TIMING(partial_time);
 
-	HK_START_TIMING(partial_block_t, partial_time);
     if (hk_check_overlay(si, index)) {
 		if (index == start_index || index == end_index) {	/* Might perform cow */
+			HK_START_TIMING(partial_block_t, partial_time);
 			if (index == start_index && *each_ofs != 0) {
 				blk_addr = linix_get(&sih->ix, index);
 				memcpy_mcsafe(tmp_content, hk_get_block(sb, blk_addr), HK_LBLK_SZ);
@@ -177,10 +177,12 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
 									   HK_LBLK_SZ - (len + *each_ofs));
 				hk_memlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ - (len + *each_ofs), &irq_flags);
 			}
+			HK_END_TIMING(partial_block_t, partial_time);
 		}
 		is_overlay = true;
 	}
 	else {		/* Set to zero */
+		HK_START_TIMING(partial_block_t, partial_time);
 		if (index == start_index && *each_ofs != 0)
 		{
 			*each_size = min(HK_LBLK_SZ - *each_ofs, len);
@@ -195,9 +197,8 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
 			memset_nt(cur_addr + (len + *each_ofs), 0, HK_LBLK_SZ - (len + *each_ofs));
 			hk_memlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ - (len + *each_ofs), &irq_flags);
 		}
+		HK_END_TIMING(partial_block_t, partial_time);
 	}
-	
-	HK_END_TIMING(partial_block_t, partial_time);
 
     return is_overlay;
 }
@@ -538,7 +539,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
 		index += prep->blks_prepared;
 	}
 	
-	// TODO: Update Inode ? Pos ? And Others
 	sih->i_blocks = end_index + 1;
 
 	inode->i_blocks = sih->i_blocks;

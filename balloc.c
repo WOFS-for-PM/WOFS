@@ -237,6 +237,8 @@ int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_la
     int                     start_cpuid;
     u64                     blks_prepared = 0;
     u64                     target_addr;
+    INIT_TIMING(alloc_time);
+    HK_START_TIMING(new_blocks_t, alloc_time);
     
     preps->num_layout = 0;
     preps->is_enough_space = false;
@@ -267,6 +269,7 @@ int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_la
         blks -= blks_prepared;
         if (blks == 0) {
             preps->is_enough_space = true;
+            HK_END_TIMING(new_blocks_t, alloc_time);
             return 0;
         }
     }
@@ -293,12 +296,13 @@ int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_la
         blks -= blks_prepared;
         if (blks == 0) {
             preps->is_enough_space = true;
+            HK_END_TIMING(new_blocks_t, alloc_time);
             return 0;
         }
     }
 
     preps->is_enough_space = false;
-
+    HK_END_TIMING(new_blocks_t, alloc_time);
     return 0;
 }
 

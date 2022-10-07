@@ -5,6 +5,8 @@
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
+ * Copyright 2015-2016 Regents of the University of California,
+ * UCSD Non-Volatile Systems Lab, Andiry Xu <jix024@cs.ucsd.edu>
  * Copyright 2012-2013 Intel Corporation
  * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
  * Copyright 2003 Sony Corporation
@@ -43,9 +45,6 @@
 
 int measure_timing;
 int wprotect;
-int meta_async;
-int meta_locality;
-int meta_pack;
 int support_clwb;
 
 module_param(measure_timing, int, 0444);
@@ -53,15 +52,6 @@ MODULE_PARM_DESC(measure_timing, "Timing measurement");
 
 module_param(wprotect, int, 0444);
 MODULE_PARM_DESC(wprotect, "Write-protect pmem region and use CR0.WP to allow updates");
-
-module_param(meta_async, int, 0444);
-MODULE_PARM_DESC(meta_async, "Allow metadata updates to be asynchronous");
-
-module_param(meta_locality, int, 0444);
-MODULE_PARM_DESC(meta_locality, "Pre-allocate metadata in the preserved continuous region");
-
-module_param(meta_pack, int, 0444);
-MODULE_PARM_DESC(meta_pack, "Whether pack metadata into single write, exclusively for meta locality");
 
 module_param(hk_dbgmask, int, 0444);
 MODULE_PARM_DESC(hk_dbgmask, "Control debugging output");
@@ -176,7 +166,9 @@ enum {
     Opt_uid,
     Opt_gid,
     Opt_dax,
-    Opt_data_cow,
+    Opt_meta_async,
+    Opt_meta_local,
+    Opt_meta_pack,
     Opt_wprotect,
     Opt_err_cont,
     Opt_err_panic,
@@ -192,6 +184,9 @@ static const match_table_t tokens = {
     {Opt_uid, "uid=%u"},
     {Opt_gid, "gid=%u"},
     {Opt_dax, "dax"},
+    {Opt_meta_async, "meta_async"},
+    {Opt_meta_local, "meta_local"},
+    {Opt_meta_pack, "meta_pack"},
     {Opt_wprotect, "wprotect"},
     {Opt_err_cont, "errors=continue"},
     {Opt_err_panic, "errors=panic"},
@@ -207,6 +202,7 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
     substring_t args[MAX_OPT_ARGS];
     int option;
     kuid_t uid;
+	struct super_block *sb = sbi->sb;
 
     if (!options)
         return 0;
@@ -260,6 +256,15 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
         case Opt_dax:
             set_opt(sbi->s_mount_opt, DAX);
             break;
+        case Opt_meta_async:
+            set_opt(sbi->s_mount_opt, META_ASYNC);
+            break;
+        case Opt_meta_local:
+            set_opt(sbi->s_mount_opt, META_LOCAL);
+            break;
+        case Opt_meta_pack:
+            set_opt(sbi->s_mount_opt, META_PACK);
+            break;
         case Opt_wprotect:
             if (remount)
                 goto bad_opt;
@@ -275,6 +280,11 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
             goto bad_opt;
         }
         }
+    }
+
+    if (test_opt(sb, META_PACK) && test_opt(sb, META_LOCAL)) {
+        hk_warn("META_PACK and META_LOCAL are mutually exclusive\n");
+        goto bad_opt;
     }
 
     return 0;
@@ -341,7 +351,7 @@ static inline void hk_mount_over(struct super_block *sb)
 
     hk_sync_super(sb);
 
-    hk_info("MAX_GAP_BLKS_PER_LAYOUT: %llu\n", MAX_GAPS_IN_DRAM(sbi));
+    hk_info("MAX_GAP_BLKS_PER_LAYOUT: %llu\n", HK_MAX_GAPS_INRAM);
 }
 
 static inline void hk_umount_over(struct super_block *sb)
@@ -428,7 +438,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
     /* We don't care the order */
     hk_flush_buffer(root_pi, sizeof(struct hk_inode), false);
     PERSISTENT_BARRIER();
-	
+
     HK_END_TIMING(new_init_t, init_time);
     hk_info("hk initialization finish\n");
     return root_pi;
@@ -554,10 +564,6 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     /* Version Related */
     sbi->tstamp = 0;
     spin_lock_init(&sbi->ts_lock);
-
-    /* GC Related */
-    mutex_init(&sbi->invalidator_mutex);
-    sbi->invalidator_running = 0;
 
 #ifdef CONFIG_DYNAMIC_WORKLOAD
     /* Dynamic Workload */
@@ -822,13 +828,14 @@ static void hk_put_super(struct super_block *sb)
     hk_terminal_equalizer(sb);
 #endif
 
-#ifdef CONFIG_CMT_BACKGROUND
-    hk_stop_cmt_workers(sb);
-    hk_flush_cmt_queue(sb);
-#endif
+	if (test_opt(sb, META_ASYNC)) {
+		hk_stop_cmt_workers(sb);
+		hk_flush_cmt_queue(sb);
+	}
 
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {
+		hk_stablisze_meta(sb);
         hk_save_regions(sb);
         hk_save_layouts(sb);
         hk_umount_over(sb);
@@ -1141,8 +1148,8 @@ static void __exit exit_hk_fs(void)
 }
 
 MODULE_AUTHOR("Yanqi Pan <deadpoolmine@qq.com>");
-MODULE_DESCRIPTION("HUNTER: A Multi-Log Persistent Memory File System");
+MODULE_DESCRIPTION("HUNTER: An Asynchronous Persistent Memory File System with Little Software Overheads");
 MODULE_LICENSE("GPL");
 
 module_init(init_hk_fs)
-    module_exit(exit_hk_fs)
+module_exit(exit_hk_fs)

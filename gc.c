@@ -250,7 +250,7 @@ static u64 hk_drop_latest_gap(struct super_block *sb, int cpuid)
             cur = list_entry(pos, struct hk_range_node, node);
             list_del(pos);
             hk_free_range_node(cur);
-            gaps_to_drop = cur->range_high - cur->range_low + 1;
+            gaps_to_drop = cur->high - cur->low + 1;
             break;
         }
         layout->num_gaps_indram -= gaps_to_drop;
@@ -327,15 +327,15 @@ int hk_try_write_back(struct super_block *sb, int from, int to)
     }
 
     /* rls layout */
-    hk_lazy_build_gaps(sb, from);
+    hk_find_gaps(sb, from);
     latest_gap = list_first_entry(&from_layout->gaps_list, struct hk_range_node, node);
     if (latest_gap) {
-        if (latest_gap->range_high + 1 == hk_get_dblk_by_addr(sbi, vict_addr)) {
+        if (latest_gap->high + 1 == hk_get_dblk_by_addr(sbi, vict_addr)) {
             /* the gaps are not built, vict_blk is not visible to gaps_list  */
             gaps_to_drop = hk_drop_latest_gap(sb, from);
             blks_to_rls += gaps_to_drop;
         }
-        else if (latest_gap->range_high == hk_get_dblk_by_addr(sbi, vict_addr)) {
+        else if (latest_gap->high == hk_get_dblk_by_addr(sbi, vict_addr)) {
             /* the gaps are not rebuilt, vict_blk is now visible to gaps_list  */
             /* or vict_blk is invalid  */
             gaps_to_drop = hk_drop_latest_gap(sb, from);
@@ -462,93 +462,93 @@ int hk_friendly_gc(struct super_block *sb)
 }
 
 /* ======================= ANCHOR: Equlizer ========================= */
-int hk_do_layout_equalize(struct super_block *sb) 
-{
-    struct hk_sb_info     *sbi = HK_SB(sb);
-    struct hk_layout_info *layout;
-    u64 blks_original = 0;
-    u64 blks_after_migration = 0;
-    int cpuid;
-    INIT_TIMING(migrate_time);
+// int hk_do_layout_equalize(struct super_block *sb) 
+// {
+//     struct hk_sb_info     *sbi = HK_SB(sb);
+//     struct hk_layout_info *layout;
+//     u64 blks_original = 0;
+//     u64 blks_after_migration = 0;
+//     int cpuid;
+//     INIT_TIMING(migrate_time);
 
-    for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-        layout = &sbi->layouts[cpuid];
-        use_layout(layout);
-        if (layout->ind.invalid_blks) {
-            if (try_up_gc(sb)) {
-                hk_dbgv("%s called\n", __func__);
-                HK_START_TIMING(equalizer_migrates_t, migrate_time);
-                blks_original = layout->atomic_counter / HK_PBLK_SZ;
-                hk_try_write_back(sb, cpuid, cpuid);
-                blks_after_migration = layout->atomic_counter / HK_PBLK_SZ;
-                HK_STATS_ADD(equalizer_migrated_blocks, blks_original - blks_after_migration);
-                HK_END_TIMING(equalizer_migrates_t, migrate_time);
-                down_gc(sb);
-            }
-        }
-        unuse_layout(layout);
-    }
+//     for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
+//         layout = &sbi->layouts[cpuid];
+//         use_layout(layout);
+//         if (layout->ind.invalid_blks) {
+//             if (try_up_gc(sb)) {
+//                 hk_dbgv("%s called\n", __func__);
+//                 HK_START_TIMING(equalizer_migrates_t, migrate_time);
+//                 blks_original = layout->atomic_counter / HK_PBLK_SZ;
+//                 hk_try_write_back(sb, cpuid, cpuid);
+//                 blks_after_migration = layout->atomic_counter / HK_PBLK_SZ;
+//                 HK_STATS_ADD(equalizer_migrated_blocks, blks_original - blks_after_migration);
+//                 HK_END_TIMING(equalizer_migrates_t, migrate_time);
+//                 down_gc(sb);
+//             }
+//         }
+//         unuse_layout(layout);
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
-static int hk_layout_equalizer_thread(void *arg)
-{
-    struct super_block *sb = arg;
-    struct hk_sb_info  *sbi = HK_SB(sb);
+// static int hk_layout_equalizer_thread(void *arg)
+// {
+//     struct super_block *sb = arg;
+//     struct hk_sb_info  *sbi = HK_SB(sb);
     
-    allow_signal(SIGINT);
+//     allow_signal(SIGINT);
     
-    for (;;) {
-        ssleep_interruptible(HK_EQU_TIME_GAP);
+//     for (;;) {
+//         ssleep_interruptible(HK_EQU_TIME_GAP);
 
-        if (kthread_should_stop()) {
-            break;
-        }
+//         if (kthread_should_stop()) {
+//             break;
+//         }
         
-        hk_do_layout_equalize(sb);
+//         hk_do_layout_equalize(sb);
         
-        /* Be Nice */
-        cond_resched();
-    }
+//         /* Be Nice */
+//         cond_resched();
+//     }
     
-    flush_signals(current);
+//     flush_signals(current);
 
-    eq_finished = 1;
-    wake_up_interruptible(&eq_finish_wq);
-    return 0;
-}
+//     eq_finished = 1;
+//     wake_up_interruptible(&eq_finish_wq);
+//     return 0;
+// }
 
-// TODO: wait to finish
-int hk_start_equalizer(struct super_block *sb)
-{   
-    struct hk_sb_info *sbi = HK_SB(sb);
+// // TODO: wait to finish
+// int hk_start_equalizer(struct super_block *sb)
+// {   
+//     struct hk_sb_info *sbi = HK_SB(sb);
     
     
-    sbi->layout_equalizer_thread = kthread_run(hk_layout_equalizer_thread, 
-                                                sb, "hk_layout_equalizer_thread");
-    if (IS_ERR(sbi->layout_equalizer_thread)) {
-        hk_info("Failed to start HUNTER layout equalizer thread\n");
-        return -1;
-    }
+//     sbi->layout_equalizer_thread = kthread_run(hk_layout_equalizer_thread, 
+//                                                 sb, "hk_layout_equalizer_thread");
+//     if (IS_ERR(sbi->layout_equalizer_thread)) {
+//         hk_info("Failed to start HUNTER layout equalizer thread\n");
+//         return -1;
+//     }
     
-    init_waitqueue_head(&eq_finish_wq);
+//     init_waitqueue_head(&eq_finish_wq);
 
-    hk_info("Started HUNTER layout equalizer thread\n");
-    return 0;
+//     hk_info("Started HUNTER layout equalizer thread\n");
+//     return 0;
     
-}
+// }
 
-int hk_terminal_equalizer(struct super_block *sb)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
+// int hk_terminal_equalizer(struct super_block *sb)
+// {
+//     struct hk_sb_info *sbi = HK_SB(sb);
 
-    if (sbi->layout_equalizer_thread) {
-        send_sig(SIGINT, sbi->layout_equalizer_thread, 1);
-        kthread_stop(sbi->layout_equalizer_thread);
-        sbi->layout_equalizer_thread = NULL;
-        hk_info("Terminated HUNTER layout equalizer thread\n");
-    }
+//     if (sbi->layout_equalizer_thread) {
+//         send_sig(SIGINT, sbi->layout_equalizer_thread, 1);
+//         kthread_stop(sbi->layout_equalizer_thread);
+//         sbi->layout_equalizer_thread = NULL;
+//         hk_info("Terminated HUNTER layout equalizer thread\n");
+//     }
     
-    return 0;
-}
+//     return 0;
+// }

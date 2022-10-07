@@ -3,27 +3,24 @@
 
 #include "hunter.h"
 
-struct hk_inode_state
-{
+struct hk_inode_state {
     u64 ino;
-    u16	mode;
-    u32	uid;
-	u32	gid;
-	u32	atime;
-	u32	mtime;
-	u32	ctime;
-	u64	size;        /* File size after truncation */
+    u16 mode;
+    u32 uid;
+    u32 gid;
+    u32 atime;
+    u32 mtime;
+    u32 ctime;
+    u64 size; /* File size after truncation */
 };
 
-enum hk_cmt_type
-{
+enum hk_cmt_type {
     CMT_VALID,
     CMT_INVALID
 };
 
-struct hk_cmt_batch
-{
-    u64 addr_start; 
+struct hk_cmt_batch {
+    u64 addr_start;
     u64 addr_end;
     u64 blk_start;
     u64 blk_end;
@@ -58,23 +55,22 @@ static inline bool hk_is_cmt_batch_valid(struct hk_cmt_batch *batch)
     return (batch->dst_blks >= 0);
 }
 
-struct hk_cmt_info 
-{
-    struct ch_slot        slot;
-    u8                    type;
-    u64                   ino;
-    u64                   addr_start;
-    u64                   addr_end;
-    u64                   blk_start;
-    u64                   blk_end;
-    u64                   tstamp;       /* tstamp when commit */
+struct hk_cmt_info {
+    struct ch_slot slot;
+    u8 type;
+    u64 ino;
+    u64 addr_start;
+    u64 addr_end;
+    u64 blk_start;
+    u64 blk_end;
+    u64 tstamp; /* tstamp when commit */
     struct hk_inode_state state;
 };
 
-struct hk_cmt_queue
-{
+struct hk_cmt_queue {
     DEFINE_CHASHTABLE(table, HK_CMT_QUEUE_BITS);
-    struct mutex locks[1 << HK_CMT_QUEUE_BITS];
+    spinlock_t locks[1 << HK_CMT_QUEUE_BITS];
+    u64 nitems[1 << HK_CMT_QUEUE_BITS];
 };
 
 #endif

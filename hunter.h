@@ -126,8 +126,8 @@ struct hk_range_node {
 	struct list_head node;
 	/* Block, inode */
 	struct {
-		unsigned long range_low;
-		unsigned long range_high;
+		unsigned long low;
+		unsigned long high;
 	};
 };
 
@@ -298,7 +298,7 @@ int hk_range_insert_range(struct super_block *sb, struct list_head *head,
                           unsigned long range_low, unsigned long range_high);
 int hk_range_insert_value(struct super_block *sb, struct list_head *head, unsigned long value);
 bool hk_range_find_value(struct super_block *sb, struct list_head *head, unsigned long value);
-unsigned long hk_range_pop(struct list_head *head);
+unsigned long hk_range_pop(struct list_head *head, u64 *len);
 int hk_range_remove(struct super_block *sb, struct list_head *head, unsigned long value);
 int hk_range_remove_range(struct super_block *sb, struct list_head *head, 
                           unsigned long range_low, unsigned long range_high);
@@ -323,19 +323,21 @@ int hk_save_regions(struct super_block *sb);
 
 /* ======================= ANCHOR: balloc.c ========================= */
 u64 get_version(struct hk_sb_info *sbi);
-int ind_update(struct hk_indicator *ind, enum hk_ind_upt_type type, u64 blks);
 int hk_layouts_init(struct hk_sb_info *sbi, int cpus);
 int hk_layouts_free(struct hk_sb_info *sbi);
-int hk_lazy_build_gaps(struct super_block *sb, int cpuid);
+int hk_find_gaps(struct super_block *sb, int cpuid);
 unsigned long hk_count_free_blocks(struct super_block *sb);
-u64 hk_prepare_layout(struct super_block* sb, int cpuid, u64 blks, enum hk_layout_type type, 
-                      u64* blks_prepared, bool zero);
-int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_layout_preps *preps);
-void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *prep);
-void hk_trv_prepared_layouts_init(struct hk_layout_preps* preps);
-u64 hk_rollback_layouts(struct super_block *sb, struct hk_layout_preps *preps);
-struct hk_layout_prep* hk_trv_prepared_layouts(struct super_block *sb, 
-											   struct hk_layout_preps* preps);
+int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, struct hk_layout_prep *prep);
+
+/* TODO: Remove the interface */
+// u64 hk_prepare_layout(struct super_block* sb, int cpuid, u64 blks, enum hk_layout_type type, 
+//                       u64* blks_prepared, bool zero);
+// int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_layout_preps *preps);
+// void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *prep);
+// void hk_trv_prepared_layouts_init(struct hk_layout_preps* preps);
+// u64 hk_rollback_layouts(struct super_block *sb, struct hk_layout_preps *preps);
+// struct hk_layout_prep* hk_trv_prepared_layouts(struct super_block *sb, 
+// 											   struct hk_layout_preps* preps);
 int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all);
 
 /* ======================= ANCHOR: file.c ========================= */
@@ -371,7 +373,7 @@ int hk_getattr(const struct path *path, struct kstat *stat,
 int hk_notify_change(struct dentry *dentry, struct iattr *attr);
 int hk_write_inode(struct inode *inode, struct writeback_control *wbc);
 void hk_evict_inode(struct inode *inode);
-int hk_free_inode_blks_no_invalidators(struct super_block *sb, struct hk_inode *pi,
+int _hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 					   		   		   struct hk_inode_info_header *sih);
 int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 					   struct hk_inode_info_header *sih);
@@ -393,6 +395,7 @@ void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *s
 
 /* ======================= ANCHOR: meta.c ========================= */
 int hk_format_meta(struct super_block *sb);
+int hk_stablisze_meta(struct super_block *sb);
 bool hk_get_cur_commit(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, 
 					   struct hk_mentry *entry);
 struct hk_mregion* hk_get_region_by_rgid(struct super_block *sb, int rgid);
@@ -556,39 +559,6 @@ static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
 	mutex_unlock(&sbi->irange_locks[ino % sbi->cpus]);
-}
-
-static inline void up_invalidator(struct super_block *sb)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    sbi->invalidator_running++;
-    mutex_unlock(&sbi->invalidator_mutex);
-}
-
-static inline void down_invalidator(struct super_block *sb)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    sbi->invalidator_running--;
-    mutex_unlock(&sbi->invalidator_mutex);
-}
-
-static inline bool try_up_gc(struct super_block *sb)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    if (sbi->invalidator_running == 0) {
-        return true;
-    }
-    mutex_unlock(&sbi->invalidator_mutex);
-    return false;
-}
-
-static inline void down_gc(struct super_block *sb)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_unlock(&sbi->invalidator_mutex);
 }
 
 static inline void hk_sync_super(struct super_block *sb)

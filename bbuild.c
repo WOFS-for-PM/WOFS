@@ -294,7 +294,6 @@ int hk_failure_recovery(struct super_block *sb)
 
         use_layout(layout);
         layout->atomic_counter = (layout->layout_blks * HK_PBLK_SZ);
-        ind_update(&layout->ind, PREP_LAYOUT_APPEND, layout->layout_blks);
         
         traverse_layout_blks(addr, layout) {
             hdr = sm_get_hdr_by_addr(sb, addr);
@@ -307,7 +306,6 @@ int hk_failure_recovery(struct super_block *sb)
                     hk_memlock_hdr(sb, hdr, &irq_flags);
 
                     sm_remove_hdr(sb, pi, hdr);
-                    ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
                 }
                 else {  /* Re insert */
                     sbi->tstamp = le64_to_cpu(pi->tstamp);
@@ -315,11 +313,7 @@ int hk_failure_recovery(struct super_block *sb)
 
                     sm_remove_hdr(sb, pi, hdr);
                     sm_insert_hdr(sb, pi, hdr);
-                    ind_update(&layout->ind, VALIDATE_BLK, 1);
                 }
-            }
-            else {
-                ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
             }
             blk++;
         }

@@ -12,7 +12,7 @@ struct ch_slot
 #define DEFINE_CHASHTABLE(table, bits) \
     struct ch_slot table[1 << (bits)]
 
-static void chash_init(struct ch_slot *table, int bits)
+static inline void chash_init(struct ch_slot *table, int bits)
 {
     int i;
     struct ch_slot *sentinal;
@@ -24,7 +24,7 @@ static void chash_init(struct ch_slot *table, int bits)
     }
 } 
 
-static void chash_add_head(struct ch_slot *table, struct ch_slot *slot, int key)
+static inline void chash_add_head(struct ch_slot *table, struct ch_slot *slot, int key)
 {
     struct ch_slot *sentinal = &table[key];
     slot->next = sentinal->next;
@@ -33,13 +33,13 @@ static void chash_add_head(struct ch_slot *table, struct ch_slot *slot, int key)
     sentinal->next = slot;
 }
 
-static void chash_del(struct ch_slot *slot)
+static inline void chash_del(struct ch_slot *slot)
 {
     slot->prev->next = slot->next;
     slot->next->prev = slot->prev;
 }
 
-static struct ch_slot *chash_last(struct ch_slot *table, int key)
+static inline struct ch_slot *chash_last(struct ch_slot *table, int key)
 {
     struct ch_slot *sentinal = &table[key];
     return sentinal->prev;

@@ -187,9 +187,6 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
 	if (ret)
 		goto out;
 
-	/* make sure the inode is not effected by equlizer or gc */
-	up_invalidator(sb);
-
 	traverse_inode_hdr(sbi, pi, hdr)
 	{
 		/* Hdr Conflict */
@@ -227,8 +224,6 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
 			break;
 		}
 	}
-	
-	down_invalidator(sb);
 
 	ret = hk_rebuild_blks_finish(sb, pi, sih, reb);
 	sih->i_blocks = sih->i_size / HK_LBLK_SZ;

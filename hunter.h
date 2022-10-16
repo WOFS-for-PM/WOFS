@@ -44,6 +44,11 @@
 #define HK_VALID_UMOUNT     0xffffffff
 #define HK_INVALID_UMOUNT   0x00000000
 
+#define ENABLE_META_LOCAL(sb)	test_opt(sb, META_LOCAL)
+#define ENABLE_META_ASYNC(sb)	test_opt(sb, META_ASYNC)
+#define ENABLE_META_PACK(sb)	test_opt(sb, META_PACK)
+#define ENABLE_HISTORY_W(sb)	test_opt(sb, HISTORY_W)
+
 /*
  * hunter inode flags
  *
@@ -177,13 +182,13 @@ static inline u64 hk_get_dblk_by_addr(struct hk_sb_info *sbi, void *d_addr)
 	struct super_block *sb = sbi->sb;
 	HK_ASSERT(d_addr >= sbi->d_addr && 
 			  d_addr < (sbi->d_addr + sbi->d_size));
-	return (u64)(d_addr - sbi->d_addr) / HK_PBLK_SZ;
+	return (u64)(d_addr - sbi->d_addr) / HK_PBLK_SZ(sbi);
 }
 
 static inline u64 hk_get_addr_by_dblk(struct hk_sb_info *sbi, u64 d_blk)
 {
 	struct super_block *sb = sbi->sb;
-	return (u64)(sbi->d_addr + (d_blk * HK_PBLK_SZ));
+	return (u64)(sbi->d_addr + (d_blk * HK_PBLK_SZ(sbi)));
 }
 
 /* Mask out flags that are inappropriate for the given type of inode. */
@@ -444,9 +449,11 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend);
 int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink);
 
 /* ======================= ANCHOR: gc.c ========================= */
+#if 0
 int hk_friendly_gc(struct super_block *sb);
 int hk_start_equalizer(struct super_block *sb);
 int hk_terminal_equalizer(struct super_block *sb);
+#endif
 
 /* ======================= ANCHOR: stats.c ========================= */
 void hk_get_timing_stats(void);
@@ -507,7 +514,7 @@ static inline void use_layout_for_addr(struct super_block *sb, u64 addr)
 {
 	int cpuid;
 	struct hk_sb_info *sbi = HK_SB(sb);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ);
+    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ(sbi));
     cpuid = (addr - sbi->d_addr) / size_per_layout;
 	cpuid = cpuid >= sbi->num_layout ? cpuid - 1 : cpuid;
     use_layout_id(sb, cpuid);
@@ -517,7 +524,7 @@ static inline void unuse_layout_for_addr(struct super_block *sb, u64 addr)
 {
 	int cpuid;
 	struct hk_sb_info *sbi = HK_SB(sb);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ);
+    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ(sbi));
     cpuid = (addr - sbi->d_addr) / size_per_layout;
 	cpuid = cpuid >= sbi->num_layout ? cpuid - 1 : cpuid;
     unuse_layout_id(sb, cpuid);

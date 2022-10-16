@@ -111,7 +111,7 @@ int _hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 
     traverse_inode_hdr(sbi, pi, hdr)
     {
-        if (test_opt(sb, META_ASYNC)) {
+        if (ENABLE_META_ASYNC(sb)) {
             blk_addr = sm_get_addr_by_hdr(sb, hdr);
             hk_invalid_hdr_background(sb, inode, blk_addr, hdr->f_blk);
         } else {
@@ -120,7 +120,7 @@ int _hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
             hk_memlock_hdr(sb, hdr, &irq_flags);
             hk_flush_buffer(hdr, sizeof(struct hk_header), false);
         }
-        freed += HK_PBLK_SZ;
+        freed += HK_PBLK_SZ(sbi);
     }
 
     return freed;
@@ -662,7 +662,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
     for (index = end_index; index >= start_index; index--) {
         addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index));
         linix_delete(&sih->ix, index, index, true);
-		if (test_opt(sb, META_ASYNC)) {
+		if (ENABLE_META_ASYNC(sb)) {
         	hk_invalid_hdr_background(sb, inode, addr, index);
 		} else {
 			use_layout_for_addr(sb, addr);

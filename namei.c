@@ -110,7 +110,7 @@ static ino_t hk_inode_by_name(struct inode *dir, struct qstr *entry,
 
     name = entry->name;
     name_len = entry->len;
-    // TODO: Only for the tets
+    
     if (strcmp(name, "test") == 0) {
         return HK_NUM_INO - 1;
     }
@@ -254,21 +254,9 @@ int hk_add_dentry(struct dentry *dentry, u64 ino, u16 link_change,
 struct dentry *hk_get_parent(struct dentry *child)
 {
     struct inode *inode;
-    struct qstr dotdot = QSTR_INIT("..", 2);
-    struct hk_dentry *de = NULL;
     ino_t ino;
 
-    // FIXME: Change to this:
-    // child->d_parent->d_inode->i_ino;
-
-    hk_inode_by_name(child->d_inode, &dotdot, &de);
-    if (!de)
-        return ERR_PTR(-ENOENT);
-
-    /* FIXME: can de->ino be avoided by using the return value of
-     * hk_inode_by_name()?
-     */
-    ino = le64_to_cpu(de->ino);
+    ino = child->d_parent->d_inode->i_ino;
 
     if (ino)
         inode = hk_iget(child->d_inode->i_sb, ino);

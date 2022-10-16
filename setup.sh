@@ -7,6 +7,9 @@ else
 fi
 
 make -j32
+
+sudo umount /mnt/pmem0
+
 sudo rmmod hunter 
 sudo insmod hunter.ko measure_timing="$timing"
 

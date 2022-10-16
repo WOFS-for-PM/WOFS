@@ -293,7 +293,7 @@ int hk_failure_recovery(struct super_block *sb)
         blk = 0;
 
         use_layout(layout);
-        layout->atomic_counter = (layout->layout_blks * HK_PBLK_SZ);
+        layout->atomic_counter = (layout->layout_blks * HK_PBLK_SZ(sbi));
         
         traverse_layout_blks(addr, layout) {
             hdr = sm_get_hdr_by_addr(sb, addr);

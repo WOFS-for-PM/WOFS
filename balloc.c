@@ -98,15 +98,15 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         hk_dbgv("%s: layout start @0x%llx, layout tail @0x%llx", __func__, target_addr, layout->atomic_counter);
         target_addr += layout->atomic_counter;
 
-        if (unlikely(target_addr + (blks * HK_PBLK_SZ) >= layout->layout_end)) {
-            blks = (layout->layout_end - target_addr) / HK_PBLK_SZ;
+        if (unlikely(target_addr + (blks * HK_PBLK_SZ(sbi)) >= layout->layout_end)) {
+            blks = (layout->layout_end - target_addr) / HK_PBLK_SZ(sbi);
         }
 
         if (unlikely(blks <= 0)) {
             return 0;
         }
 
-        layout->atomic_counter += (blks * HK_PBLK_SZ);
+        layout->atomic_counter += (blks * HK_PBLK_SZ(sbi));
         if (blks_prepared != NULL) {
             *blks_prepared = blks;
         }
@@ -121,13 +121,13 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
     }
 
     if (zero) {
-        hk_memunlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ, &irq_flags);
-        memset_nt((void *)target_addr, 0, blks * HK_PBLK_SZ);
-        hk_memlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ, &irq_flags);
+        hk_memunlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
+        memset_nt((void *)target_addr, 0, blks * HK_PBLK_SZ(sbi));
+        hk_memlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
     }
 
-    if (test_opt(sb, META_LOCAL)) {
-        if (!IS_ALIGNED(TRANS_ADDR_TO_OFS(sbi, target_addr), HK_LBLK_SZ)) {
+    if (ENABLE_META_LOCAL(sb)) {
+        if (!IS_ALIGNED(TRANS_ADDR_TO_OFS(sbi, target_addr), HK_LBLK_SZ(sbi))) {
             hk_warn("%s: target_addr [%llu] is not aligned to BLOCK\n", __func__, TRANS_ADDR_TO_OFS(sbi, target_addr));
         }
     } else {
@@ -366,7 +366,7 @@ int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all)
     if (rls_all) {
         layout->atomic_counter = 0;
     } else {
-        layout->atomic_counter -= (blks * HK_PBLK_SZ);
+        layout->atomic_counter -= (blks * HK_PBLK_SZ(sbi));
     }
 
     return 0;
@@ -398,7 +398,7 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
     u64 blks_per_layout;
     int ret = 0;
 
-    size_per_layout = _round_down(sbi->d_size / cpus, HK_PBLK_SZ);
+    size_per_layout = _round_down(sbi->d_size / cpus, HK_PBLK_SZ(sbi));
     sbi->num_layout = cpus;
     sbi->layouts = (struct hk_layout_info *)kcalloc(cpus, sizeof(struct hk_layout_info), GFP_KERNEL);
     if (sbi->layouts == NULL) {
@@ -410,9 +410,9 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout = &sbi->layouts[cpuid];
         layout->layout_start = sbi->d_addr + size_per_layout * cpuid;
         if (cpuid == cpus - 1) {
-            size_per_layout = _round_down((sbi->d_size - cpuid * size_per_layout), HK_PBLK_SZ);
+            size_per_layout = _round_down((sbi->d_size - cpuid * size_per_layout), HK_PBLK_SZ(sbi));
         }
-        blks_per_layout = size_per_layout / HK_PBLK_SZ;
+        blks_per_layout = size_per_layout / HK_PBLK_SZ(sbi);
         layout->atomic_counter = 0;
         layout->cpuid = cpuid;
         layout->layout_blks = blks_per_layout;

@@ -1,7 +1,6 @@
 #ifndef _HK_SUPER_H
 #define _HK_SUPER_H
 #include "hunter.h"
-// TODO: Change the annotation
 /*
  * Structure of the HUNTER super block in PMEM
  *
@@ -47,7 +46,7 @@ struct hk_super_block {
 
 } __attribute((__packed__));
 
-#define HK_SB_SIZE roundup(sizeof(struct hk_super_block), HK_LBLK_SZ) /* must be power of two */
+#define HK_SB_SIZE(sbi) roundup(sizeof(struct hk_super_block), HK_LBLK_SZ(sbi)) /* must be power of two */
 
 #define HK_ROOT_INO (0)
 #define HK_RESV_NUM (1)
@@ -91,6 +90,9 @@ struct hk_sb_info {
     /* DAX-mmap snapshot structures */
     struct mutex vma_mutex;
     struct list_head mmap_sih_list;
+
+    u32 pblk_sz;
+    u32 lblk_sz; 
 
     u64 d_addr;
     u64 d_size;

@@ -60,7 +60,7 @@ struct hk_layout_preps {
     struct hk_layout_prep preps[HK_MAX_LAYOUTS];
 };
 
-#define traverse_layout_blks(addr, layout)         for (addr = layout->layout_start; addr < layout->layout_start + layout->atomic_counter; addr += HK_PBLK_SZ)
-#define traverse_layout_blks_reverse(addr, layout) for (addr = layout->layout_start + layout->atomic_counter - HK_PBLK_SZ; addr >= layout->layout_start; addr -= HK_PBLK_SZ)
-#define GET_LAST_BLK_FROM_LAYOUT(layout)           (layout->atomic_counter + layout->layout_start - HK_PBLK_SZ)
+#define traverse_layout_blks(addr, layout)         for (addr = layout->layout_start; addr < layout->layout_start + layout->atomic_counter; addr += HK_PBLK_SZ(sbi))
+#define traverse_layout_blks_reverse(addr, layout) for (addr = layout->layout_start + layout->atomic_counter - HK_PBLK_SZ(sbi); addr >= layout->layout_start; addr -= HK_PBLK_SZ(sbi))
+#define GET_LAST_BLK_FROM_LAYOUT(layout)           (layout->atomic_counter + layout->layout_start - HK_PBLK_SZ(sbi))
 #endif /* _HK_BALLOC_H */

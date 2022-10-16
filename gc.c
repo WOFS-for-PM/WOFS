@@ -24,6 +24,7 @@
  */
 #include "hunter.h"
 
+#if 0
 wait_queue_head_t  gc_finish_wq;
 int                *gc_finished;
 
@@ -196,9 +197,9 @@ u64 hk_try_write_vict(struct super_block *sb, int cpuid, u64 vict_addr, enum hk_
         break;
     } 
 
-    hk_memunlock_range(sb, suvv_addr, HK_LBLK_SZ, &irq_flags);
-    memcpy_to_pmem_nocache(suvv_addr, vict_addr, HK_LBLK_SZ);
-    hk_memlock_range(sb, suvv_addr, HK_LBLK_SZ, &irq_flags);
+    hk_memunlock_range(sb, suvv_addr, HK_LBLK_SZ(sbi), &irq_flags);
+    memcpy_to_pmem_nocache(suvv_addr, vict_addr, HK_LBLK_SZ(sbi));
+    hk_memlock_range(sb, suvv_addr, HK_LBLK_SZ(sbi), &irq_flags);
     
     return suvv_addr;
 }
@@ -228,9 +229,9 @@ u64 hk_try_write_vict_no_lock(struct super_block *sb, int cpuid, u64 vict_addr, 
         break;
     } 
 
-    hk_memunlock_range(sb, suvv_addr, HK_LBLK_SZ, &irq_flags);
-    memcpy_to_pmem_nocache(suvv_addr, vict_addr, HK_LBLK_SZ);
-    hk_memlock_range(sb, suvv_addr, HK_LBLK_SZ, &irq_flags);
+    hk_memunlock_range(sb, suvv_addr, HK_LBLK_SZ(sbi), &irq_flags);
+    memcpy_to_pmem_nocache(suvv_addr, vict_addr, HK_LBLK_SZ(sbi));
+    hk_memlock_range(sb, suvv_addr, HK_LBLK_SZ(sbi), &irq_flags);
     
     return suvv_addr;
 }
@@ -375,9 +376,9 @@ retry:
             break;
         }
         HK_START_TIMING(self_gc_migrates_t, migrate_time);
-        blks_original = layout->atomic_counter / HK_PBLK_SZ;
+        blks_original = layout->atomic_counter / HK_PBLK_SZ(sbi);
         ret = hk_try_write_back(sb, cpuid, cpuid);
-        blks_after_migration = layout->atomic_counter / HK_PBLK_SZ;
+        blks_after_migration = layout->atomic_counter / HK_PBLK_SZ(sbi);
         HK_STATS_ADD(self_gc_migrated_blocks, blks_original - blks_after_migration);
         HK_END_TIMING(self_gc_migrates_t, migrate_time);
         if (ret) {
@@ -478,9 +479,9 @@ int hk_friendly_gc(struct super_block *sb)
 //             if (try_up_gc(sb)) {
 //                 hk_dbgv("%s called\n", __func__);
 //                 HK_START_TIMING(equalizer_migrates_t, migrate_time);
-//                 blks_original = layout->atomic_counter / HK_PBLK_SZ;
+//                 blks_original = layout->atomic_counter / HK_PBLK_SZ(sbi);
 //                 hk_try_write_back(sb, cpuid, cpuid);
-//                 blks_after_migration = layout->atomic_counter / HK_PBLK_SZ;
+//                 blks_after_migration = layout->atomic_counter / HK_PBLK_SZ(sbi);
 //                 HK_STATS_ADD(equalizer_migrated_blocks, blks_original - blks_after_migration);
 //                 HK_END_TIMING(equalizer_migrates_t, migrate_time);
 //                 down_gc(sb);
@@ -552,3 +553,4 @@ int hk_friendly_gc(struct super_block *sb)
     
 //     return 0;
 // }
+#endif

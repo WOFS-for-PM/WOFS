@@ -8,9 +8,9 @@ u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr)
     struct hk_sb_info *sbi = HK_SB(sb);
 #ifndef CONFIG_LAYOUT_TIGHT
     u64 blk = (hdr - sbi->sm_addr) / sizeof(struct hk_header);
-    return sbi->d_addr + (blk * HK_PBLK_SZ);
+    return sbi->d_addr + (blk * HK_PBLK_SZ(sbi));
 #else
-    return hdr + sizeof(struct hk_header) - HK_PBLK_SZ;
+    return hdr + sizeof(struct hk_header) - HK_PBLK_SZ(sbi);
 #endif
 }
 
@@ -20,7 +20,7 @@ struct hk_header *sm_get_hdr_by_blk(struct super_block *sb, u64 blk)
 #ifndef CONFIG_LAYOUT_TIGHT
     return (struct hk_header *)(sbi->sm_addr + blk * sizeof(struct hk_header));
 #else
-    return (struct hk_header *)(sbi->d_addr + (blk + 1) * HK_PBLK_SZ - sizeof(struct hk_header));
+    return (struct hk_header *)(sbi->d_addr + (blk + 1) * HK_PBLK_SZ(sbi) - sizeof(struct hk_header));
 #endif
 }
 
@@ -34,7 +34,7 @@ struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr)
         BUG_ON(1);
     }
 
-    blk = (addr - sbi->d_addr) / HK_PBLK_SZ;
+    blk = (addr - sbi->d_addr) / HK_PBLK_SZ(sbi);
 
     hk_dbgv("sbi->sm_addr: %llx, %d, %d\n", sbi->sm_addr, sizeof(struct hk_header), blk * sizeof(struct hk_header));
 
@@ -46,7 +46,7 @@ struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
     int cpuid;
     struct hk_sb_info *sbi = HK_SB(sb);
     u64 addr = sm_get_addr_by_hdr(sb, hdr);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ);
+    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ(sbi));
 
     cpuid = (addr - sbi->d_addr) / size_per_layout;
 
@@ -916,7 +916,7 @@ int hk_format_meta(struct super_block *sb)
     hk_memlock_range(sb, sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
 
     /* Step 2: Format Summary Headers  */
-    if (test_opt(sb, META_LOCAL)) {
+    if (ENABLE_META_LOCAL(sb)) {
         hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
         memset_nt_large((void *)sbi->sm_addr, 0, sbi->sm_size);
         for (bid = 0; bid < sbi->d_blks; bid++) {

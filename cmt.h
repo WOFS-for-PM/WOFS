@@ -27,21 +27,22 @@ struct hk_cmt_batch {
     u64 dst_blks;
 };
 
-static inline void hk_init_cmt_batch(struct hk_cmt_batch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
+static inline void hk_init_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
 {
     batch->addr_start = batch->addr_end = addr;
     batch->blk_start = batch->blk_end = blk_cur;
     batch->dst_blks = dst_blks;
 }
 
-static inline void hk_inc_cmt_batch(struct hk_cmt_batch *batch)
+static inline void hk_inc_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch)
 {
-    batch->addr_end += HK_PBLK_SZ;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    batch->addr_end += HK_PBLK_SZ(sbi);
     batch->blk_end += 1;
     batch->dst_blks -= 1;
 }
 
-static inline void hk_next_cmt_batch(struct hk_cmt_batch *batch)
+static inline void hk_next_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch)
 {
     batch->addr_start = batch->addr_end;
     batch->blk_start = batch->blk_end;
@@ -50,7 +51,7 @@ static inline void hk_next_cmt_batch(struct hk_cmt_batch *batch)
     }
 }
 
-static inline bool hk_is_cmt_batch_valid(struct hk_cmt_batch *batch)
+static inline bool hk_is_cmt_batch_valid(struct super_block *sb, struct hk_cmt_batch *batch)
 {
     return (batch->dst_blks >= 0);
 }

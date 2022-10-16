@@ -40,7 +40,7 @@ int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
     info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ;
+    info->addr_end = blk_addr + HK_PBLK_SZ(sbi);
     info->blk_start = f_blk;
     info->blk_end = f_blk;
     info->tstamp = get_version(sbi);
@@ -61,7 +61,7 @@ int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 b
     info->type = CMT_INVALID;
     info->ino = inode->i_ino;
     info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ;
+    info->addr_end = blk_addr + HK_PBLK_SZ(sbi);
     info->blk_start = f_blk;
     info->blk_end = f_blk;
     info->tstamp = get_version(sbi);
@@ -134,7 +134,7 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
 
     use_nvm_inode(sb, ino);
     pi = hk_get_inode_by_ino(sb, ino);
-    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
+    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ(sbi), blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
         switch (info->type) {
         case CMT_VALID: {

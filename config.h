@@ -24,6 +24,7 @@
 #define HUNTER_MOUNT_META_ASYNC   0x000800 /* Write metadata asynchronously */
 #define HUNTER_MOUNT_META_LOCAL   0x001000 /* Reserving a continuous space to write meta */
 #define HUNTER_MOUNT_META_PACK    0x002000 /* Pack meta (physically, logically) */
+#define HUNTER_MOUNT_HISTORY_W    0x004000 /* History window for file open */
 /*
  * Maximal count of links to a file
  */
@@ -38,8 +39,8 @@
 /*
  * HUNTER CONFIGURATIONS
  */
-#define HK_PBLK_SZ PAGE_SIZE
-#define HK_LBLK_SZ PAGE_SIZE /* logic block size */
+#define HK_PBLK_SZ(sbi) sbi->pblk_sz
+#define HK_LBLK_SZ(sbi) sbi->lblk_sz /* logic block size */
 #define HK_NUM_INO (1024 * 1024)
 #define HK_RG_SLOTS (1024 * 1024)
 #define HK_RG_ENTY_SLOTS (4)
@@ -52,20 +53,10 @@
 #define HK_CMT_MAX_PROCESS_BATCH (1024 * 256)
 #define HK_CMT_WAKEUP_THRESHOLD  (1024 * 256)
 #define HK_MAX_GAPS_INRAM 		 (1024 * 256)
-// #define HK_EQU_TIME_GAP 0
 #define HK_CMT_WORKER_NUM 4 /* for commit worker */
-#define HK_MAX_GC_ATTEMPTS 5 /* GC attempts */
 #define HK_JOURNAL_SIZE (4 * 1024)
 #define HK_PERCORE_JSLOTS (1) /* per core journal slots */
 #define HK_BLKS_SIZE(blks) (((blks) << 12) + ((blks) << 6))
-
-/* ======================= Debug Configurations ========================= */
-/* enable gc test */
-// #define ENABLE_GC_TEST_MODE
-
-#ifdef ENABLE_GC_TEST_MODE
-#define EMU_PMEM_SIZE_GB 8L
-#endif
 
 /* ======================= Enhanced Configurations ========================= */
 
@@ -82,13 +73,9 @@
 // #define CONFIG_LAYOUT_TIGHT						/* enable tight layout */
 
 #ifdef CONFIG_LAYOUT_TIGHT
-#define HK_PBLK_SZ          (PAGE_SIZE + sizeof(struct hk_header))
-#define HK_NEXT_PADDR(addr) addr += HK_PBLK_SZ
+#define HK_PBLK_SZ(sbi)          (PAGE_SIZE + sizeof(struct hk_header))
 #endif
 
-#ifdef CONFIG_CMT_BACKGROUND
-// #define ENABLE_SYNCHRONIZATION
-#endif
 /* ======================= Write ordering ========================= */
 
 #define CACHELINE_SIZE        (64)

@@ -61,7 +61,7 @@ static int hk_guess_slots(struct super_block *sb)
 	int    slots;
 
 	avg_size = hk_dw_stat_avg(&sbi->dw);
-	slots = avg_size / HK_LBLK_SZ == 0 ? 1 : avg_size / HK_LBLK_SZ;
+	slots = avg_size / HK_LBLK_SZ(sbi) == 0 ? 1 : avg_size / HK_LBLK_SZ(sbi);
 	return slots;
 }
 
@@ -226,7 +226,7 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
 	}
 
 	ret = hk_rebuild_blks_finish(sb, pi, sih, reb);
-	sih->i_blocks = sih->i_size / HK_LBLK_SZ;
+	sih->i_blocks = sih->i_size / HK_LBLK_SZ(sbi);
 
 out:
 	HK_END_TIMING(rebuild_blks_t, rebuild_time);
@@ -262,9 +262,10 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
 
 	pi = (struct hk_inode *)hk_get_inode_by_ino(sb, ino);
 	
-	/* flush the inode attr */
-	hk_flush_cmt_inode_fast(sb, ino);
-	
+	if (ENABLE_META_ASYNC(sb)) {
+        hk_flush_cmt_inode_fast(sb, ino);
+    }
+
 	// TODO: Build Attr From Meta Region
 	hk_applying_region_to_inode(sb, pi);
 

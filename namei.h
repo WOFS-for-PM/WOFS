@@ -21,6 +21,6 @@ struct hk_dentry_info {
 	struct hk_dentry *direntry;	
 };
 
-#define MAX_DENTRY_PER_BLK (HK_PBLK_SZ / sizeof(struct hk_dentry))
+#define MAX_DENTRY_PER_BLK (HK_PBLK_SZ(sbi) / sizeof(struct hk_dentry))
 
 #endif /* _HK_NAMEI_H */

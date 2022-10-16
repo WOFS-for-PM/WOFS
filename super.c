@@ -169,6 +169,7 @@ enum {
     Opt_meta_async,
     Opt_meta_local,
     Opt_meta_pack,
+    Opt_history_w,
     Opt_wprotect,
     Opt_err_cont,
     Opt_err_panic,
@@ -187,6 +188,7 @@ static const match_table_t tokens = {
     {Opt_meta_async, "meta_async"},
     {Opt_meta_local, "meta_local"},
     {Opt_meta_pack, "meta_pack"},
+    {Opt_history_w, "history_w"},
     {Opt_wprotect, "wprotect"},
     {Opt_err_cont, "errors=continue"},
     {Opt_err_panic, "errors=panic"},
@@ -202,7 +204,7 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
     substring_t args[MAX_OPT_ARGS];
     int option;
     kuid_t uid;
-	struct super_block *sb = sbi->sb;
+    struct super_block *sb = sbi->sb;
 
     if (!options)
         return 0;
@@ -265,6 +267,9 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
         case Opt_meta_pack:
             set_opt(sbi->s_mount_opt, META_PACK);
             break;
+        case Opt_history_w:
+            set_opt(sbi->s_mount_opt, HISTORY_W);
+            break;
         case Opt_wprotect:
             if (remount)
                 goto bad_opt;
@@ -282,7 +287,7 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
         }
     }
 
-    if (test_opt(sb, META_PACK) && test_opt(sb, META_LOCAL)) {
+    if (ENABLE_META_PACK(sb) && ENABLE_META_LOCAL(sb)) {
         hk_warn("META_PACK and META_LOCAL are mutually exclusive\n");
         goto bad_opt;
     }
@@ -303,9 +308,10 @@ bad_opt:
 static bool hk_check_size(struct super_block *sb, unsigned long size)
 {
     unsigned long minimum_size;
+    struct hk_sb_info *sbi = HK_SB(sb);
 
     /* space required for super block and root directory.*/
-    minimum_size = HK_SB_SIZE;
+    minimum_size = HK_SB_SIZE(sbi);
 
     if (size < minimum_size)
         return false;
@@ -381,7 +387,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
     hk_info("creating an empty hunter of size %lu\n", size);
 
     sbi->num_blocks = ((unsigned long)(size) >> PAGE_SHIFT);
-    sbi->blocksize = blocksize = HK_PBLK_SZ;
+    sbi->blocksize = blocksize = HK_PBLK_SZ(sbi);
     hk_set_blocksize(sb, blocksize);
 
     if (!hk_check_size(sb, size)) {
@@ -494,15 +500,18 @@ static int hk_check_integrity(struct super_block *sb)
     return 0;
 }
 
-// FIXME: Handle Fauilre
 /* FIXME: these feilds might change when the system is running... */
 static int hk_super_constants_init(struct hk_sb_info *sbi)
 {
+    struct super_block *sb = sbi->sb;
     u64 max_rg_size;
     int i;
 
+    sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
+    sbi->lblk_sz = PAGE_SIZE;
+
     /* Layout Related */
-    sbi->m_addr = _round_up((u64)sbi->virt_addr + HK_SB_SIZE, PAGE_SIZE);
+    sbi->m_addr = _round_up((u64)sbi->virt_addr + HK_SB_SIZE(sbi), PAGE_SIZE);
 
     /* Build Inode Table */
     sbi->ino_tab_addr = sbi->m_addr;
@@ -511,13 +520,13 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
 
     /* Build Summary Header */
     sbi->sm_addr = sbi->ino_tab_addr + sbi->ino_tab_size;
-#ifndef CONFIG_LAYOUT_TIGHT
-    sbi->sm_slots = sbi->initsize / HK_PBLK_SZ;
-    sbi->sm_size = _round_up(sbi->sm_slots * sizeof(struct hk_header), PAGE_SIZE);
-#else
-    sbi->sm_slots = 0;
-    sbi->sm_size = 0;
-#endif // !CONFIG_LAYOUT_TIGHT
+    if (ENABLE_META_LOCAL(sb)) {
+        sbi->sm_slots = sbi->initsize / HK_PBLK_SZ(sbi);
+        sbi->sm_size = _round_up(sbi->sm_slots * sizeof(struct hk_header), PAGE_SIZE);
+    } else {
+        sbi->sm_slots = 0;
+        sbi->sm_size = 0;
+    }
 
     /* Build Journal */
     sbi->j_addr = sbi->sm_addr + sbi->sm_size;
@@ -537,7 +546,7 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
 
     sbi->d_addr = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
     sbi->d_size = sbi->initsize - (sbi->d_addr - (u64)sbi->virt_addr);
-    sbi->d_blks = sbi->d_size / HK_PBLK_SZ;
+    sbi->d_blks = sbi->d_size / HK_PBLK_SZ(sbi);
 
     /* Inode List Related */
 #ifndef CONFIG_PERCORE_IALLOCATOR
@@ -559,16 +568,20 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
         mutex_init(&sbi->irange_locks[i]);
 
     /* Background Commit Related */
-    sbi->cq = hk_init_cmt_queue();
+    if (ENABLE_META_ASYNC(sb)) {
+        sbi->cq = hk_init_cmt_queue();
+        if (!sbi->cq)
+            return -ENOMEM;
+    }
 
     /* Version Related */
     sbi->tstamp = 0;
     spin_lock_init(&sbi->ts_lock);
 
-#ifdef CONFIG_DYNAMIC_WORKLOAD
-    /* Dynamic Workload */
-    hk_dw_init(&sbi->dw, HK_LINIX_SLOTS);
-#endif
+    if (ENABLE_HISTORY_W(sb)) {
+        /* Dynamic Workload */
+        hk_dw_init(&sbi->dw, HK_LINIX_SLOTS);
+    }
 
     hk_dbgv("%s: meta addr: %llx, meta_size: %llx; data addr: %llx\n", __func__, sbi->m_addr, sbi->m_size, sbi->d_addr);
     return 0;
@@ -612,12 +625,6 @@ static int hk_fill_super(struct super_block *sb, void *data, int silent)
         goto out;
     }
 
-    hk_super_constants_init(sbi);
-
-    hk_layouts_init(sbi, sbi->cpus);
-
-    hk_info("measure timing %d, wprotect %d\n", measure_timing, wprotect);
-
     get_random_bytes(&random, sizeof(u32));
     atomic_set(&sbi->next_generation, random);
 
@@ -639,7 +646,13 @@ static int hk_fill_super(struct super_block *sb, void *data, int silent)
         goto out;
     }
 
+    hk_super_constants_init(sbi);
+
+    hk_layouts_init(sbi, sbi->cpus);
+
     hk_sysfs_init(sb);
+
+    hk_info("measure timing %d, wprotect %d\n", measure_timing, wprotect);
 
     /* Init a new hk instance */
     if (sbi->s_mount_opt & HUNTER_MOUNT_FORMAT) {
@@ -718,13 +731,15 @@ setup_sb:
 
     hk_mount_over(sb);
 
+#if 0
 #ifdef CONFIG_ENABLE_EQUALIZER
     hk_start_equalizer(sb);
 #endif
-
-#ifdef CONFIG_CMT_BACKGROUND
-    hk_start_cmt_workers(sb);
 #endif
+
+    if (ENABLE_META_ASYNC(sb)) {
+        hk_start_cmt_workers(sb);
+    }
 
     retval = 0;
     HK_END_TIMING(mount_t, mount_time);
@@ -761,14 +776,7 @@ int hk_statfs(struct dentry *d, struct kstatfs *buf)
 static int hk_show_options(struct seq_file *seq, struct dentry *root)
 {
     struct hk_sb_info *sbi = HK_SB(root->d_sb);
-
-    // seq_printf(seq, ",physaddr=0x%016llx", (u64)sbi->phys_addr);
-    // if (sbi->initsize)
-    //      seq_printf(seq, ",init=%luk", sbi->initsize >> 10);
-    // if (sbi->blocksize)
-    //	 seq_printf(seq, ",bs=%lu", sbi->blocksize);
-    // if (sbi->bpi)
-    //	seq_printf(seq, ",bpi=%lu", sbi->bpi);
+    
     if (sbi->mode != (0777 | S_ISVTX))
         seq_printf(seq, ",mode=%03o", sbi->mode);
     if (uid_valid(sbi->uid))
@@ -824,26 +832,27 @@ static void hk_put_super(struct super_block *sb)
     struct hk_super_block *super;
     int i;
 
+#if 0
 #ifdef CONFIG_ENABLE_EQUALIZER
     hk_terminal_equalizer(sb);
 #endif
+#endif
 
-	if (test_opt(sb, META_ASYNC)) {
-		hk_stop_cmt_workers(sb);
-		hk_flush_cmt_queue(sb);
-	}
+    if (ENABLE_META_ASYNC(sb)) {
+        hk_stop_cmt_workers(sb);
+        hk_flush_cmt_queue(sb);
+        /* destory cmt queue */
+        hk_free_cmt_queue(sbi->cq);
+    }
 
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {
-		hk_stablisze_meta(sb);
+        hk_stablisze_meta(sb);
         hk_save_regions(sb);
         hk_save_layouts(sb);
         hk_umount_over(sb);
         sbi->virt_addr = NULL;
     }
-
-    /* destory cmt queue */
-    hk_free_cmt_queue(sbi->cq);
 
     /* destroy inode list */
 #ifndef CONFIG_PERCORE_IALLOCATOR

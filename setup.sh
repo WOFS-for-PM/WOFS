@@ -14,4 +14,4 @@ sudo rmmod hunter
 sudo insmod hunter.ko measure_timing="$timing"
 
 
-sudo mount -t HUNTER -o init,meta_local,meta_async /dev/pmem0 /mnt/pmem0
+sudo mount -t HUNTER -o init,meta_local,meta_async=5 /dev/pmem0 /mnt/pmem0

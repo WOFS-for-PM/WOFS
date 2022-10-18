@@ -185,7 +185,7 @@ static const match_table_t tokens = {
     {Opt_uid, "uid=%u"},
     {Opt_gid, "gid=%u"},
     {Opt_dax, "dax"},
-    {Opt_meta_async, "meta_async"},
+    {Opt_meta_async, "meta_async=%u"},
     {Opt_meta_local, "meta_local"},
     {Opt_meta_pack, "meta_pack"},
     {Opt_history_w, "history_w"},
@@ -259,6 +259,9 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
             set_opt(sbi->s_mount_opt, DAX);
             break;
         case Opt_meta_async:
+            if (match_int(&args[0], &option))
+                goto bad_val;
+            sbi->wake_up_interval = option;
             set_opt(sbi->s_mount_opt, META_ASYNC);
             break;
         case Opt_meta_local:

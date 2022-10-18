@@ -224,7 +224,7 @@ static int hk_cmt_worker_thread(void *arg)
 
     for (;;) {
     again:
-        ssleep_interruptible(HK_CMT_TIME_INTERVAL);
+        ssleep_interruptible(sbi->wake_up_interval);
 
         if (kthread_should_stop())
             break;
@@ -271,7 +271,7 @@ void hk_start_cmt_workers(struct super_block *sb)
         wake_up_process(sbi->cmt_workers[i]);
         hk_info("start cmt workers %d\n", i);
     }
-    hk_info("Each worker wakes up every %d s\n", HK_CMT_TIME_INTERVAL);
+    hk_info("Each worker wakes up every %d s\n", sbi->wake_up_interval);
 }
 
 void hk_stop_cmt_workers(struct super_block *sb)

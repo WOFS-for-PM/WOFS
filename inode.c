@@ -251,10 +251,10 @@ void hk_evict_inode(struct inode *inode)
                sih->ino, sih->i_size,
                sih->i_mode, inode->i_mode);
     }
-
-#ifdef CONFIG_DYNAMIC_WORKLOAD
-    hk_dw_forward(&sbi->dw, sih->i_size);
-#endif
+    
+    if (ENABLE_HISTORY_W(sb)) {
+        hk_dw_forward(&sbi->dw, sih->i_size);
+    }
 
     hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
     if (!inode->i_nlink && !is_bad_inode(inode)) {

@@ -122,7 +122,8 @@ struct hk_sb_info {
     struct hk_cmt_queue *cq;
     struct task_struct *cmt_workers[HK_CMT_WORKER_NUM];
     wait_queue_head_t cmt_waits[HK_CMT_WORKER_NUM];
-
+    int wake_up_interval;
+    
     /* for inode management */
     struct mutex *irange_locks; /* For In-NVMM Inode Lock */
 

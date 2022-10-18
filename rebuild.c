@@ -79,9 +79,9 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
 		linix_init(&sih->ix, 0);
 	}
 	else if (!S_ISLNK(i_mode)) {
-#ifdef CONFIG_DYNAMIC_WORKLOAD
-    	slots = hk_guess_slots(sb);
-#endif 
+		if (ENABLE_HISTORY_W(sb)) {
+    		slots = hk_guess_slots(sb);
+		}
 		linix_init(&sih->ix, slots);
 	}
 	else {	/* symlink only need one block */

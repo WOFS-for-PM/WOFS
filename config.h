@@ -49,7 +49,7 @@
 #define HK_NAME_LEN 255
 #define HK_HASH_BITS 6 /* for directory table */
 #define HK_CMT_QUEUE_BITS 10 /* for commit queue */
-#define HK_CMT_TIME_INTERVAL 5 /* Default */
+// #define HK_CMT_TIME_INTERVAL 5 /* Default */
 #define HK_CMT_MAX_PROCESS_BATCH (1024 * 256)
 #define HK_CMT_WAKEUP_THRESHOLD  (1024 * 256)
 #define HK_MAX_GAPS_INRAM 		 (1024 * 256)

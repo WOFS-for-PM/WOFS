@@ -172,6 +172,7 @@ enum timing_category {
 
 	/* Linix */
 	linix_title_t,
+	linix_set_t,
 	linix_get_t,
 
 	/* FriendlyGC */

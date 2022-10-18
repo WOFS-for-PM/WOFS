@@ -147,6 +147,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"invalid_summary_header",
 
 	"=================== LinIX ===================",
+	"linix_set",
 	"linix_get",
 
 	"=================== FriendlyGC ===================",

@@ -1,0 +1,14 @@
+{
+    "modules": {
+        "measure_timing": 0,
+        "wprotect": 0
+    },
+    "fs": {
+        "init":	1,
+        "meta_async": 5,	  
+        "meta_local": 1,
+        "meta_pack": 0,
+        "history_w": 0,	    
+        "wprotect":	1  
+    }
+}

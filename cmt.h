@@ -23,14 +23,13 @@ struct hk_cmt_batch {
     u64 addr_start;
     u64 addr_end;
     u64 blk_start;
-    u64 blk_end;
     u64 dst_blks;
 };
 
 static inline void hk_init_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
 {
     batch->addr_start = batch->addr_end = addr;
-    batch->blk_start = batch->blk_end = blk_cur;
+    batch->blk_start = blk_cur;
     batch->dst_blks = dst_blks;
 }
 
@@ -38,14 +37,12 @@ static inline void hk_inc_cmt_batch(struct super_block *sb, struct hk_cmt_batch 
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     batch->addr_end += HK_PBLK_SZ(sbi);
-    batch->blk_end += 1;
     batch->dst_blks -= 1;
 }
 
 static inline void hk_next_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch)
 {
     batch->addr_start = batch->addr_end;
-    batch->blk_start = batch->blk_end;
     if (batch->dst_blks == 0) {
         batch->dst_blks = -1;
     }
@@ -59,19 +56,26 @@ static inline bool hk_is_cmt_batch_valid(struct super_block *sb, struct hk_cmt_b
 struct hk_cmt_info {
     struct ch_slot slot;
     u8 type;
+    u16 mode;
+    u32 blk_start;
+    u32 uid;
+    u32 gid;
+    u32 time; /* for atime, ctime, and mtime */
+    u64 size; /* File size after truncation */
     u64 ino;
     u64 addr_start;
     u64 addr_end;
-    u64 blk_start;
-    u64 blk_end;
     u64 tstamp; /* tstamp when commit */
-    struct hk_inode_state state;
 };
+
+// int a = sizeof(struct hk_cmt_info);
 
 struct hk_cmt_queue {
     DEFINE_CHASHTABLE(table, HK_CMT_QUEUE_BITS);
     spinlock_t locks[1 << HK_CMT_QUEUE_BITS];
     u64 nitems[1 << HK_CMT_QUEUE_BITS];
+    void *fetchers;
+    int nfetchers
 };
 
 #endif

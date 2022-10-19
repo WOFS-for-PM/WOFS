@@ -49,14 +49,12 @@
 #define HK_NAME_LEN 255
 #define HK_HASH_BITS 6 /* for directory table */
 #define HK_CMT_QUEUE_BITS 10 /* for commit queue */
-// #define HK_CMT_TIME_INTERVAL 5 /* Default */
 #define HK_CMT_MAX_PROCESS_BATCH (1024 * 256)
-#define HK_CMT_WAKEUP_THRESHOLD  (1024 * 256)
+#define HK_CMT_WAKEUP_THRESHOLD  (HK_CMT_MAX_PROCESS_BATCH * 2)
 #define HK_MAX_GAPS_INRAM 		 (1024 * 256)
 #define HK_CMT_WORKER_NUM 4 /* for commit worker */
 #define HK_JOURNAL_SIZE (4 * 1024)
 #define HK_PERCORE_JSLOTS (1) /* per core journal slots */
-#define HK_BLKS_SIZE(blks) (((blks) << 12) + ((blks) << 6))
 
 /* ======================= Enhanced Configurations ========================= */
 

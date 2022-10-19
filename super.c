@@ -572,7 +572,7 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
 
     /* Background Commit Related */
     if (ENABLE_META_ASYNC(sb)) {
-        sbi->cq = hk_init_cmt_queue();
+        sbi->cq = hk_init_cmt_queue(sb, 4);
         if (!sbi->cq)
             return -ENOMEM;
     }
@@ -920,7 +920,7 @@ struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb)
     struct hk_cmt_info *p;
 
     p = (struct hk_cmt_info *)
-        kmem_cache_zalloc(hk_cmt_info_cachep, GFP_NOFS);
+        kmem_cache_zalloc(hk_cmt_info_cachep, GFP_ATOMIC);
     return p;
 }
 

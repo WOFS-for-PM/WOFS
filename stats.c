@@ -145,6 +145,9 @@ const char *Timingstring[TIMING_NUM] = {
 	"=================== Meta ===================", 
 	"valid_summary_header",
 	"invalid_summary_header",
+	"request_valid_block",
+	"request_invalid_block",
+	"prepare_request",
 
 	"=================== LinIX ===================",
 	"linix_set",

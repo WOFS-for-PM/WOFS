@@ -434,7 +434,7 @@ void hk_start_cmt_workers(struct super_block *sb);
 void hk_stop_cmt_workers(struct super_block *sb);
 void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino);
 void hk_flush_cmt_queue(struct super_block *sb);
-struct hk_cmt_queue *hk_init_cmt_queue(void);
+struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers);
 void hk_free_cmt_queue(struct hk_cmt_queue *cq);
 
 /* ======================= ANCHOR: rebuild.c ========================= */

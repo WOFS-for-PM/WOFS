@@ -169,6 +169,9 @@ enum timing_category {
 	meta_title_t, 
 	sm_valid_t,
 	sm_invalid_t,
+	request_valid_t,
+	request_invalid_t,
+	prepare_request_t,
 
 	/* Linix */
 	linix_title_t,

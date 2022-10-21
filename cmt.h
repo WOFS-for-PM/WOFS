@@ -66,6 +66,7 @@ struct hk_cmt_info {
     u64 addr_start;
     u64 addr_end;
     u64 tstamp; /* tstamp when commit */
+    u8 paddings[16];
 };
 
 // int a = sizeof(struct hk_cmt_info);

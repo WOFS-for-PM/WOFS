@@ -920,7 +920,7 @@ struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb)
     struct hk_cmt_info *p;
 
     p = (struct hk_cmt_info *)
-        kmem_cache_zalloc(hk_cmt_info_cachep, GFP_ATOMIC);
+        kmem_cache_alloc(hk_cmt_info_cachep, GFP_ATOMIC);
     return p;
 }
 
@@ -983,7 +983,7 @@ static int __init init_cmtinfo_cache(void)
 {
     hk_cmt_info_cachep = kmem_cache_create("hk_cmt_info_cache",
                                            sizeof(struct hk_cmt_info),
-                                           0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
+                                           0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD | SLAB_HWCACHE_ALIGN), NULL);
     if (hk_cmt_info_cachep == NULL)
         return -ENOMEM;
     return 0;

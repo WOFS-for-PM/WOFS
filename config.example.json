@@ -8,7 +8,7 @@
         "meta_async": 5,	  
         "meta_local": 1,
         "meta_pack": 0,
-        "history_w": 0,	    
+        "history_w": 1,	    
         "wprotect":	1  
     }
 }

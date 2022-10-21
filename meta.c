@@ -6,22 +6,22 @@
 u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-#ifndef CONFIG_LAYOUT_TIGHT
-    u64 blk = (hdr - sbi->sm_addr) / sizeof(struct hk_header);
-    return sbi->d_addr + (blk * HK_PBLK_SZ(sbi));
-#else
-    return hdr + sizeof(struct hk_header) - HK_PBLK_SZ(sbi);
-#endif
+    if (ENABLE_META_LOCAL(sb)) {
+        u64 blk = (hdr - sbi->sm_addr) / sizeof(struct hk_header);
+        return sbi->d_addr + (blk * HK_PBLK_SZ(sbi));
+    } else {
+        return hdr + sizeof(struct hk_header) - HK_PBLK_SZ(sbi);
+    }
 }
 
 struct hk_header *sm_get_hdr_by_blk(struct super_block *sb, u64 blk)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-#ifndef CONFIG_LAYOUT_TIGHT
-    return (struct hk_header *)(sbi->sm_addr + blk * sizeof(struct hk_header));
-#else
-    return (struct hk_header *)(sbi->d_addr + (blk + 1) * HK_PBLK_SZ(sbi) - sizeof(struct hk_header));
-#endif
+    if (ENABLE_META_LOCAL(sb)) {
+        return (struct hk_header *)(sbi->sm_addr + blk * sizeof(struct hk_header));
+    } else {
+        return (struct hk_header *)(sbi->d_addr + (blk + 1) * HK_PBLK_SZ(sbi) - sizeof(struct hk_header));
+    }
 }
 
 struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr)
@@ -558,7 +558,6 @@ int hk_commit_inode_state(struct super_block *sb, struct hk_inode_state *state)
     setattr->size = cpu_to_le64(state->size);
 
     setattr->tstamp = cpu_to_le64(get_version(sbi));
-
     hk_do_commit_inode(sb, pi->ino, &entry);
 
     return 0;

@@ -219,7 +219,6 @@ int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk
 
     HK_START_TIMING(prepare_request_t, prepare_time);
     info = hk_alloc_cmt_info(sb);
-    HK_END_TIMING(prepare_request_t, prepare_time);
     
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
@@ -232,6 +231,7 @@ int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk
     info->mode = inode->i_mode;
     info->time = inode->i_mtime.tv_sec;
     info->size = inode->i_size;
+    HK_END_TIMING(prepare_request_t, prepare_time);
 
     hk_request_cmt(sb, info);
     HK_END_TIMING(request_valid_t, request_time);
@@ -610,19 +610,19 @@ struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers)
         spin_lock_init(&cq->locks[i]);
         cq->nitems[i] = 0;
     }
+    
+    // cq->nfetchers = nfecthers;
+    // cq->fetchers = kvmalloc(sizeof(struct memory_fetcher) * nfecthers, GFP_KERNEL);
+    // if (!cq->fetchers) {
+    //     hk_warn("hk_init_cmt_queue: failed to allocate memory for fetchers\n");
+    //     return NULL;
+    // }
 
-    cq->nfetchers = nfecthers;
-    cq->fetchers = kvmalloc(sizeof(struct memory_fetcher) * nfecthers, GFP_KERNEL);
-    if (!cq->fetchers) {
-        hk_warn("hk_init_cmt_queue: failed to allocate memory for fetchers\n");
-        return NULL;
-    }
-
-    for (i = 0; i < nfecthers; i++) {
-        init_pre_alloc_memory_pool(sb, &get_fetcher(cq, i)->pamp, 
-                                   sizeof(struct hk_cmt_info), 1024 * 1024 * 16,
-                                   alloc_cmt_info, free_cmt_info);
-    }
+    // for (i = 0; i < nfecthers; i++) {
+    //     init_pre_alloc_memory_pool(sb, &get_fetcher(cq, i)->pamp, 
+    //                                sizeof(struct hk_cmt_info), 1024 * 1024 * 16,
+    //                                alloc_cmt_info, free_cmt_info);
+    // }
     
     // hk_start_memory_fetchers(cq);
 
@@ -634,12 +634,12 @@ void hk_free_cmt_queue(struct hk_cmt_queue *cq)
     int i;
     if (cq) {
         // hk_stop_memory_fetchers(cq);
-        for (i = 0; i < cq->nfetchers; i++) {
-            destroy_pre_alloc_memory_pool(&get_fetcher(cq, i)->pamp);
-        }
-        if (cq->fetchers) {
-            kvfree(cq->fetchers);
-        }
+        // for (i = 0; i < cq->nfetchers; i++) {
+        //     destroy_pre_alloc_memory_pool(&get_fetcher(cq, i)->pamp);
+        // }
+        // if (cq->fetchers) {
+        //     kvfree(cq->fetchers);
+        // }
         kfree(cq);
     }
 }

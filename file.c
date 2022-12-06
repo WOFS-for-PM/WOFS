@@ -130,7 +130,7 @@ out:
     return copied ? copied : error;
 }
 
-bool hk_check_overlay(struct hk_inode_info *si, u64 index)
+static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index)
 {
     struct hk_inode_info_header *sih = &si->header;
     bool is_overlay = false;
@@ -144,7 +144,7 @@ bool hk_check_overlay(struct hk_inode_info *si, u64 index)
 
 bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                         u64 start_index, u64 end_index,
-                        loff_t *each_ofs, size_t *each_size,
+                        loff_t each_ofs, size_t *each_size,
                         size_t len)
 {
     struct super_block *sb = si->vfs_inode.i_sb;
@@ -156,43 +156,45 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
     INIT_TIMING(partial_time);
 
     HK_START_TIMING(partial_block_t, partial_time);
-    if (hk_check_overlay(si, index)) {
+    is_overlay = hk_check_overlay(si, index);
+    HK_END_TIMING(partial_block_t, partial_time);
+
+    if (is_overlay) {
         if (index == start_index || index == end_index) { /* Might perform cow */
-            if (index == start_index && *each_ofs != 0) {
+            if (index == start_index && each_ofs != 0) {
                 blk_addr = linix_get(&sih->ix, index);
-                *each_size = min(HK_LBLK_SZ(sbi) - *each_ofs, len);
-                hk_memunlock_range(sb, cur_addr, *each_ofs, &irq_flags);
-                memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), *each_ofs);
-                hk_memlock_range(sb, cur_addr, *each_ofs, &irq_flags);
+                *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
+                hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
             }
             if (index == end_index && len < HK_LBLK_SZ(sbi)) {
                 blk_addr = linix_get(&sih->ix, index);
                 *each_size = len;
-                hk_memunlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ(sbi) - (len + *each_ofs), &irq_flags);
-                memcpy_to_pmem_nocache(cur_addr + (len + *each_ofs), hk_get_block(sb, blk_addr) + (len + *each_ofs), HK_LBLK_SZ(sbi) - (len + *each_ofs));
-                hk_memlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ(sbi) - (len + *each_ofs), &irq_flags);
+                hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
+                memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
+                hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
             }
         }
-        is_overlay = true;
     } else { /* Set to zero */
-        if (index == start_index && *each_ofs != 0) {
-            *each_size = min(HK_LBLK_SZ(sbi) - *each_ofs, len);
-            hk_memunlock_range(sb, cur_addr, *each_ofs, &irq_flags);
-            memset_nt(cur_addr, 0, *each_ofs);
-            hk_memlock_range(sb, cur_addr, *each_ofs, &irq_flags);
+        if (index == start_index && each_ofs != 0) {
+            *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
+            hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+            memset_nt(cur_addr, 0, each_ofs);
+            hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
         }
         if (index == end_index && len < HK_LBLK_SZ(sbi)) {
             *each_size = len;
-            hk_memunlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ(sbi) - (len + *each_ofs), &irq_flags);
-            memset_nt(cur_addr + (len + *each_ofs), 0, HK_LBLK_SZ(sbi) - (len + *each_ofs));
-            hk_memlock_range(sb, cur_addr + (len + *each_ofs), HK_LBLK_SZ(sbi) - (len + *each_ofs), &irq_flags);
+            hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
+            memset_nt(cur_addr + (len + each_ofs), 0, HK_LBLK_SZ(sbi) - (len + each_ofs));
+            hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
         }
     }
 
-    HK_END_TIMING(partial_block_t, partial_time);
-
     return is_overlay;
 }
+
+extern struct hk_mregion *hk_get_region_by_ino(struct super_block *sb, u64 ino);
 
 int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                      loff_t ofs, size_t size, unsigned char *content,
@@ -227,8 +229,13 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             if (i == 0 || i == prep->blks_prepared - 1) {
                 is_overlay = hk_try_perform_cow(si, addr, index_cur,
                                                 start_index, end_index,
-                                                &each_ofs, &each_size,
+                                                each_ofs, &each_size,
                                                 size);
+
+                /* try prefetch hdr/region before writing it */                              
+                prefetcht2(sm_get_hdr_by_addr(sb, addr));
+                /* Prefetch Region */
+                /* prefetcht2((void *)hk_get_region_by_ino(sb, inode->i_ino)); */
 
                 HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
                 hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
@@ -334,7 +341,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         } else {
             is_overlay = hk_try_perform_cow(si, addr, index_cur,
                                             start_index, end_index,
-                                            &each_ofs, &each_size,
+                                            each_ofs, &each_size,
                                             size);
 
             HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
@@ -474,7 +481,8 @@ out:
     if (ENABLE_META_ASYNC(sb)) {
 		/* do nothing */
     } else {
-        hk_commit_newattr_indram(sb, inode);
+        /* Write-Once */
+        /* hk_commit_newattr_indram(sb, inode); */
     }
 
     HK_END_TIMING(write_t, write_time);

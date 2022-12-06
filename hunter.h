@@ -151,6 +151,14 @@ struct hk_range_node {
 #include "mprotect.h"
 #include "cmt.h"
 
+static inline void prefetcht0(const void *x) {
+	asm volatile("prefetcht0 %0" : : "m" (*(const char* )x));
+}
+
+static inline void prefetcht2(const void *x) {
+	asm volatile("prefetcht2 %0" : : "m" (*(const char* )x));
+}
+
 /* blk_addr is the offset addr in NVMM */
 static inline void *hk_get_block(struct super_block *sb, u64 blk_addr)
 {

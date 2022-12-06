@@ -172,6 +172,7 @@ enum timing_category {
 	request_valid_t,
 	request_invalid_t,
 	prepare_request_t,
+	commit_newattr_t,
 
 	/* Linix */
 	linix_title_t,

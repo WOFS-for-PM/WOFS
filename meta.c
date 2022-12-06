@@ -165,7 +165,9 @@ int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 t
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
-    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
+    /* flush and fence here significantly hinder the performance */ 
+    /* So that try killing it, fence once or delaying fence */
+    /* hk_flush_buffer(hdr, sizeof(struct hk_header), true); */
     hdr->valid = 1;
     hk_flush_buffer(hdr, sizeof(struct hk_header), true);
     hk_memlock_hdr(sb, hdr, &irq_flags);
@@ -325,7 +327,6 @@ int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
         if (slotid != rg->last_valid_linkchange && slotid != rg->last_valid_setattr) {
             memcpy_to_pmem_nocache(&rg->entries[slotid], entry, sizeof(struct hk_mentry));
 
-            PERSISTENT_BARRIER();
             /* Commit The Write */
             switch (entry->type) {
             case SET_ATTR:
@@ -337,6 +338,7 @@ int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
             default:
                 break;
             }
+
             hk_flush_buffer(rg, sizeof(struct hk_mentry), true);
             break;
         }
@@ -410,6 +412,9 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     struct hk_mentry entry;
     struct hk_setattr_entry *setattr;
     struct hk_sb_info *sbi = HK_SB(sb);
+    INIT_TIMING(commit_newattr);
+    
+    HK_START_TIMING(commit_newattr_t, commit_newattr);
 
     setattr = &entry.entry.setattr;
 
@@ -425,6 +430,7 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     setattr->tstamp = get_version(sbi);
 
     hk_do_commit_inode(sb, inode->i_ino, &entry);
+    HK_END_TIMING(commit_newattr_t, commit_newattr);
 }
 
 /* automatically update attr based on whether the file (ino) is opened */

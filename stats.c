@@ -148,6 +148,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"request_valid_block",
 	"request_invalid_block",
 	"prepare_request",
+	"commit_newattr",
 
 	"=================== LinIX ===================",
 	"linix_set",

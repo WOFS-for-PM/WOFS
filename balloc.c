@@ -88,6 +88,7 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
     u64 target_addr = layout->layout_start;
     unsigned long irq_flags = 0;
 
+    /* Only check under debug.  */
     if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
         hk_info("%s: layout_lock is not locked\n", __func__);
         BUG_ON(1);
@@ -179,7 +180,7 @@ retry:
         prep->blks_prepared = blks_prepared;
         prep->cpuid = cpuid;
         prep->target_addr = target_addr;
-        *blks = *blks - blks_prepared;
+        *blks -= blks_prepared;
         break;
     }
     if (tries < 1) {

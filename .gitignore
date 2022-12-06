@@ -10,4 +10,5 @@ modules.order
 pattern
 .vscode
 .tmp_versions
+LOG
 

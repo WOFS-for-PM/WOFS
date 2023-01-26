@@ -21,15 +21,30 @@ int hk_init_free_inode_list(struct super_block *sb, bool is_init)
 {
     struct hk_inode *pi;
     struct hk_sb_info *sbi = HK_SB(sb);
+    inode_mgr_t *mgr = sbi->inode_mgr;
+    imap_t *imap = &sbi->obj_mgr.prealloc_imap;
+    struct hlist_head *map = imap->map;
+    struct hk_inode_info_header *cur;
+    int bkt;
     int i;
 
     if (is_init) {
-        hk_range_insert_range(sb, &sbi->ilist, 0, HK_NUM_INO - 1);
+        hk_range_insert_range(sb, &mgr->ilist, 0, HK_NUM_INO - 1);
     } else {
-        for (i = HK_NUM_INO - 1; i >= 0; i--) {
-            pi = hk_get_inode_by_ino(sb, i);
-            if (!pi->valid) {
-                hk_range_insert_value(sb, &sbi->ilist, i);
+        if (ENABLE_META_PACK(sb)) {
+            /* First insert all values */
+            hk_init_free_inode_list(sb, true);
+            /* Second filter out those existing value */
+            hash_for_each(map, bkt, cur, hnode)
+            {
+                inode_mgr_restore(mgr, cur->ino);
+            }
+        } else {
+            for (i = HK_NUM_INO - 1; i >= 0; i--) {
+                pi = hk_get_inode_by_ino(sb, i);
+                if (!pi->valid) {
+                    hk_range_insert_value(sb, &sbi->ilist, i);
+                }
             }
         }
     }
@@ -41,6 +56,10 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
 {
     struct hk_inode *pi;
     struct hk_sb_info *sbi = HK_SB(sb);
+    inode_mgr_t *mgr = sbi->inode_mgr;
+    imap_t *imap = &sbi->obj_mgr->prealloc_imap;
+    struct hk_inode_info_header *cur;
+    int bkt;
     u64 start_ino, end_ino;
     int inums_percore;
     int i;
@@ -54,17 +73,27 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
     end_ino = start_ino + inums_percore - 1;
 
     if (is_init) {
-        hk_range_insert_range(sb, &sbi->ilists[cpuid], start_ino, end_ino);
+        hk_range_insert_range(sb, &mgr->ilists[cpuid], start_ino, end_ino);
     } else {
-        for (i = end_ino; i >= start_ino; i--) {
-            pi = hk_get_inode_by_ino(sb, i);
-            if (!pi->valid) {
-                hk_range_insert_value(sb, &sbi->ilists[cpuid], i);
+        if (ENABLE_META_PACK(sb)) {
+            /* First insert all values */
+            hk_init_free_inode_list_percore(sb, cpuid, true);
+            /* Second filter out those existing value */
+            hash_for_each(imap->map, bkt, cur, hnode)
+            {
+                inode_mgr_restore(mgr, cur->ino);
+            }
+        } else {
+            for (i = end_ino; i >= start_ino; i--) {
+                pi = hk_get_inode_by_ino(sb, i);
+                if (!pi->valid) {
+                    hk_range_insert_value(sb, &mgr->ilists[cpuid], i);
+                }
             }
         }
     }
 
-    sbi->ilist_init[cpuid] = true;
+    mgr->ilist_init[cpuid] = true;
 
     return 0;
 }
@@ -94,7 +123,7 @@ static int hk_free_dram_resource(struct super_block *sb,
     return freed;
 }
 
-int _hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
+int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
                         struct hk_inode_info_header *sih)
 {
     int freed = 0;
@@ -138,7 +167,7 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 
     HK_START_TIMING(free_inode_log_t, free_time);
 
-    freed = _hk_free_inode_blks(sb, pi, sih);
+    freed = __hk_free_inode_blks(sb, pi, sih);
 
     HK_END_TIMING(free_inode_log_t, free_time);
     return freed;
@@ -167,17 +196,8 @@ static int hk_free_inode(struct super_block *sb, struct hk_inode *pi,
     sih->i_size = 0;
     sih->i_blocks = 0;
 
-#ifndef CONFIG_PERCORE_IALLOCATOR
-    mutex_lock(&sbi->ilist_lock);
-    err = hk_range_insert_value(sb, &sbi->ilist, le64_to_cpu(pi->ino));
-    mutex_unlock(&sbi->ilist_lock);
-#else
-    int cpuid;
-    cpuid = hk_get_cpuid_by_ino(sb, le64_to_cpu(pi->ino));
-    mutex_lock(&sbi->ilist_locks[cpuid]);
-    err = hk_range_insert_value(sb, &sbi->ilists[cpuid], le64_to_cpu(pi->ino));
-    mutex_unlock(&sbi->ilist_locks[cpuid]);
-#endif
+    err = inode_mgr_free(sbi->inode_mgr, le64_to_cpu(pi->ino));
+
     HK_END_TIMING(free_inode_t, free_time);
     return err;
 }
@@ -430,6 +450,7 @@ bad_inode:
     return ret;
 }
 
+#if 0
 u64 hk_get_new_ino(struct super_block *sb)
 {
     u64 ino = (u64)-1;
@@ -476,6 +497,140 @@ u64 hk_get_new_ino(struct super_block *sb)
     HK_END_TIMING(new_HK_inode_t, new_hk_ino_time);
     return ino;
 }
+#endif
+
+/* lazy allocator */
+int inode_mgr_init(struct hk_sb_info *sbi, inode_mgr_t *mgr)
+{
+    int i, cpus = sbi->cpus;
+    mgr->sbi = sbi;
+    /* Inode List Related */
+#ifndef CONFIG_PERCORE_IALLOCATOR
+    INIT_LIST_HEAD(&mgr->ilist);
+    spin_lock_init(&mgr->ilist_lock);
+#else
+    mgr->ilists = kcalloc(cpus, sizeof(struct list_head), GFP_KERNEL);
+    for (i = 0; i < cpus; i++)
+        INIT_LIST_HEAD(&mgr->ilists[i]);
+    mgr->ilist_locks = kcalloc(cpus, sizeof(spinlock_t), GFP_KERNEL);
+    for (i = 0; i < cpus; i++)
+        spin_lock_init(&mgr->ilist_locks[i]);
+    mgr->ilist_init = kcalloc(cpus, sizeof(bool), GFP_KERNEL);
+    for (i = 0; i < cpus; i++)
+        mgr->ilist_init[i] = false;
+#endif
+    return 0;
+}
+
+int inode_mgr_alloc(inode_mgr_t *mgr, u32 *ret_ino)
+{
+    u32 ino = (u32)-1;
+    struct hk_sb_info *sbi = mgr->sbi;
+    struct super_block *sb = sbi->sb;
+	u64 len = 1;
+
+    INIT_TIMING(new_hk_ino_time);
+
+    HK_START_TIMING(new_HK_inode_t, new_hk_ino_time);
+
+#ifndef CONFIG_PERCORE_IALLOCATOR
+    spin_lock(&mgr->ilist_lock);
+    if (unlikely(list_empty(&mgr->ilist))) {
+        hk_init_free_inode_list(sb, false);
+    }
+    ino = hk_range_pop(&mgr->ilist);
+    spin_unlock(&mgr->ilist_lock);
+#else
+    int cpuid, start_cpuid;
+
+    cpuid = hk_get_cpuid(sb);
+    start_cpuid = cpuid;
+
+    do {
+        spin_lock(&mgr->ilist_locks[cpuid]);
+        if (unlikely(mgr->ilist_init[cpuid] == false)) {
+            hk_init_free_inode_list_percore(sb, cpuid, false);
+        }
+        if (!list_empty(&mgr->ilists[cpuid])) {
+            ino = hk_range_pop(&mgr->ilists[cpuid], &len);
+            spin_unlock(&mgr->ilist_locks[cpuid]);
+            break;
+        }
+        spin_unlock(&mgr->ilist_locks[cpuid]);
+        cpuid = (cpuid + 1) % sbi->cpus;
+    } while (cpuid != start_cpuid);
+
+#endif
+    if (ino == (u32)-1) {
+        hk_info("No free inode\n");
+        BUG_ON(1);
+    }
+    
+    if (ret_ino)
+        *ret_ino = ino;
+
+    HK_END_TIMING(new_HK_inode_t, new_hk_ino_time);
+    return 0;
+}
+
+int inode_mgr_free(inode_mgr_t *mgr, u32 ino)
+{
+    struct hk_sb_info *sbi = mgr->sbi;
+    struct super_block *sb = sbi->sb;
+    int err = 0;
+
+#ifndef CONFIG_PERCORE_IALLOCATOR
+    spin_lock(&mgr->ilist_lock);
+    err = hk_range_insert_value(sb, &mgr->ilist, ino);
+    spin_unlock(&mgr->ilist_lock);
+#else
+    int cpuid;
+    cpuid = hk_get_cpuid_by_ino(sb, ino);
+    spin_lock(&mgr->ilist_locks[cpuid]);
+    err = hk_range_insert_value(sb, &mgr->ilists[cpuid], ino);
+    spin_unlock(&mgr->ilist_locks[cpuid]);
+#endif
+
+    return err;
+}
+
+int inode_mgr_restore(inode_mgr_t *mgr, u32 ino)
+{
+    struct hk_sb_info *sbi = mgr->sbi;
+    struct super_block *sb = sbi->sb;
+    int err = 0;
+
+#ifndef CONFIG_PERCORE_IALLOCATOR
+    spin_lock(&mgr->ilist_lock);
+    err = hk_range_remove(sb, &mgr->ilist, ino);
+    spin_unlock(&mgr->ilist_lock);
+#else 
+    int cpuid;
+    cpuid = hk_get_cpuid_by_ino(sb, ino);
+    spin_lock(&mgr->ilist_locks[cpuid]);
+    err = hk_range_remove(sb, &mgr->ilists[cpuid], ino);
+    spin_unlock(&mgr->ilist_locks[cpuid]);
+#endif
+    return err;
+}
+
+int inode_mgr_destory(inode_mgr_t *mgr)
+{
+    struct hk_sb_info *sbi = mgr->sbi;
+    if (mgr) {
+#ifndef CONFIG_PERCORE_IALLOCATOR
+        hk_range_free_all(&mgr->ilist);
+#else
+        int cpuid;
+        for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
+            hk_range_free_all(&mgr->ilists[cpuid]);
+        }
+#endif
+        kfree(mgr);
+    }
+    return 0;
+}
+
 
 struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
                               u64 ino, umode_t mode, size_t size, dev_t rdev,
@@ -856,6 +1011,43 @@ struct inode *hk_iget(struct super_block *sb, unsigned long ino)
 fail:
     iget_failed(inode);
     return ERR_PTR(err);
+}
+
+void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
+{
+    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
+    struct super_block *sb = si->vfs_inode.i_sb;
+    u32 ofs_blk = GET_ALIGNED_BLKNR(offset);
+    
+    if (ENABLE_META_PACK(sb)) {
+        obj_ref_data_t *ref = NULL;
+        u32 blk;
+        
+        ref = (obj_ref_data_t *)linix_get(&sih->ix, ofs_blk);
+        if (!ref) {
+            /* try find the first not null in linix */
+            blk = ofs_blk;
+            while (!ref && blk != -1) {
+                ref = (obj_ref_data_t *)linix_get(&sih->ix, blk);
+                blk--;
+            }
+        }
+
+        if (!ref) {
+            return NULL;
+        }
+
+        /* check if offset is in ref */
+        if (offset >= ref->ofs && offset < ref->ofs + (ref->num << HUNTER_BLK_SHIFT)) {
+            return ref;
+        } 
+
+        hk_err(sb, "offset %u is not in ref %u, inconsistency happened\n", offset, ref->data_offset);
+    } else {
+        return (void *)linix_get(&sih->ix, ofs_blk);
+    }
+
+    return NULL;
 }
 
 const struct address_space_operations hk_aops_dax = {

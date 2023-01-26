@@ -235,6 +235,7 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
     int ret = 0;
 
     size_per_layout = _round_down(sbi->d_size / cpus, HK_PBLK_SZ(sbi));
+    sbi->per_layout_blks = size_per_layout / HK_PBLK_SZ(sbi);
     sbi->num_layout = cpus;
     sbi->layouts = (struct hk_layout_info *)kcalloc(cpus, sizeof(struct hk_layout_info), GFP_KERNEL);
     if (sbi->layouts == NULL) {

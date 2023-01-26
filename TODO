@@ -1,2 +1,12 @@
+# 2023/1/25 ~ 2023/1/26
+- [x] Migrate two-layer allocator.
+- [x] Migrate object manager.
+- [x] Aggregate the memory allocators (i.e., those slab allocators).
+- [x] Migrate Inode manager.
+
+# 2023/1/24
+- Start working on the new version of the project, which implements the new features, i.e., WRITE-ONCE
+- Clear Time Status
+
 - Renaming REGION to AttrLog
 - Renaming Journal to Transactions

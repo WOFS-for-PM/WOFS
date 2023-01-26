@@ -83,7 +83,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
                 goto out;
         }
 
-        blk_addr = linix_get(&sih->ix, index);
+        blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
         if (blk_addr == 0) { /* It's a file hole */
             zero = true;
         } else {
@@ -135,7 +135,7 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
     struct hk_inode_info_header *sih = &si->header;
     bool is_overlay = false;
 
-    if (index < sih->ix.num_slots && linix_get(&sih->ix, index) != 0) {
+    if (index < sih->ix.num_slots && (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT)) != 0) {
         is_overlay = true;
     }
 
@@ -162,14 +162,14 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
     if (is_overlay) {
         if (index == start_index || index == end_index) { /* Might perform cow */
             if (index == start_index && each_ofs != 0) {
-                blk_addr = linix_get(&sih->ix, index);
+                blk_addr = (u64) hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                 *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
                 hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
                 memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
                 hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
             }
             if (index == end_index && len < HK_LBLK_SZ(sbi)) {
-                blk_addr = linix_get(&sih->ix, index);
+                blk_addr = (u64) hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                 *each_size = len;
                 hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
                 memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
@@ -247,7 +247,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                 if (ENABLE_META_ASYNC(sb)) {
                     hk_valid_hdr_background(sb, inode, addr, index_cur);
                     if (is_overlay) {
-                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
+                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
                         hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
                     }
                 } else {
@@ -258,7 +258,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                         /* commit the inode */
                         hk_commit_newattr_indram(sb, inode);
 
-                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
+                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
 
                         /* invalid the old one */
                         use_layout_for_addr(sb, addr_overlayed);
@@ -303,7 +303,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                             hk_valid_range_background(sb, inode, &batch);
                             hk_next_cmt_batch(sb, &batch);
 
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
+                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
                             hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
                         }
                     } else {
@@ -313,8 +313,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                         if (is_overlay) {
                             hk_commit_newattr_indram(sb, inode);
 
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-
+                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
                             /* invalid the old one */
                             use_layout_for_addr(sb, addr_overlayed);
                             sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
@@ -353,7 +352,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             if (ENABLE_META_ASYNC(sb)) {
                 hk_valid_hdr_background(sb, inode, addr, index_cur);
                 if (is_overlay) {
-                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
+                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
                     hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
                 }
             } else {
@@ -363,7 +362,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                 if (is_overlay) {
                     hk_commit_newattr_indram(sb, inode);
 
-                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
+                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
 
                     /* invalid the old one */
                     use_layout_for_addr(sb, addr_overlayed);

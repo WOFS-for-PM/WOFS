@@ -479,10 +479,11 @@ static int hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
     struct inode *inode = NULL;
     int err = PTR_ERR(inode);
     struct super_block *sb = dir->i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pidir, *pi;
     struct hk_dentry *direntry;
     u64 pi_addr = 0;
-    u64 ino;
+    u32 ino;
     int txid;
     INIT_TIMING(create_time);
 
@@ -492,7 +493,7 @@ static int hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
     if (!pidir)
         goto out_err;
 
-    ino = hk_get_new_ino(sb);
+    err = inode_mgr_alloc(sbi->inode_mgr, &ino);
     if (ino == -1)
         goto out_err;
 
@@ -585,9 +586,10 @@ static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
     struct inode *inode = NULL;
     int err = PTR_ERR(inode);
     struct super_block *sb = dir->i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pidir, *pi;
     struct hk_dentry *direntry;
-    u64 ino;
+    u32 ino;
     int txid;
     INIT_TIMING(mknod_time);
 
@@ -597,7 +599,7 @@ static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
     if (!pidir)
         goto out_err;
 
-    ino = hk_get_new_ino(sb);
+    err = inode_mgr_alloc(sbi->inode_mgr, &ino);
     if (ino == -1)
         goto out_err;
 
@@ -706,8 +708,9 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     struct hk_inode_info_header *sih;
     struct hk_inode *pidir, *pi;
     struct hk_dentry *direntry;
+    struct hk_sb_info *sbi = HK_SB(sb);
     u64 sym_blk_addr = 0;
-    u64 ino;
+    u32 ino;
     int txid;
 
     INIT_TIMING(symlink_time);
@@ -720,7 +723,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     if (!pidir)
         goto out_fail;
 
-    ino = hk_get_new_ino(sb);
+    err = inode_mgr_alloc(sbi->inode_mgr, &ino);
     if (ino == 0)
         goto out_fail;
 
@@ -914,9 +917,9 @@ static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     struct hk_dentry *direntry;
     struct hk_inode_info *si, *sidir;
     struct hk_inode_info_header *sih = NULL;
-
+    struct hk_sb_info *sbi = HK_SB(sb);
     u64 pi_addr = 0;
-    u64 ino;
+    u32 ino;
     int err = -EMLINK;
     int txid;
     INIT_TIMING(mkdir_time);
@@ -925,7 +928,7 @@ static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     if (dir->i_nlink >= HK_LINK_MAX)
         goto out;
 
-    ino = hk_get_new_ino(sb);
+    err = inode_mgr_alloc(sbi->inode_mgr, &ino);
     if (ino == 0)
         goto out_err;
 

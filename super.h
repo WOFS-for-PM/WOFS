@@ -31,6 +31,7 @@ struct hk_super_block {
     __le32 s_mtime; /* mount time */
     __le32 s_wtime; /* write time */
 
+    __le32 s_last_layout;  /* 0 for lfs, 1 for local, 2 for pack, cannot be changed now */
     __le32 s_valid_umount; /* is valid umount ? */
     __le64 s_tstamp;       /* time stemp */
     struct {
@@ -47,6 +48,11 @@ struct hk_super_block {
 } __attribute((__packed__));
 
 #define HK_SB_SIZE(sbi) roundup(sizeof(struct hk_super_block), HK_LBLK_SZ(sbi)) /* must be power of two */
+
+#define HUNTER_BLK_SIZE  (4 * 1024)
+#define HUNTER_MTA_SIZE  (64) // 64B grained
+#define HUNTER_BLK_SHIFT (12)
+#define HUNTER_MTA_SHIFT (6)
 
 #define HK_ROOT_INO (0)
 #define HK_RESV_NUM (1)
@@ -94,74 +100,83 @@ struct hk_sb_info {
     u32 pblk_sz;
     u32 lblk_sz; 
 
+    /* data */
     u64 d_addr;
     u64 d_size;
     u64 d_blks;
+    
+    /* metadata-related */
     u64 m_addr;
     u64 m_size;
-    u64 ino_tab_addr;
-    u64 ino_tab_slots;
-    u64 ino_tab_size;
-    u64 sm_addr;
-    u64 sm_slots;
-    u64 sm_size;
-    u64 j_addr;
-    u64 j_slots;
-    u64 j_size;
-    u64 rg_addr;
-    u64 rg_slots;
-    u64 rg_size;
+
+    /* metadata layout */
+    union 
+    {
+        /* normal layout */
+        struct {
+            /* inode table */
+            u64 ino_tab_addr;
+            u64 ino_tab_slots;
+            u64 ino_tab_size;
+            
+            /* summary table */
+            u64 sm_addr;
+            u64 sm_slots;
+            u64 sm_size;
+            
+            /* transcation table */
+            u64 j_addr;
+            u64 j_slots;
+            u64 j_size;
+            struct mutex *j_locks;
+            
+            /* inode-region (attr log) table */
+            u64 rg_addr;
+            u64 rg_slots;
+            u64 rg_size;
+
+            /* for inode management */
+            struct mutex *irange_locks; /* For In-NVMM Inode Lock */
+        };
+        /* pack layout */
+        struct {
+            /* bitmaps for saving packages allocation info */
+            u64 bm_start;
+            u64 bm_size;
+            u64 fs_start;
+            u64 tl_per_type_bm_reserved_blks;
+            atomic64_t vtail;
+            struct obj_mgr *obj_mgr;
+        };
+    };
+    
     /* per cpu structure */
     struct hk_layout_info *layouts;
     u32 num_layout;
-
-    /* for journal */
-    struct mutex *j_locks;
+    u64 per_layout_blks;        /* aligned blks */
 
     /* for background cmt */
     struct hk_cmt_queue *cq;
     struct task_struct *cmt_workers[HK_CMT_WORKER_NUM];
     int wake_up_interval;
     
-    /* for inode management */
-    struct mutex *irange_locks; /* For In-NVMM Inode Lock */
-
-#ifndef CONFIG_PERCORE_IALLOCATOR
-    struct mutex ilist_lock;
-    struct list_head ilist; /* Sort asending */
-#else
-    struct mutex *ilist_locks;
-    struct list_head *ilists;
-    bool *ilist_init;
-#endif
-
+// #ifndef CONFIG_PERCORE_IALLOCATOR
+//     struct mutex ilist_lock;
+//     struct list_head ilist; /* Sort asending */
+// #else
+//     struct mutex *ilist_locks;
+//     struct list_head *ilists;
+//     bool *ilist_init;
+// #endif
+    /* 32-bits per-core ino allocator */
+    struct inode_mgr *inode_mgr;
     /* for dynamic workload */
     struct hk_dym_wkld dw;
 };
 
-static inline void hk_dump_super(struct super_block *sb)
+static u64 inline hk_inc_and_get_vtail(struct hk_sb_info *sbi)
 {
-    struct hk_sb_info *sbi = sb->s_fs_info;
-    struct hk_super_block *hk_sb = sbi->hk_sb;
-    int cpuid;
-
-    hk_info("hk_sb->s_sum: 0x%x\n", hk_sb->s_sum);
-    hk_info("hk_sb->s_magic: 0x%x\n", hk_sb->s_magic);
-    hk_info("hk_sb->s_padding32: 0x%x\n", hk_sb->s_padding32);
-    hk_info("hk_sb->s_vol_name: %s\n", hk_sb->s_volume_name);
-    hk_info("hk_sb->s_blocksize: 0x%x\n", hk_sb->s_blocksize);
-    hk_info("hk_sb->s_size: 0x%llx\n", hk_sb->s_size);
-    hk_info("hk_sb->s_mtime: 0x%x\n", hk_sb->s_mtime);
-    hk_info("hk_sb->s_wtime: 0x%x\n", hk_sb->s_wtime);
-    hk_info("hk_sb->s_valid_umount: 0x%x\n", hk_sb->s_valid_umount);
-    hk_info("hk_sb->s_tstamp: 0x%llx\n", hk_sb->s_tstamp);
-
-    for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-        hk_info("layout %d: tail: 0x%llx, valid: %llu, invalid: %llu, free: %llu, total: %llu\n",
-                cpuid, hk_sb->s_layout[cpuid].s_atomic_counter, hk_sb->s_layout[cpuid].s_ind.valid_blks,
-                hk_sb->s_layout[cpuid].s_ind.invalid_blks, hk_sb->s_layout[cpuid].s_ind.free_blks,
-                hk_sb->s_layout[cpuid].s_ind.total_blks);
-    }
+    return (u64)atomic64_fetch_add(1, &sbi->vtail);
 }
 
 static inline struct hk_sb_info *HK_SB(struct super_block *sb)

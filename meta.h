@@ -55,44 +55,6 @@ struct hk_mregion {
     struct hk_mentry entries[HK_RG_ENTY_SLOTS];
 } __attribute((__packed__));
 
-static inline void hk_dump_mentry(struct super_block *sb, struct hk_mentry *entry)
-{
-    switch (entry->type) {
-    case SET_ATTR:
-        hk_info("SET_ATTR: mode %u, id: %u, gid: %u, atime: %u, mtime: %u \n ctime: %u, size: %llu, tstamp: %llu\n",
-                le32_to_cpu(entry->entry.setattr.mode),
-                le32_to_cpu(entry->entry.setattr.uid),
-                le32_to_cpu(entry->entry.setattr.gid),
-                le32_to_cpu(entry->entry.setattr.atime),
-                le32_to_cpu(entry->entry.setattr.mtime),
-                le32_to_cpu(entry->entry.setattr.ctime),
-                le64_to_cpu(entry->entry.setattr.size),
-                le64_to_cpu(entry->entry.setattr.tstamp));
-        break;
-    case LINK_CHANGE:
-        hk_info("LINK_CHANGE: links: %u, ctime: %u, tstamp: %llu\n",
-                le16_to_cpu(entry->entry.linkchange.links),
-                le32_to_cpu(entry->entry.linkchange.ctime),
-                le64_to_cpu(entry->entry.linkchange.tstamp));
-        break;
-    default:
-        break;
-    }
-}
-
-static inline void hk_dump_mregion(struct super_block *sb, struct hk_mregion *rg)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    int slotid;
-    if (le64_to_cpu(rg->ino) != (u64)-1) {
-        for (slotid = 0; slotid < HK_RG_ENTY_SLOTS; slotid++) {
-            if (rg->last_valid_linkchange == slotid || rg->last_valid_setattr == slotid) {
-                hk_dump_mentry(sb, &rg->entries[slotid]);
-            }
-        }
-    }
-}
-
 struct hk_jdentry {
     u8 name_len; /* length of the dentry name */
     __le16 links_count;
@@ -191,71 +153,5 @@ struct hk_tx_info {
 #define traverse_tx_info(ji, slotid, info) for (ji = &info->ji_pi, slotid = 0; slotid < HK_MAX_OBJ_INVOVED; slotid++, ji = hk_tx_get_ji_from_tx_info(info, slotid))
 
 #define traverse_journal_entry(sbi, jcur, jnl) for (jcur = TRANS_OFS_TO_ADDR(sbi, jnl->jhdr.jofs_head); jcur != TRANS_OFS_TO_ADDR(sbi, jnl->jhdr.jofs_tail); jcur = jcur + sizeof(struct hk_jentry) > TRANS_OFS_TO_ADDR(sbi, jnl->jhdr.jofs_end) ? TRANS_OFS_TO_ADDR(sbi, jnl->jhdr.jofs_start) + sizeof(struct hk_jentry) : jcur + sizeof(struct hk_jentry))
-
-static void hk_dump_jentry(struct super_block *sb, struct hk_jentry *je)
-{
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-    switch (je->type) {
-
-    case J_INODE:
-        hk_info("J_INODE: ino: %llu, tstamp: %llu, i_flags: %u, i_size: %llu \n i_ctime: %u, i_mtime: %u, i_atime: %u, i_mode: %u, i_links_count: %u, i_xattr: %llu \n i_uid: %u, i_gid: %u, i_generation: %u, i_create_time: %u, rdev: %u\n",
-                le64_to_cpu(je->jinode.ino),
-                le64_to_cpu(je->jinode.tstamp),
-                le32_to_cpu(je->jinode.i_flags),
-                le64_to_cpu(je->jinode.i_size),
-                le32_to_cpu(je->jinode.i_ctime),
-                le32_to_cpu(je->jinode.i_mtime),
-                le32_to_cpu(je->jinode.i_atime),
-                le16_to_cpu(je->jinode.i_mode),
-                le16_to_cpu(je->jinode.i_links_count),
-                le64_to_cpu(je->jinode.i_xattr),
-                le32_to_cpu(je->jinode.i_uid),
-                le32_to_cpu(je->jinode.i_gid),
-                le32_to_cpu(je->jinode.i_generation),
-                le32_to_cpu(je->jinode.i_create_time),
-                le32_to_cpu(je->jinode.dev.rdev));
-        break;
-    case J_DENTRY:
-        hk_info("J_DENTRY: name_len: %u, links_count: %u, mtime: %u \n ino: %llu, tstamp: (-), name: %s\n",
-                je->jdentry.name_len,
-                le16_to_cpu(je->jdentry.links_count),
-                le32_to_cpu(je->jdentry.mtime),
-                le64_to_cpu(je->jdentry.ino),
-                je->jdentry.name);
-        break;
-    }
-#else
-    switch (je->type) {
-    case J_INODE:
-        hk_info("J_INODE: data @ %llx\n", le64_to_cpu(je->data));
-        break;
-    case J_DENTRY:
-        hk_info("J_DENTRY: data @ %llx\n", le64_to_cpu(je->data));
-        break;
-    }
-#endif
-}
-
-static void hk_dump_journal(struct super_block *sb, struct hk_journal *jnl)
-{
-    struct hk_jentry *je;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    u64 jcur;
-
-    hk_info("JOURNAL: jtype: %u, jofs_start: %llu, jofs_end: %llu, jofs_head: %llu, jofs_tail: %llu\n",
-            jnl->jhdr.jtype,
-            le64_to_cpu(jnl->jhdr.jofs_start),
-            le64_to_cpu(jnl->jhdr.jofs_end),
-            le64_to_cpu(jnl->jhdr.jofs_head),
-            le64_to_cpu(jnl->jhdr.jofs_tail));
-
-    if (jnl->jhdr.jofs_head != jnl->jhdr.jofs_tail) {
-        traverse_journal_entry(sbi, jcur, jnl)
-        {
-            je = (struct hk_jentry *)jcur;
-            hk_dump_jentry(sb, je);
-        }
-    }
-}
 
 #endif /* _HK_META_H */

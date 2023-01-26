@@ -40,12 +40,14 @@
 
 #define TRANS_ADDR_TO_OFS(sbi, addr)  (addr == 0 ? 0 : ((u64)(addr) - (u64)(sbi)->virt_addr))   
 #define TRANS_OFS_TO_ADDR(sbi, ofs)   (ofs == 0 ? 0 : ((u64)(ofs) + (sbi)->virt_addr))
+#define GET_ALIGNED_BLKNR(ofs_addr) ((ofs_addr) >> HUNTER_BLK_SHIFT)
 
 #define HK_VALID_UMOUNT     0xffffffff
 #define HK_INVALID_UMOUNT   0x00000000
 
-#define ENABLE_META_LOCAL(sb)	test_opt(sb, META_LOCAL)
 #define ENABLE_META_ASYNC(sb)	test_opt(sb, META_ASYNC)
+#define ENABLE_META_LOCAL(sb)	test_opt(sb, META_LOCAL)
+#define ENABLE_META_LFS(sb)		test_opt(sb, META_LFS)
 #define ENABLE_META_PACK(sb)	test_opt(sb, META_PACK)
 #define ENABLE_HISTORY_W(sb)	test_opt(sb, HISTORY_W)
 
@@ -141,8 +143,10 @@ struct hk_range_node {
 #include "stats.h"
 #include "config.h"
 #include "dw.h"
+#include "tlalloc.h"
 #include "namei.h"
 #include "linix.h"
+#include "objm.h"
 #include "super.h"
 #include "inode.h"
 #include "config.h"
@@ -150,6 +154,8 @@ struct hk_range_node {
 #include "meta.h"
 #include "mprotect.h"
 #include "cmt.h"
+#include "generic_cachep.h"
+#include "dbg.h"
 
 static inline void prefetcht0(const void *x) {
 	asm volatile("prefetcht0 %0" : : "m" (*(const char* )x));
@@ -304,7 +310,6 @@ static inline u64 _round_up(u64 value, u64 align)
 		return (value / align + 1) * align;
 	}
 }
-
 /* ======================= ANCHOR: mlist.c ========================= */
 void hk_range_trv(struct list_head *head);
 int hk_range_insert_range(struct super_block *sb, struct list_head *head, 
@@ -316,6 +321,16 @@ int hk_range_remove(struct super_block *sb, struct list_head *head, unsigned lon
 int hk_range_remove_range(struct super_block *sb, struct list_head *head, 
                           unsigned long range_low, unsigned long range_high);
 void hk_range_free_all(struct list_head *head);
+
+/* ======================= ANCHOR: tlalloc.c ========================= */
+void tl_build_free_param(tlfree_param_t *param, u64 blk, u64 num, u16 flags);
+void tl_build_alloc_param(tlalloc_param_t *param, u64 req, u16 flags);
+void tl_build_restore_param(tlrestore_param_t *param, u64 blk, u64 num, u16 flags);
+int tl_alloc_init(tl_allocator_t *alloc, u64 blk, u64 num, u32 blk_size, u32 meta_size);
+s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param);
+void tlfree(tl_allocator_t *alloc, tlfree_param_t *param);
+void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param);
+void tl_destory(tl_allocator_t *alloc);
 
 /* ======================= ANCHOR: super.c ========================= */
 struct hk_range_node *hk_alloc_range_node(struct super_block *sb);
@@ -330,6 +345,7 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
                     u16 i_mode);
 
 /* ======================= ANCHOR: bbuild.c ========================= */
+unsigned long hk_get_bm_size(struct super_block *sb);
 int hk_recovery(struct super_block *sb);
 int hk_save_layouts(struct super_block *sb);
 int hk_save_regions(struct super_block *sb);
@@ -375,9 +391,14 @@ extern const struct address_space_operations hk_aops_dax;
 void hk_init_inode(struct inode *inode, struct hk_inode *pi);
 int hk_init_free_inode_list(struct super_block *sb, bool is_init);
 int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_init);
-u64 hk_get_new_ino(struct super_block *sb);
+int inode_mgr_init(struct hk_sb_info *sbi, inode_mgr_t *mgr);
+int inode_mgr_alloc(inode_mgr_t *mgr, u32 *ret_ino);
+int inode_mgr_free(inode_mgr_t *mgr, u32 ino);
+int inode_mgr_destory(inode_mgr_t *mgr);
+int inode_mgr_restore(inode_mgr_t *mgr, u32 ino);
 struct inode *hk_iget_opened(struct super_block *sb, unsigned long ino);
 struct inode *hk_iget(struct super_block *sb, unsigned long ino);
+void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset);
 struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir, 
 							  u64 ino, umode_t mode, size_t size, dev_t rdev, 
 							  const struct qstr *qstr);
@@ -386,7 +407,7 @@ int hk_getattr(const struct path *path, struct kstat *stat,
 int hk_notify_change(struct dentry *dentry, struct iattr *attr);
 int hk_write_inode(struct inode *inode, struct writeback_control *wbc);
 void hk_evict_inode(struct inode *inode);
-int _hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
+int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 					   		   		   struct hk_inode_info_header *sih);
 int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 					   struct hk_inode_info_header *sih);
@@ -482,6 +503,47 @@ static inline int hk_get_cpuid(struct super_block *sb)
 
 	return smp_processor_id() % sbi->cpus;
 }
+
+static u64 inline get_pm_blk_addr(struct hk_sb_info *sbi, u32 blk)
+{
+    return (u64)sbi->virt_addr + ((u64)blk << HUNTER_BLK_SHIFT);
+}
+
+static u64 inline get_pm_entry_addr(struct hk_sb_info *sbi, u32 blk, u32 entrynr)
+{
+    return get_pm_blk_addr(sbi, blk) + ((u64)entrynr << HUNTER_MTA_SHIFT);
+}
+
+static u64 inline get_pm_addr(struct hk_sb_info *sbi, u64 offset)
+{
+    return (u64)sbi->virt_addr + offset;
+}
+
+static u64 inline get_pm_offset(struct hk_sb_info *sbi, u64 addr)
+{
+    return addr - (u64)sbi->virt_addr;
+}
+
+static u64 inline get_pm_blk_offset(struct hk_sb_info *sbi, u64 blk)
+{
+    return (blk << HUNTER_BLK_SHIFT);
+}
+
+static u64 inline get_pm_blk(struct hk_sb_info *sbi, u64 addr)
+{
+    return (u64)(get_pm_offset(sbi, addr) >> HUNTER_BLK_SHIFT);
+}
+
+static u64 inline get_layout_idx(struct hk_sb_info *sbi, u64 offset)
+{
+    return offset / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
+}
+
+static inline struct tl_allocator *get_tl_allocator(struct hk_sb_info *sbi, u64 offset)
+{
+    u64 idx = get_layout_idx(sbi, offset);
+    return &sbi->layouts[idx].allocator;
+} 
 
 // BKDR String Hash Function
 static inline unsigned long BKDRHash(const char *str, int length)

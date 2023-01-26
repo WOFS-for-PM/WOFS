@@ -25,6 +25,23 @@
 
 #include "hunter.h"
 
+#define BMBLK_ATTR      TL_MTA_PKG_ATTR
+#define BMBLK_UNLINK    TL_MTA_PKG_UNLINK
+#define BMBLK_CREATE    TL_MTA_PKG_CREATE
+#define BMBLK_DATA      TL_MTA_PKG_DATA
+#define BMBLK_NUM       (4)
+#define BMBLK_SIZE(sbi) (sbi->tl_per_type_bm_reserved_blks << PAGE_SHIFT)
+
+unsigned long hk_get_bm_size(struct super_block *sb)
+{
+    if (ENABLE_META_PACK(sb)) {
+        return BMBLK_SIZE(HK_SB(sb)) * BMBLK_NUM;
+    } else {
+        hk_warn("meta pack is disabled, no need to allocate bitmap");
+        return 0;
+    }
+}
+
 int hk_save_layouts(struct super_block *sb) 
 {
     struct hk_sb_info     *sbi = HK_SB(sb);

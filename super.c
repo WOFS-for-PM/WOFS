@@ -63,6 +63,160 @@ static struct kmem_cache *hk_range_node_cachep;
 static struct kmem_cache *hk_dentry_info_cachep;
 static struct kmem_cache *hk_cmt_info_cachep;
 
+void hk_free_range_node(struct hk_range_node *node)
+{
+    kmem_cache_free(hk_range_node_cachep, node);
+}
+
+void hk_free_cmt_info(struct hk_cmt_info *node)
+{
+    kmem_cache_free(hk_cmt_info_cachep, node);
+}
+
+void hk_free_dentry_info(struct hk_dentry_info *node)
+{
+    kmem_cache_free(hk_dentry_info_cachep, node);
+}
+
+struct hk_range_node *hk_alloc_range_node(struct super_block *sb)
+{
+    struct hk_range_node *p;
+
+    p = (struct hk_range_node *)
+        kmem_cache_zalloc(hk_range_node_cachep, GFP_ATOMIC);
+    return p;
+}
+
+struct hk_dentry_info *hk_alloc_dentry_info(struct super_block *sb)
+{
+    struct hk_dentry_info *p;
+
+    p = (struct hk_dentry_info *)
+        kmem_cache_zalloc(hk_dentry_info_cachep, GFP_ATOMIC);
+    return p;
+}
+
+struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb)
+{
+    struct hk_cmt_info *p;
+
+    p = (struct hk_cmt_info *)
+        kmem_cache_alloc(hk_cmt_info_cachep, GFP_ATOMIC);
+    return p;
+}
+
+static struct inode *hk_alloc_inode(struct super_block *sb)
+{
+    struct hk_inode_info *vi;
+
+    vi = kmem_cache_alloc(hk_inode_cachep, GFP_NOFS);
+    if (!vi)
+        return NULL;
+
+    atomic64_set(&vi->vfs_inode.i_version, 1);
+
+    return &vi->vfs_inode;
+}
+
+static void hk_i_callback(struct rcu_head *head)
+{
+    struct inode *inode = container_of(head, struct inode, i_rcu);
+    struct hk_inode_info *vi = HK_I(inode);
+
+    hk_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
+    kmem_cache_free(hk_inode_cachep, vi);
+}
+
+static void hk_destroy_inode(struct inode *inode)
+{
+    hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
+    call_rcu(&inode->i_rcu, hk_i_callback);
+}
+
+static void init_once(void *foo)
+{
+    struct hk_inode_info *vi = foo;
+
+    inode_init_once(&vi->vfs_inode);
+}
+
+static int __init init_inodecache(void)
+{
+    hk_inode_cachep = kmem_cache_create("hk_inode_cache",
+                                        sizeof(struct hk_inode_info),
+                                        0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), init_once);
+    if (hk_inode_cachep == NULL)
+        return -ENOMEM;
+    return 0;
+}
+
+static int __init init_rangenode_cache(void)
+{
+    hk_range_node_cachep = kmem_cache_create("hk_range_node_cache",
+                                             sizeof(struct hk_range_node),
+                                             0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
+    if (hk_range_node_cachep == NULL)
+        return -ENOMEM;
+    return 0;
+}
+
+static int __init init_cmtinfo_cache(void)
+{
+    hk_cmt_info_cachep = kmem_cache_create("hk_cmt_info_cache",
+                                           sizeof(struct hk_cmt_info),
+                                           0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD | SLAB_HWCACHE_ALIGN), NULL);
+    if (hk_cmt_info_cachep == NULL)
+        return -ENOMEM;
+    return 0;
+}
+
+static int __init init_dentryinfo_cache(void)
+{
+    hk_dentry_info_cachep = kmem_cache_create("hk_dentry_info_cache",
+                                              sizeof(struct hk_dentry_info),
+                                              0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
+    if (hk_dentry_info_cachep == NULL)
+        return -ENOMEM;
+    return 0;
+}
+
+static void destroy_inodecache(void)
+{
+    /*
+     * Make sure all delayed rcu free inodes are flushed before
+     * we destroy cache.
+     */
+    rcu_barrier();
+    if (hk_inode_cachep) {
+        kmem_cache_destroy(hk_inode_cachep);
+        hk_inode_cachep = NULL;
+    }
+}
+
+static void destroy_rangenode_cache(void)
+{
+    if (hk_range_node_cachep) {
+        kmem_cache_destroy(hk_range_node_cachep);
+        hk_range_node_cachep = NULL;
+    }
+}
+
+static void destroy_cmtinfo_cache(void)
+{
+    if (hk_cmt_info_cachep) {
+        kmem_cache_destroy(hk_cmt_info_cachep);
+        hk_cmt_info_cachep = NULL;
+    }
+}
+
+static void destroy_dentryinfo_cache(void)
+{
+    if (hk_dentry_info_cachep) {
+        kmem_cache_destroy(hk_dentry_info_cachep);
+        hk_dentry_info_cachep = NULL;
+    }
+}
+
 /* FIXME: should the following variable be one per hk instance? */
 unsigned int hk_dbgmask;
 
@@ -168,6 +322,7 @@ enum {
     Opt_dax,
     Opt_meta_async,
     Opt_meta_local,
+    Opt_meta_lfs,
     Opt_meta_pack,
     Opt_history_w,
     Opt_wprotect,
@@ -187,6 +342,7 @@ static const match_table_t tokens = {
     {Opt_dax, "dax"},
     {Opt_meta_async, "meta_async=%u"},
     {Opt_meta_local, "meta_local"},
+    {Opt_meta_lfs, "meta_lfs"},
     {Opt_meta_pack, "meta_pack"},
     {Opt_history_w, "history_w"},
     {Opt_wprotect, "wprotect"},
@@ -267,6 +423,9 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
         case Opt_meta_local:
             set_opt(sbi->s_mount_opt, META_LOCAL);
             break;
+        case Opt_meta_lfs:
+            set_opt(sbi->s_mount_opt, META_LFS);
+            break;
         case Opt_meta_pack:
             set_opt(sbi->s_mount_opt, META_PACK);
             break;
@@ -290,8 +449,9 @@ static int hk_parse_options(char *options, struct hk_sb_info *sbi,
         }
     }
 
-    if (ENABLE_META_PACK(sb) && ENABLE_META_LOCAL(sb)) {
-        hk_warn("META_PACK and META_LOCAL are mutually exclusive\n");
+    if (ENABLE_META_PACK(sb) && ENABLE_META_LOCAL(sb) || ENABLE_META_PACK(sb) && ENABLE_META_LFS(sb) 
+    || ENABLE_META_LFS(sb) && ENABLE_META_LOCAL(sb)) {
+        hk_warn("META* are mutually exclusive\n");
         goto bad_opt;
     }
 
@@ -425,28 +585,32 @@ static struct hk_inode *hk_init(struct super_block *sb,
     /* Flush In-DRAM superblock into NVM */
     hk_sync_super(sb);
 
-    root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
-    hk_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);
+    if (ENABLE_META_PACK(sb)) {
+        /* TODO */
+    } else {
+        root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
+        hk_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);
 
-    hk_memunlock_inode(sb, root_pi, &irq_flags);
-    root_pi->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
-    root_pi->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
-    root_pi->i_gid = cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
-    root_pi->i_links_count = cpu_to_le16(2);
-    root_pi->i_flags = 0;
-    root_pi->i_size = cpu_to_le64(sb->s_blocksize);
-    root_pi->i_atime = root_pi->i_mtime = root_pi->i_ctime = cpu_to_le32(get_seconds());
+        hk_memunlock_inode(sb, root_pi, &irq_flags);
+        root_pi->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
+        root_pi->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
+        root_pi->i_gid = cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
+        root_pi->i_links_count = cpu_to_le16(2);
+        root_pi->i_flags = 0;
+        root_pi->i_size = cpu_to_le64(sb->s_blocksize);
+        root_pi->i_atime = root_pi->i_mtime = root_pi->i_ctime = cpu_to_le32(get_seconds());
 #ifndef CONFIG_PERCORE_IALLOCATOR
-    root_pi->ino = cpu_to_le64(hk_get_new_ino(sb));
+        inode_mgr_alloc(&sbi->inode_mgr, &root_pi->ino);
 #else
-    root_pi->ino = cpu_to_le64(0);
+        root_pi->ino = cpu_to_le64(0);
 #endif
-    root_pi->valid = 1;
-    hk_memlock_inode(sb, root_pi, &irq_flags);
+        root_pi->valid = 1;
+        hk_memlock_inode(sb, root_pi, &irq_flags);
 
-    /* We don't care the order */
-    hk_flush_buffer(root_pi, sizeof(struct hk_inode), false);
-    PERSISTENT_BARRIER();
+        /* We don't care the order */
+        hk_flush_buffer(root_pi, sizeof(struct hk_inode), false);
+        PERSISTENT_BARRIER();
+    }
 
     HK_END_TIMING(new_init_t, init_time);
     hk_info("hk initialization finish\n");
@@ -509,66 +673,86 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     struct super_block *sb = sbi->sb;
     u64 max_rg_size;
     int i;
-
-    sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
+    
     sbi->lblk_sz = PAGE_SIZE;
-
-    /* Layout Related */
-    sbi->m_addr = _round_up((u64)sbi->virt_addr + HK_SB_SIZE(sbi), PAGE_SIZE);
-
-    /* Build Inode Table */
-    sbi->ino_tab_addr = sbi->m_addr;
-    sbi->ino_tab_slots = HK_NUM_INO;
-    sbi->ino_tab_size = _round_up(sbi->ino_tab_slots * sizeof(struct hk_inode), PAGE_SIZE);
-
-    /* Build Summary Header */
-    sbi->sm_addr = sbi->ino_tab_addr + sbi->ino_tab_size;
-    if (ENABLE_META_LOCAL(sb)) {
-        sbi->sm_slots = sbi->initsize / HK_PBLK_SZ(sbi);
-        sbi->sm_size = _round_up(sbi->sm_slots * sizeof(struct hk_header), PAGE_SIZE);
+    if (ENABLE_META_PACK(sb)) {
+        sbi->pblk_sz = PAGE_SIZE;
+        sbi->m_addr = sbi->bm_start = _round_up((u64)sbi->virt_addr + HK_SB_SIZE(sbi), PAGE_SIZE);
+        sbi->m_size = sbi->bm_size = hk_get_bm_size(sb);
+        sbi->fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
+        sbi->tl_per_type_bm_reserved_blks = _round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE);
     } else {
-        sbi->sm_slots = 0;
-        sbi->sm_size = 0;
+        sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
+
+        /* Layout Related */
+        sbi->m_addr = _round_up((u64)sbi->virt_addr + HK_SB_SIZE(sbi), PAGE_SIZE);
+
+        /* Build Inode Table */
+        sbi->ino_tab_addr = sbi->m_addr;
+        sbi->ino_tab_slots = HK_NUM_INO;
+        sbi->ino_tab_size = _round_up(sbi->ino_tab_slots * sizeof(struct hk_inode), PAGE_SIZE);
+
+        /* Build Summary Header */
+        sbi->sm_addr = sbi->ino_tab_addr + sbi->ino_tab_size;
+        if (ENABLE_META_LOCAL(sb)) {
+            sbi->sm_slots = sbi->initsize / HK_PBLK_SZ(sbi);
+            sbi->sm_size = _round_up(sbi->sm_slots * sizeof(struct hk_header), PAGE_SIZE);
+        } else {
+            sbi->sm_slots = 0;
+            sbi->sm_size = 0;
+        }
+
+        /* Build Journal */
+        sbi->j_addr = sbi->sm_addr + sbi->sm_size;
+        sbi->j_slots = sbi->cpus * HK_PERCORE_JSLOTS;
+        sbi->j_size = _round_up(sbi->j_slots * HK_JOURNAL_SIZE, PAGE_SIZE);
+        sbi->j_locks = kcalloc(sbi->j_slots, sizeof(struct mutex), GFP_KERNEL);
+        for (i = 0; i < sbi->j_slots; i++)
+            mutex_init(&sbi->j_locks[i]);
+
+        /* Build Meta Region */
+        sbi->rg_addr = sbi->j_addr + sbi->j_size;
+        sbi->rg_slots = HK_RG_SLOTS > HK_NUM_INO ? HK_NUM_INO : HK_RG_SLOTS;
+        sbi->rg_size = _round_up(sbi->rg_slots * sizeof(struct hk_mregion), PAGE_SIZE);
+
+        /* Calc Meta Size and Data Size */
+        sbi->m_size = _round_up(sbi->rg_addr - sbi->m_addr + sbi->rg_size, PAGE_SIZE);
     }
-
-    /* Build Journal */
-    sbi->j_addr = sbi->sm_addr + sbi->sm_size;
-    sbi->j_slots = sbi->cpus * HK_PERCORE_JSLOTS;
-    sbi->j_size = _round_up(sbi->j_slots * HK_JOURNAL_SIZE, PAGE_SIZE);
-    sbi->j_locks = kcalloc(sbi->j_slots, sizeof(struct mutex), GFP_KERNEL);
-    for (i = 0; i < sbi->j_slots; i++)
-        mutex_init(&sbi->j_locks[i]);
-
-    /* Build Meta Region */
-    sbi->rg_addr = sbi->j_addr + sbi->j_size;
-    sbi->rg_slots = HK_RG_SLOTS > HK_NUM_INO ? HK_NUM_INO : HK_RG_SLOTS;
-    sbi->rg_size = _round_up(sbi->rg_slots * sizeof(struct hk_mregion), PAGE_SIZE);
-
-    /* Calc Meta Size and Data Size */
-    sbi->m_size = _round_up(sbi->rg_addr - sbi->m_addr + sbi->rg_size, PAGE_SIZE);
 
     sbi->d_addr = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
     sbi->d_size = sbi->initsize - (sbi->d_addr - (u64)sbi->virt_addr);
     sbi->d_blks = sbi->d_size / HK_PBLK_SZ(sbi);
 
+    hk_dbgv("%s: meta addr: %llx, meta_size: %llx; data addr: %llx\n", __func__, sbi->m_addr, sbi->m_size, sbi->d_addr);
+    return 0;
+}
+
+static int hk_features_init(struct hk_sb_info *sbi)
+{
+    int i, ret = 0;
+    struct super_block *sb = sbi->sb;
+
     /* Inode List Related */
-#ifndef CONFIG_PERCORE_IALLOCATOR
-    INIT_LIST_HEAD(&sbi->ilist);
-    mutex_init(&sbi->ilist_lock);
-#else
-    sbi->ilists = kcalloc(sbi->cpus, sizeof(struct list_head), GFP_KERNEL);
-    for (i = 0; i < sbi->cpus; i++)
-        INIT_LIST_HEAD(&sbi->ilists[i]);
-    sbi->ilist_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
-    for (i = 0; i < sbi->cpus; i++)
-        mutex_init(&sbi->ilist_locks[i]);
-    sbi->ilist_init = kcalloc(sbi->cpus, sizeof(bool), GFP_KERNEL);
-    for (i = 0; i < sbi->cpus; i++)
-        sbi->ilist_init[i] = false;
-#endif
-    sbi->irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
-    for (i = 0; i < sbi->cpus; i++)
-        mutex_init(&sbi->irange_locks[i]);
+    sbi->inode_mgr = (struct inode_mgr *)kmalloc(sizeof(struct inode_mgr), GFP_KERNEL);
+    if (!sbi->inode_mgr)
+        return -ENOMEM;
+    
+    ret = inode_mgr_init(sbi, sbi->inode_mgr);
+    if (ret < 0)
+        return ret;
+    
+    if (ENABLE_META_PACK(sb)) {
+        /* zero out vtail */
+        atomic64_and(0, &sbi->vtail);
+    } else
+    {    
+        sbi->irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
+        for (i = 0; i < sbi->cpus; i++)
+            mutex_init(&sbi->irange_locks[i]);
+        /* Version Related */
+        sbi->tstamp = 0;
+        spin_lock_init(&sbi->ts_lock);
+    }
 
     /* Background Commit Related */
     if (ENABLE_META_ASYNC(sb)) {
@@ -577,16 +761,11 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
             return -ENOMEM;
     }
 
-    /* Version Related */
-    sbi->tstamp = 0;
-    spin_lock_init(&sbi->ts_lock);
-
     if (ENABLE_HISTORY_W(sb)) {
         /* Dynamic Workload */
         hk_dw_init(&sbi->dw, HK_LINIX_SLOTS);
     }
 
-    hk_dbgv("%s: meta addr: %llx, meta_size: %llx; data addr: %llx\n", __func__, sbi->m_addr, sbi->m_size, sbi->d_addr);
     return 0;
 }
 
@@ -649,7 +828,14 @@ static int hk_fill_super(struct super_block *sb, void *data, int silent)
         goto out;
     }
 
+    if (ENABLE_META_PACK(sb)) {
+        /* we use ref_dentry instead, see objm.c */
+        destroy_dentryinfo_cache();
+    }
+
     hk_super_constants_init(sbi);
+    
+    hk_features_init(sbi);
 
     hk_layouts_init(sbi, sbi->cpus);
 
@@ -846,26 +1032,19 @@ static void hk_put_super(struct super_block *sb)
         hk_flush_cmt_queue(sb);
         /* destory cmt queue */
         hk_free_cmt_queue(sbi->cq);
+        hk_stablisze_meta(sb);
     }
 
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {
-        hk_stablisze_meta(sb);
         hk_save_regions(sb);
         hk_save_layouts(sb);
         hk_umount_over(sb);
         sbi->virt_addr = NULL;
     }
 
-    /* destroy inode list */
-#ifndef CONFIG_PERCORE_IALLOCATOR
-    hk_range_free_all(&sbi->ilist);
-#else
-    int cpuid;
-    for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
-        hk_range_free_all(&sbi->ilists[cpuid]);
-    }
-#endif
+    /* destroy inode manager */
+    inode_mgr_destory(sbi->inode_mgr);
 
     /* destroy layouts in DRAM */
     hk_layouts_free(sbi);
@@ -882,148 +1061,6 @@ static void hk_put_super(struct super_block *sb)
     sb->s_fs_info = NULL;
 }
 
-void hk_free_range_node(struct hk_range_node *node)
-{
-    kmem_cache_free(hk_range_node_cachep, node);
-}
-
-void hk_free_cmt_info(struct hk_cmt_info *node)
-{
-    kmem_cache_free(hk_cmt_info_cachep, node);
-}
-
-void hk_free_dentry_info(struct hk_dentry_info *node)
-{
-    kmem_cache_free(hk_dentry_info_cachep, node);
-}
-
-struct hk_range_node *hk_alloc_range_node(struct super_block *sb)
-{
-    struct hk_range_node *p;
-
-    p = (struct hk_range_node *)
-        kmem_cache_zalloc(hk_range_node_cachep, GFP_NOFS);
-    return p;
-}
-
-struct hk_dentry_info *hk_alloc_dentry_info(struct super_block *sb)
-{
-    struct hk_dentry_info *p;
-
-    p = (struct hk_dentry_info *)
-        kmem_cache_zalloc(hk_dentry_info_cachep, GFP_NOFS);
-    return p;
-}
-
-struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb)
-{
-    struct hk_cmt_info *p;
-
-    p = (struct hk_cmt_info *)
-        kmem_cache_alloc(hk_cmt_info_cachep, GFP_ATOMIC);
-    return p;
-}
-
-static struct inode *hk_alloc_inode(struct super_block *sb)
-{
-    struct hk_inode_info *vi;
-
-    vi = kmem_cache_alloc(hk_inode_cachep, GFP_NOFS);
-    if (!vi)
-        return NULL;
-
-    atomic64_set(&vi->vfs_inode.i_version, 1);
-
-    return &vi->vfs_inode;
-}
-
-static void hk_i_callback(struct rcu_head *head)
-{
-    struct inode *inode = container_of(head, struct inode, i_rcu);
-    struct hk_inode_info *vi = HK_I(inode);
-
-    hk_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
-    kmem_cache_free(hk_inode_cachep, vi);
-}
-
-static void hk_destroy_inode(struct inode *inode)
-{
-    hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
-    call_rcu(&inode->i_rcu, hk_i_callback);
-}
-
-static void init_once(void *foo)
-{
-    struct hk_inode_info *vi = foo;
-
-    inode_init_once(&vi->vfs_inode);
-}
-
-static int __init init_inodecache(void)
-{
-    hk_inode_cachep = kmem_cache_create("hk_inode_cache",
-                                        sizeof(struct hk_inode_info),
-                                        0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), init_once);
-    if (hk_inode_cachep == NULL)
-        return -ENOMEM;
-    return 0;
-}
-
-static int __init init_rangenode_cache(void)
-{
-    hk_range_node_cachep = kmem_cache_create("hk_range_node_cache",
-                                             sizeof(struct hk_range_node),
-                                             0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
-    if (hk_range_node_cachep == NULL)
-        return -ENOMEM;
-    return 0;
-}
-
-static int __init init_cmtinfo_cache(void)
-{
-    hk_cmt_info_cachep = kmem_cache_create("hk_cmt_info_cache",
-                                           sizeof(struct hk_cmt_info),
-                                           0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD | SLAB_HWCACHE_ALIGN), NULL);
-    if (hk_cmt_info_cachep == NULL)
-        return -ENOMEM;
-    return 0;
-}
-
-static int __init init_dentryinfo_cache(void)
-{
-    hk_dentry_info_cachep = kmem_cache_create("hk_dentry_info_cache",
-                                              sizeof(struct hk_dentry_info),
-                                              0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
-    if (hk_dentry_info_cachep == NULL)
-        return -ENOMEM;
-    return 0;
-}
-
-static void destroy_inodecache(void)
-{
-    /*
-     * Make sure all delayed rcu free inodes are flushed before
-     * we destroy cache.
-     */
-    rcu_barrier();
-    kmem_cache_destroy(hk_inode_cachep);
-}
-
-static void destroy_rangenode_cache(void)
-{
-    kmem_cache_destroy(hk_range_node_cachep);
-}
-
-static void destroy_cmtinfo_cache(void)
-{
-    kmem_cache_destroy(hk_cmt_info_cachep);
-}
-
-static void destroy_dentryinfo_cache(void)
-{
-    kmem_cache_destroy(hk_dentry_info_cachep);
-}
-
 /*
  * the super block writes are all done "on the fly", so the
  * super block is never in a "dirty" state, so there's no need
@@ -1032,9 +1069,9 @@ static void destroy_dentryinfo_cache(void)
 static struct super_operations hk_sops = {
     .alloc_inode = hk_alloc_inode,
     .destroy_inode = hk_destroy_inode,
-    .write_inode = hk_write_inode, /* TODO: Not support yet */
+    .write_inode = hk_write_inode, 
     .dirty_inode = NULL,           /* TODO: Not support yet */
-    .evict_inode = hk_evict_inode, /* TODO: Not support yet */
+    .evict_inode = hk_evict_inode, 
     .put_super = hk_put_super,
     .statfs = hk_statfs,
     .remount_fs = hk_remount,
@@ -1062,7 +1099,7 @@ static struct inode *hk_nfs_get_inode(struct super_block *sb,
     if (ino < HK_ROOT_INO)
         return ERR_PTR(-ESTALE);
 
-    if (ino > LONG_MAX)
+    if (ino > UINT_MAX)
         return ERR_PTR(-ESTALE);
 
     inode = hk_iget(sb, ino);
@@ -1100,6 +1137,59 @@ static const struct export_operations hk_export_ops = {
     .get_parent = hk_get_parent,
 };
 
+void hk_destory_slab_caches(void)
+{
+    destroy_rangenode_cache();
+    destroy_cmtinfo_cache();
+    destroy_dentryinfo_cache();
+    destroy_obj_ref_inode_cache();
+    destroy_obj_ref_attr_cache();
+    destroy_obj_ref_dentry_cache();
+    destroy_obj_ref_data_cache();
+    destroy_claim_req_cache();
+}
+
+static int __init hk_create_slab_caches(void)
+{
+    int rc = 0;
+
+    rc = init_rangenode_cache();
+    if (rc)
+        goto out;
+
+    rc = init_dentryinfo_cache();
+    if (rc)
+        goto out;
+
+    rc = init_cmtinfo_cache();
+    if (rc)
+        goto out;
+    
+    /* init caches */
+    rc = init_obj_ref_inode_cache();
+    if (rc)
+        goto out;
+    
+    rc = init_obj_ref_attr_cache();
+    if (rc)
+        goto out;
+    
+    rc = init_obj_ref_dentry_cache();
+    if (rc)
+        goto out;
+    
+    rc = init_obj_ref_data_cache();
+    if (rc)
+        goto out;
+
+    rc = init_claim_req_cache();
+    if (rc)
+        goto out;
+
+out:
+    return rc;
+}
+
 static int __init init_hk_fs(void)
 {
     int rc = 0;
@@ -1113,38 +1203,25 @@ static int __init init_hk_fs(void)
             support_clwb ? "YES" : "NO");
 
     hk_proc_root = proc_mkdir(proc_dirname, NULL);
-
-    rc = init_rangenode_cache();
-    if (rc)
-        return rc;
-
-    rc = init_inodecache();
+    rc = hk_create_slab_caches();
     if (rc)
         goto out1;
 
-    rc = init_dentryinfo_cache();
+    rc = init_inodecache();
     if (rc)
         goto out2;
 
-    rc = init_cmtinfo_cache();
-    if (rc)
-        goto out3;
-
     rc = register_filesystem(&hk_fs_type);
     if (rc)
-        goto out4;
+        goto out2;
 
     HK_END_TIMING(init_t, init_time);
     return 0;
 
-out4:
-    destroy_cmtinfo_cache();
-out3:
-    destroy_dentryinfo_cache();
 out2:
     destroy_inodecache();
 out1:
-    destroy_rangenode_cache();
+    hk_destory_slab_caches();
 
     return rc;
 }
@@ -1154,13 +1231,11 @@ static void __exit exit_hk_fs(void)
     unregister_filesystem(&hk_fs_type);
     remove_proc_entry(proc_dirname, NULL);
     destroy_inodecache();
-    destroy_rangenode_cache();
-    destroy_dentryinfo_cache();
-    destroy_cmtinfo_cache();
+    hk_destory_slab_caches();
 }
 
 MODULE_AUTHOR("Yanqi Pan <deadpoolmine@qq.com>");
-MODULE_DESCRIPTION("HUNTER: An Asynchronous Persistent Memory File System with Little Software Overheads");
+MODULE_DESCRIPTION("HUNTER: An Exact Write-ONCE PM File System with Memory Considerations");
 MODULE_LICENSE("GPL");
 
 module_init(init_hk_fs)

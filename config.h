@@ -1,8 +1,13 @@
 #ifndef _HK_CONFIG_H_
 #define _HK_CONFIG_H_
 
-#define HUNTER_SUPER_MAGIC 0x48554E54
-
+#define HUNTER_SUPER_MAGIC     0x48554E54 /* HUNT */
+#define HUNTER_OBJ_MAGIC       0x484F424A /* HOBJ */
+#define HUNTER_UNO_MAGIC       0x48504B48 /* HUNO */
+#define HUNTER_MAX_NAME_LEN    (128 - 36)
+#define HUNTER_VALID_UNMOUNT   0xFFFFFFFF
+#define HUNTER_INVALID_UNMOUNT 0x00000000
+#define HUNTER_ROOT_INO        0
 /*
  * The HUNTER filesystem constants/structures
  */
@@ -23,8 +28,9 @@
 #define HUNTER_MOUNT_DATA_COW     0x000400 /* Copy-on-write for data integrity */
 #define HUNTER_MOUNT_META_ASYNC   0x000800 /* Write metadata asynchronously */
 #define HUNTER_MOUNT_META_LOCAL   0x001000 /* Reserving a continuous space to write meta */
-#define HUNTER_MOUNT_META_PACK    0x002000 /* Pack meta (physically, logically) */
-#define HUNTER_MOUNT_HISTORY_W    0x004000 /* History window for file open */
+#define HUNTER_MOUNT_META_LFS     0x002000 /* Append metadata like LFS */
+#define HUNTER_MOUNT_META_PACK    0x004000 /* Pack meta (physically, logically). i.e., WRITE-ONCE */
+#define HUNTER_MOUNT_HISTORY_W    0x008000 /* History window for file open */
 /*
  * Maximal count of links to a file
  */
@@ -39,22 +45,23 @@
 /*
  * HUNTER CONFIGURATIONS
  */
-#define HK_PBLK_SZ(sbi) sbi->pblk_sz
-#define HK_LBLK_SZ(sbi) sbi->lblk_sz /* logic block size */
-#define HK_NUM_INO (1024 * 1024)
-#define HK_RG_SLOTS (1024 * 1024)
-#define HK_RG_ENTY_SLOTS (4)
-#define HK_LINIX_SLOTS (1024 * 256) /* related to init size */
-#define HK_HISTORY_WINDOWS (1) /* for dynamic workloads */
-#define HK_NAME_LEN 255
-#define HK_HASH_BITS 6 /* for directory table */
-#define HK_CMT_QUEUE_BITS 10 /* for commit queue */
+#define HK_PBLK_SZ(sbi)          sbi->pblk_sz
+#define HK_LBLK_SZ(sbi)          sbi->lblk_sz /* logic block size */
+#define HK_NUM_INO               (1024 * 1024)
+#define HK_RG_SLOTS              (1024 * 1024)
+#define HK_RG_ENTY_SLOTS         (4)
+#define HK_LINIX_SLOTS           (1024 * 256) /* related to init size */
+#define HK_HISTORY_WINDOWS       (1)          /* for dynamic workloads */
+#define HK_NAME_LEN              (128 - 36)
+#define HK_HASH_BITS7            7  /* for those long period hash table */
+#define HK_HASH_BITS3            3  /* for those frequent creating hash table */
+#define HK_CMT_QUEUE_BITS        10 /* for commit queue */
 #define HK_CMT_MAX_PROCESS_BATCH (1024 * 256)
 #define HK_CMT_WAKEUP_THRESHOLD  (HK_CMT_MAX_PROCESS_BATCH * 2)
-#define HK_MAX_GAPS_INRAM 		 (1024 * 256)
-#define HK_CMT_WORKER_NUM 4 /* for commit worker */
-#define HK_JOURNAL_SIZE (4 * 1024)
-#define HK_PERCORE_JSLOTS (1) /* per core journal slots */
+#define HK_MAX_GAPS_INRAM        (1024 * 256)
+#define HK_CMT_WORKER_NUM        4 /* for commit worker */
+#define HK_JOURNAL_SIZE          (4 * 1024)
+#define HK_PERCORE_JSLOTS        (1) /* per core journal slots */
 
 /* ======================= Enhanced Configurations ========================= */
 
@@ -71,7 +78,7 @@
 // #define CONFIG_LAYOUT_TIGHT						/* enable tight layout */
 
 #ifdef CONFIG_LAYOUT_TIGHT
-#define HK_PBLK_SZ(sbi)          (PAGE_SIZE + sizeof(struct hk_header))
+#define HK_PBLK_SZ(sbi) (PAGE_SIZE + sizeof(struct hk_header))
 #endif
 
 /* ======================= Write ordering ========================= */
@@ -141,11 +148,13 @@ static inline void hk_flush_buffer(void *buf, uint32_t len, bool fence)
         PERSISTENT_BARRIER();
 }
 
+#if 0
 /* ======================= GC static workers ========================= */
 /* TODO: We might not need this */
 #define HK_MAX_GC_SENDER 4
 #define HK_MAX_GC_WRITER 2
 
 #define HK_EQU_FACTOR 50
+#endif
 
 #endif /* _HK_CONFIG_H_ */

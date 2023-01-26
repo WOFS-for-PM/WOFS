@@ -27,25 +27,24 @@ enum hk_layout_type {
 
 struct hk_layout_info {
     struct mutex layout_lock;
-    u64 atomic_counter;
     u32 cpuid;
     u64 layout_start;
     u64 layout_end;
     u64 layout_blks;
-    u64 num_gaps_indram;
-    struct list_head gaps_list;
-    struct hk_indicator ind;
+    union 
+    {
+        struct {
+            u64 atomic_counter;
+            u64 num_gaps_indram;
+            struct list_head gaps_list;
+            struct hk_indicator ind;
+        };
+        struct {
+            struct tl_allocator allocator;
+        };
+    };
+    
 };
-
-static inline void hk_dump_layout_info(struct hk_layout_info *layout)
-{
-    struct hk_indicator *ind = &layout->ind;
-    hk_info("layout: %d===>\n", layout->cpuid);
-    hk_info("-----------------------------------\n");
-    hk_info("tail: 0x%llx\n", layout->atomic_counter);
-    hk_info("valid_blks: %llu, invalid_blks: %llu, free_blks: %llu, prep_blks: %llu, total: %llu\n",
-            ind->valid_blks, ind->invalid_blks, ind->free_blks, ind->prep_blks, ind->total_blks);
-}
 
 struct hk_layout_prep {
     int cpuid;

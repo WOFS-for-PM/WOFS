@@ -266,7 +266,6 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
         hk_flush_cmt_inode_fast(sb, ino);
     }
 
-	// TODO: Build Attr From Meta Region
 	hk_applying_region_to_inode(sb, pi);
 
 	// We need this valid in case we need to evict the inode.

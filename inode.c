@@ -124,7 +124,7 @@ static int hk_free_dram_resource(struct super_block *sb,
 }
 
 int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
-                        struct hk_inode_info_header *sih)
+                         struct hk_inode_info_header *sih)
 {
     int freed = 0;
     u64 blk_addr;
@@ -135,8 +135,9 @@ int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
     struct hk_inode_info *si;
     struct inode *inode;
 
-    si = container_of(sih, struct hk_inode_info, header);
-    inode = &si->vfs_inode;
+    /* TODO: pass in hk_inode_info instead of hk_inode_info_header */
+    // si = container_of(sih, struct hk_inode_info, header);
+    // inode = &si->vfs_inode;
 
     traverse_inode_hdr(sbi, pi, hdr)
     {
@@ -271,7 +272,7 @@ void hk_evict_inode(struct inode *inode)
                sih->ino, sih->i_size,
                sih->i_mode, inode->i_mode);
     }
-    
+
     if (ENABLE_HISTORY_W(sb)) {
         hk_dw_forward(&sbi->dw, sih->i_size);
     }
@@ -312,7 +313,7 @@ int hk_getattr(const struct path *path, struct kstat *stat,
 {
     struct inode *inode = d_inode(path->dentry);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     unsigned int flags = sih->i_flags;
 
     if (flags & FS_APPEND_FL)
@@ -401,7 +402,7 @@ static int hk_build_vfs_inode(struct super_block *sb, struct inode *inode,
 {
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode *pi;
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     int ret = -EIO;
 
     pi = hk_get_inode_by_ino(sb, ino);
@@ -527,7 +528,7 @@ int inode_mgr_alloc(inode_mgr_t *mgr, u32 *ret_ino)
     u32 ino = (u32)-1;
     struct hk_sb_info *sbi = mgr->sbi;
     struct super_block *sb = sbi->sb;
-	u64 len = 1;
+    u64 len = 1;
 
     INIT_TIMING(new_hk_ino_time);
 
@@ -565,7 +566,7 @@ int inode_mgr_alloc(inode_mgr_t *mgr, u32 *ret_ino)
         hk_info("No free inode\n");
         BUG_ON(1);
     }
-    
+
     if (ret_ino)
         *ret_ino = ino;
 
@@ -604,7 +605,7 @@ int inode_mgr_restore(inode_mgr_t *mgr, u32 ino)
     spin_lock(&mgr->ilist_lock);
     err = hk_range_remove(sb, &mgr->ilist, ino);
     spin_unlock(&mgr->ilist_lock);
-#else 
+#else
     int cpuid;
     cpuid = hk_get_cpuid_by_ino(sb, ino);
     spin_lock(&mgr->ilist_locks[cpuid]);
@@ -614,7 +615,7 @@ int inode_mgr_restore(inode_mgr_t *mgr, u32 ino)
     return err;
 }
 
-int inode_mgr_destory(inode_mgr_t *mgr)
+int inode_mgr_destroy(inode_mgr_t *mgr)
 {
     struct hk_sb_info *sbi = mgr->sbi;
     if (mgr) {
@@ -630,7 +631,6 @@ int inode_mgr_destory(inode_mgr_t *mgr)
     }
     return 0;
 }
-
 
 struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
                               u64 ino, umode_t mode, size_t size, dev_t rdev,
@@ -709,10 +709,11 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
     hk_memlock_inode(sb, pi, &irq_flags);
 
     si = HK_I(inode);
-    sih = &si->header;
+    sih = si->header;
     hk_init_header(sb, sih, inode->i_mode);
     sih->ino = ino;
     sih->tstamp = le64_to_cpu(pi->tstamp);
+    sih->si = si;
 
     hk_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
     sih->i_flags = le32_to_cpu(pi->i_flags);
@@ -741,7 +742,7 @@ static int hk_handle_setattr_operation(struct super_block *sb, struct inode *ino
                                        struct hk_inode *pi, unsigned int ia_valid, struct iattr *attr)
 {
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     int ret = 0;
 
     if (ia_valid & ATTR_MODE)
@@ -761,7 +762,7 @@ void hk_prepare_truncate(struct super_block *sb,
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     u64 addr;
     unsigned long offset = newsize & (sb->s_blocksize - 1);
     unsigned long index, length;
@@ -791,7 +792,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pi = hk_get_inode(sb, inode);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     unsigned int data_bits = sb->s_blocksize_bits;
     s64 start_index, end_index, index;
     u64 addr;
@@ -817,13 +818,13 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
     for (index = end_index; index >= start_index; index--) {
         addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index));
         linix_delete(&sih->ix, index, index, true);
-		if (ENABLE_META_ASYNC(sb)) {
-        	hk_invalid_hdr_background(sb, inode, addr, index);
-		} else {
-			use_layout_for_addr(sb, addr);
-			sm_invalid_hdr(sb, addr, sih->ino);
-			unuse_layout_for_addr(sb, addr);
-		}
+        if (ENABLE_META_ASYNC(sb)) {
+            hk_invalid_hdr_background(sb, inode, addr, index);
+        } else {
+            use_layout_for_addr(sb, addr);
+            sm_invalid_hdr(sb, addr, sih->ino);
+            unuse_layout_for_addr(sb, addr);
+        }
         freed++;
     }
 
@@ -875,7 +876,7 @@ int hk_notify_change(struct dentry *dentry, struct iattr *attr)
 {
     struct inode *inode = dentry->d_inode;
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct super_block *sb = inode->i_sb;
     struct hk_inode *pi = hk_get_inode(sb, inode);
     int ret;
@@ -967,13 +968,16 @@ struct inode *hk_iget(struct super_block *sb, unsigned long ino)
         return inode;
 
     si = HK_I(inode);
-
+    if (!si->header && !ENABLE_META_PACK(sb)) {
+        BUG_ON(1);
+    }
+    
     hk_dbgv("%s: inode %lu\n", __func__, ino);
 
     pi = hk_get_inode_by_ino(sb, ino);
 
-    // TODO: Let's assume this is the file `test`
-    // TODO: This is for HUNTER-BASE only
+    // NOTE: Let's assume this is the file `test`
+    // NOTE: This is for HUNTER-BASE only
     if (!pi->valid) {
         hk_memunlock_inode(sb, pi, &irq_flags);
         pi->valid = 1;
@@ -1015,14 +1019,15 @@ fail:
 
 void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
 {
-    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
+    struct hk_inode_info *si = sih->si;
+    BUG_ON(!si);
     struct super_block *sb = si->vfs_inode.i_sb;
     u32 ofs_blk = GET_ALIGNED_BLKNR(offset);
     
     if (ENABLE_META_PACK(sb)) {
         obj_ref_data_t *ref = NULL;
         u32 blk;
-        
+
         ref = (obj_ref_data_t *)linix_get(&sih->ix, ofs_blk);
         if (!ref) {
             /* try find the first not null in linix */
@@ -1040,9 +1045,9 @@ void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
         /* check if offset is in ref */
         if (offset >= ref->ofs && offset < ref->ofs + (ref->num << HUNTER_BLK_SHIFT)) {
             return ref;
-        } 
+        }
 
-        hk_err(sb, "offset %u is not in ref %u, inconsistency happened\n", offset, ref->data_offset);
+        hk_warn("offset %u is not in ref %u, inconsistency happened\n", offset, ref->data_offset);
     } else {
         return (void *)linix_get(&sih->ix, ofs_blk);
     }

@@ -148,7 +148,7 @@ static_assert(sizeof(struct hk_obj_dentry) == 128);
 struct hk_obj_data {
     struct hk_obj_hdr hdr;
     u32 ino;
-    u64 ofs;
+    u64 ofs; /* offset in file */
     u32 blk;
     u64 num;
     u32 i_cmtime; /* for both mtime and ctime */
@@ -180,11 +180,11 @@ typedef struct obj_ref_hdr {
 typedef struct obj_ref_data {
     obj_ref_hdr_t hdr; /* in-pm entry hdr */
     struct list_head node;
-    u64 next;          /* next in-pm addr, might be used for cacheable design */
-    u64 prev;          /* prev in-pm addr, might be used for cacheable design */
-    u64 data_offset;   /* in-pm data offset */
-    u64 ofs;           /* In-File offset */
-    u64 num;           /* Number of blocks */
+    u64 next;        /* next in-pm addr, might be used for cacheable design */
+    u64 prev;        /* prev in-pm addr, might be used for cacheable design */
+    u64 data_offset; /* in-pm data offset */
+    u64 ofs;         /* In-File offset */
+    u64 num;         /* Number of blocks */
     u8 type;
 } obj_ref_data_t;
 
@@ -236,11 +236,11 @@ typedef struct claim_req {
 
 /* build this in the mount time */
 typedef struct obj_mgr {
-    struct hk_sb_info *sbi; /* the superblock */
-    d_root_t *d_roots;          /* the root of all objs, the number equals to the number of split layouts */
-    int num_d_roots;            /* the number of d_roots */
-    imap_t prealloc_imap;       /* used to fast locate per file objs, key is ino, value is hk_inode */
-    DECLARE_HASHTABLE(pending_table, HK_HASH_BITS7);  /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
+    struct hk_sb_info *sbi;                          /* the superblock */
+    d_root_t *d_roots;                               /* the root of all objs, the number equals to the number of split layouts */
+    int num_d_roots;                                 /* the number of d_roots */
+    imap_t prealloc_imap;                            /* used to fast locate per file objs, key is ino, value is hk_inode */
+    DECLARE_HASHTABLE(pending_table, HK_HASH_BITS7); /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
 } obj_mgr_t;
 
 typedef struct attr_update {
@@ -270,8 +270,7 @@ typedef struct data_update {
 
 typedef struct inode_update {
     u64 addr; /* In-PM inode offset */
-    union 
-    {
+    union {
         unsigned long ino;
         struct hk_inode_info_header *sih;
     };
@@ -287,7 +286,7 @@ typedef struct in_pkg_param {
 } in_pkg_param_t;
 
 typedef struct in_create_pkg_param {
-    bool create_pm_only;
+    bool create_pm_only;    /* for rename */
 } in_create_pkg_param_t;
 
 /* out param region */

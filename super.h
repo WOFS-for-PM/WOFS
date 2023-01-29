@@ -17,7 +17,7 @@ struct hk_super_block {
     /* static fields. they never change after file system creation.
      * checksum only validates up to s_start_dynamic field below
      */
-    __le32 s_sum;   /* checksum of this sb */
+    __le32 s_sum;   /* checksum of this sb plus private data appended at the end of this sb */
     __le32 s_magic; /* magic signature */
     __le32 s_padding32;
     __le32 s_blocksize;     /* blocksize in bytes */
@@ -33,7 +33,14 @@ struct hk_super_block {
 
     __le32 s_last_layout;  /* 0 for lfs, 1 for local, 2 for pack, cannot be changed now */
     __le32 s_valid_umount; /* is valid umount ? */
-    __le64 s_tstamp;       /* time stemp */
+
+    __le64 s_private_data;     /* offset of private data relative to current super block */
+    __le64 s_private_data_len; /* private data len */
+
+} __attribute((__packed__));
+
+struct hk_normal_data {
+    __le64 s_tstamp; /* time stemp */
     struct {
         __le64 s_atomic_counter;
         struct {
@@ -44,10 +51,13 @@ struct hk_super_block {
             __le64 total_blks;
         } s_ind;
     } s_layout[POSSIBLE_MAX_CPU];
+};
 
-} __attribute((__packed__));
+struct hk_pack_data {
+    u64 s_vtail;
+};
 
-#define HK_SB_SIZE(sbi) roundup(sizeof(struct hk_super_block), HK_LBLK_SZ(sbi)) /* must be power of two */
+#define HK_SB_SIZE(sbi) roundup(sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len, HK_LBLK_SZ(sbi)) /* must be power of two */
 
 #define HUNTER_BLK_SIZE  (4 * 1024)
 #define HUNTER_MTA_SIZE  (64) // 64B grained
@@ -60,13 +70,10 @@ struct hk_super_block {
  * hk super-block data in DRAM
  */
 struct hk_sb_info {
-    struct super_block *sb;       /* VFS super block */
-    struct hk_super_block *hk_sb; /* DRAM copy of SB */
+    struct super_block *sb;        /* VFS super block */
+    struct hk_super_block *hk_sb;  /* DRAM copy of primary SB (i.e., First SB) */
     struct block_device *s_bdev;
     struct dax_device *s_dax_dev;
-
-    u64 tstamp;
-    spinlock_t ts_lock; /* Time stamp lock */
     /*
      * base physical and virtual address of hk (which is also
      * the pointer to the super block)
@@ -98,38 +105,40 @@ struct hk_sb_info {
     struct list_head mmap_sih_list;
 
     u32 pblk_sz;
-    u32 lblk_sz; 
+    u32 lblk_sz;
 
     /* data */
     u64 d_addr;
     u64 d_size;
     u64 d_blks;
-    
+
     /* metadata-related */
     u64 m_addr;
     u64 m_size;
 
-    /* metadata layout */
-    union 
-    {
-        /* normal layout */
+    /* misc */
+    union {
+        /* for normal layout */
         struct {
+            u64 tstamp;
+            spinlock_t ts_lock; /* Time stamp lock */
+
             /* inode table */
             u64 ino_tab_addr;
             u64 ino_tab_slots;
             u64 ino_tab_size;
-            
+
             /* summary table */
             u64 sm_addr;
             u64 sm_slots;
             u64 sm_size;
-            
+
             /* transcation table */
             u64 j_addr;
             u64 j_slots;
             u64 j_size;
             struct mutex *j_locks;
-            
+
             /* inode-region (attr log) table */
             u64 rg_addr;
             u64 rg_slots;
@@ -138,7 +147,7 @@ struct hk_sb_info {
             /* for inode management */
             struct mutex *irange_locks; /* For In-NVMM Inode Lock */
         };
-        /* pack layout */
+        /* for pack layout */
         struct {
             /* bitmaps for saving packages allocation info */
             u64 bm_start;
@@ -147,29 +156,23 @@ struct hk_sb_info {
             u64 tl_per_type_bm_reserved_blks;
             atomic64_t vtail;
             struct obj_mgr *obj_mgr;
+            struct hk_inode_info_header *rih; /* root header */
         };
     };
-    
+
     /* per cpu structure */
     struct hk_layout_info *layouts;
     u32 num_layout;
-    u64 per_layout_blks;        /* aligned blks */
+    u64 per_layout_blks; /* aligned blks */
 
     /* for background cmt */
     struct hk_cmt_queue *cq;
     struct task_struct *cmt_workers[HK_CMT_WORKER_NUM];
     int wake_up_interval;
-    
-// #ifndef CONFIG_PERCORE_IALLOCATOR
-//     struct mutex ilist_lock;
-//     struct list_head ilist; /* Sort asending */
-// #else
-//     struct mutex *ilist_locks;
-//     struct list_head *ilists;
-//     bool *ilist_init;
-// #endif
+
     /* 32-bits per-core ino allocator */
     struct inode_mgr *inode_mgr;
+
     /* for dynamic workload */
     struct hk_dym_wkld dw;
 };
@@ -187,11 +190,11 @@ static inline struct hk_sb_info *HK_SB(struct super_block *sb)
 /* If this is part of a read-modify-write of the super block,
  * hk_memunlock_super() before calling!
  */
-static inline struct hk_super_block *hk_get_super(struct super_block *sb)
+static inline struct hk_super_block *hk_get_super(struct super_block *sb, int n)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
 
-    return (struct hk_super_block *)sbi->virt_addr;
+    return n == HUNTER_FIRST_SUPER_BLK ? (struct hk_super_block *)sbi->virt_addr : (sbi->virt_addr + sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len);
 }
 
 /* Update the crc32c value by appending a 64b data word. */

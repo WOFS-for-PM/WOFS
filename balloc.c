@@ -29,7 +29,7 @@ int hk_find_gaps(struct super_block *sb, int cpuid)
     if (layout->num_gaps_indram != 0) {
         return -1;
     }
-    
+
     hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
     traverse_layout_blks_reverse(addr, layout)
     {
@@ -59,7 +59,7 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid, u64 blks,
     struct hk_range_node *range;
     u64 blk_start;
     u64 addr;
-     
+
     /* TODO: remove this from critical path */
     hk_find_gaps(sb, cpuid);
 
@@ -67,7 +67,7 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid, u64 blks,
         hk_info("%s: No more invalid blks in cpuid: %d \n", __func__, cpuid);
         return 0;
     }
-    
+
     blk_start = hk_range_pop(&layout->gaps_list, &blks);
     if (!blk_start) {
         hk_info("%s: No Gaps in %d\n", __func__, blk_start);
@@ -88,14 +88,13 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
     u64 target_addr = layout->layout_start;
     unsigned long irq_flags = 0;
 
-    /* Only check under debug.  */
-    if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
-        hk_info("%s: layout_lock is not locked\n", __func__);
-        BUG_ON(1);
-    }
-
-    up_version(sbi);
-    if (likely(type == LAYOUT_APPEND)) {
+    switch (type) {
+    case LAYOUT_APPEND: {
+        up_version(sbi);
+        if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
+            hk_info("%s: layout_lock is not locked\n", __func__);
+            BUG_ON(1);
+        }
         hk_dbgv("%s: layout start @0x%llx, layout tail @0x%llx", __func__, target_addr, layout->atomic_counter);
         target_addr += layout->atomic_counter;
 
@@ -111,14 +110,41 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         if (blks_prepared != NULL) {
             *blks_prepared = blks;
         }
-    } else if (type == LAYOUT_GAP) {
+        break;
+    }
+    case LAYOUT_GAP: {
+        up_version(sbi);
+        if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
+            hk_info("%s: layout_lock is not locked\n", __func__);
+            BUG_ON(1);
+        }
         target_addr = hk_prepare_gap_in_layout(sb, cpuid, blks, blks_prepared, zero);
         if (target_addr == 0) {
             return 0;
         }
-    } else {
+        break;
+    }
+    case LAYOUT_PACK: {
+        tlalloc_param_t param;
+        tl_allocator_t *allocator = &layout->allocator;
+        int ret = 0;
+
+        tl_build_alloc_param(&param, blks, TL_BLK);
+        ret = tlalloc(allocator, &param);
+        if (ret) {
+            return 0;
+        }
+
+        target_addr = get_pm_blk_addr(sbi, param._ret_rng.low);
+        if (blks_prepared != NULL) {
+            *blks_prepared = param._ret_allocated;
+        }
+        break;
+    }
+    default:
         hk_dbgv("%s: not support args\n", __func__);
         return 0;
+        break;
     }
 
     if (zero) {
@@ -160,37 +186,55 @@ int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, stru
     prep->cpuid = -1;
     prep->target_addr = 0;
 
-retry:
-    for (i = 0; i < sbi->num_layout; i++) {
-        cpuid = (start_cpuid + i) % sbi->num_layout;
-        layout = &sbi->layouts[cpuid];
+    if (ENABLE_META_PACK(sb)) {
+        for (i = 0; i < sbi->num_layout; i++) {
+            cpuid = (start_cpuid + i) % sbi->num_layout;
+            layout = &sbi->layouts[cpuid];
 
-        use_layout(layout);
-        if (tries == 0) {
-            target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_APPEND, &blks_prepared, zero);
-        } else if (tries == 1) {
-            target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_GAP, &blks_prepared, zero);
+            target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_PACK, &blks_prepared, zero);
+            if (target_addr == 0) {
+                continue;
+            }
+
+            prep->blks_prepared = blks_prepared;
+            prep->cpuid = cpuid;
+            prep->target_addr = target_addr;
+            *blks -= blks_prepared;
+            break;
         }
-        unuse_layout(layout);
+    } else {
+    retry:
+        for (i = 0; i < sbi->num_layout; i++) {
+            cpuid = (start_cpuid + i) % sbi->num_layout;
+            layout = &sbi->layouts[cpuid];
 
-        if (target_addr == 0) {
-            continue;
+            use_layout(layout);
+            if (tries == 0) {
+                target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_APPEND, &blks_prepared, zero);
+            } else if (tries == 1) {
+                target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_GAP, &blks_prepared, zero);
+            }
+            unuse_layout(layout);
+
+            if (target_addr == 0) {
+                continue;
+            }
+
+            prep->blks_prepared = blks_prepared;
+            prep->cpuid = cpuid;
+            prep->target_addr = target_addr;
+            *blks -= blks_prepared;
+            break;
         }
-
-        prep->blks_prepared = blks_prepared;
-        prep->cpuid = cpuid;
-        prep->target_addr = target_addr;
-        *blks -= blks_prepared;
-        break;
+        if (tries < 1) {
+            tries++;
+            if (prep->target_addr == 0) {
+                hk_info("%s: No space in layout, try to use gap\n", __func__);
+                goto retry;
+            }
+        }
+        HK_END_TIMING(new_data_blocks_t, alloc_time);
     }
-    if (tries < 1) {
-        tries++;
-        if (prep->target_addr == 0) {
-            hk_info("%s: No space in layout, try to use gap\n", __func__);
-            goto retry;
-        }
-    }
-    HK_END_TIMING(new_data_blocks_t, alloc_time);
     return prep->blks_prepared == 0 ? -1 : 0;
 }
 
@@ -250,13 +294,17 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
             size_per_layout = _round_down((sbi->d_size - cpuid * size_per_layout), HK_PBLK_SZ(sbi));
         }
         blks_per_layout = size_per_layout / HK_PBLK_SZ(sbi);
-        layout->atomic_counter = 0;
         layout->cpuid = cpuid;
         layout->layout_blks = blks_per_layout;
         layout->layout_end = layout->layout_start + size_per_layout;
-        layout->num_gaps_indram = 0;
-        INIT_LIST_HEAD(&layout->gaps_list);
         mutex_init(&layout->layout_lock);
+        if (ENABLE_META_PACK(sb)) {
+            tl_alloc_init(&layout->allocator, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE); 
+        } else {
+            layout->atomic_counter = 0;
+            layout->num_gaps_indram = 0;
+            INIT_LIST_HEAD(&layout->gaps_list);
+        }
         hk_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
     }
 out:
@@ -271,7 +319,11 @@ int hk_layouts_free(struct hk_sb_info *sbi)
     if (sbi->layouts) {
         for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
             layout = &sbi->layouts[cpuid];
-            hk_range_free_all(&layout->gaps_list);
+            if (ENABLE_META_PACK(sbi->sb)) {
+                tl_destory(&layout->allocator);
+            } else {
+                hk_range_free_all(&layout->gaps_list);
+            }
         }
         kfree(sbi->layouts);
     }

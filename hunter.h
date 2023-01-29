@@ -168,7 +168,7 @@ static inline void prefetcht2(const void *x) {
 /* blk_addr is the offset addr in NVMM */
 static inline void *hk_get_block(struct super_block *sb, u64 blk_addr)
 {
-	struct hk_super_block *ps = hk_get_super(sb);
+	struct hk_super_block *ps = hk_get_super(sb, HUNTER_FIRST_SUPER_BLK);
 
 	return blk_addr ? ((void *)ps + blk_addr) : NULL;
 }
@@ -332,14 +332,6 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param);
 void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param);
 void tl_destory(tl_allocator_t *alloc);
 
-/* ======================= ANCHOR: super.c ========================= */
-struct hk_range_node *hk_alloc_range_node(struct super_block *sb);
-void hk_free_range_node(struct hk_range_node *node);
-struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb);
-void hk_free_cmt_info(struct hk_cmt_info *node);
-struct hk_dentry_info *hk_alloc_dentry_info(struct super_block *sb);
-void hk_free_dentry_info(struct hk_dentry_info *node);
-
 /* ======================= ANCHOR: rebuild.c ========================= */
 void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih, 
                     u16 i_mode);
@@ -357,16 +349,6 @@ int hk_layouts_free(struct hk_sb_info *sbi);
 int hk_find_gaps(struct super_block *sb, int cpuid);
 unsigned long hk_count_free_blocks(struct super_block *sb);
 int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, struct hk_layout_prep *prep);
-
-/* TODO: Remove the interface */
-// u64 hk_prepare_layout(struct super_block* sb, int cpuid, u64 blks, enum hk_layout_type type, 
-//                       u64* blks_prepared, bool zero);
-// int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_layout_preps *preps);
-// void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *prep);
-// void hk_trv_prepared_layouts_init(struct hk_layout_preps* preps);
-// u64 hk_rollback_layouts(struct super_block *sb, struct hk_layout_preps *preps);
-// struct hk_layout_prep* hk_trv_prepared_layouts(struct super_block *sb, 
-// 											   struct hk_layout_preps* preps);
 int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all);
 
 /* ======================= ANCHOR: file.c ========================= */
@@ -394,7 +376,7 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
 int inode_mgr_init(struct hk_sb_info *sbi, inode_mgr_t *mgr);
 int inode_mgr_alloc(inode_mgr_t *mgr, u32 *ret_ino);
 int inode_mgr_free(inode_mgr_t *mgr, u32 ino);
-int inode_mgr_destory(inode_mgr_t *mgr);
+int inode_mgr_destroy(inode_mgr_t *mgr);
 int inode_mgr_restore(inode_mgr_t *mgr, u32 ino);
 struct inode *hk_iget_opened(struct super_block *sb, unsigned long ino);
 struct inode *hk_iget(struct super_block *sb, unsigned long ino);
@@ -454,6 +436,48 @@ struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
 struct hk_jentry* hk_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid);
 int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...);
 int hk_finish_tx(struct super_block *sb, int txid);
+
+/* ======================= ANCHOR: objm.c ========================= */
+obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino);
+void ref_inode_destroy(obj_ref_inode_t *ref);
+obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u32 dep_addr);
+void ref_attr_destroy(obj_ref_attr_t *ref);
+obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino);
+void ref_dentry_destroy(obj_ref_dentry_t *ref);
+obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 num, u64 data_offset);
+void ref_data_destroy(obj_ref_data_t *ref);
+int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr);
+void obj_mgr_destroy(obj_mgr_t *mgr);
+int obj_mgr_load_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
+int obj_mgr_unload_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
+int obj_mgr_get_dobjs(obj_mgr_t *mgr, u64 ino, u8 type, void **obj_refs);
+int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
+int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
+struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino);
+int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t *update);
+int reclaim_dram_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
+int reclaim_dram_create(obj_mgr_t *mgr, struct hk_inode_info_header *sih, obj_ref_dentry_t *ref);
+int reclaim_dram_unlink(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
+int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t *update);
+int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_update_t *update);
+int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode_update_t *update);
+int check_pkg_valid(void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr);
+int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
+                         struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
+                         in_pkg_param_t *in_param, out_pkg_param_t *out_param);
+int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
+                      struct hk_inode_info_header *psih, obj_ref_dentry_t *ref,
+                      in_pkg_param_t *in_param, out_pkg_param_t *out_param);
+int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
+                    u64 data_addr, off_t offset, size_t size,
+                    in_pkg_param_t *in_param, out_pkg_param_t *out_param);
+int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
+                    int link_change, int size_change,
+                    in_pkg_param_t *in_param, out_pkg_param_t *out_param);
+int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
+                      obj_ref_dentry_t *ref, struct hk_inode_info_header *sih,
+                      struct hk_inode_info_header *psih, struct hk_inode_info_header *npsih,
+                      out_pkg_param_t *unlink_out_param, out_pkg_param_t *create_out_param);
 
 /* ======================= ANCHOR: cmt.c ========================= */
 int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
@@ -641,17 +665,21 @@ static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
 static inline void hk_sync_super(struct super_block *sb)
 {
 	struct hk_sb_info 	  *sbi = HK_SB(sb);
-	struct hk_super_block *super = hk_get_super(sb);
-	struct hk_super_block *super_redund;	// TODO:
+	struct hk_super_block *super = hk_get_super(sb, HUNTER_FIRST_SUPER_BLK);
+	struct hk_super_block *super_redund = hk_get_super(sb, HUNTER_SECOND_SUPER_BLK);
 	unsigned long 		  irq_flags = 0;
 
-	hk_memunlock_super(sb, &irq_flags);
-
+	hk_memunlock_super(sb, HUNTER_FIRST_SUPER_BLK, &irq_flags);
 	memcpy_to_pmem_nocache((void *)super, (void *)sbi->hk_sb,
-							sizeof(struct hk_super_block));
+							HK_SB_SIZE(sbi));
+	hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
 	PERSISTENT_BARRIER();
-
-	hk_memlock_super(sb, &irq_flags);
+	
+	hk_memunlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
+	memcpy_to_pmem_nocache((void *)super_redund, (void *)sbi->hk_sb,
+							HK_SB_SIZE(sbi));
+	hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
+	PERSISTENT_BARRIER();
 }
 
 /* Update checksum for the DRAM copy */
@@ -663,7 +691,7 @@ static inline void hk_update_super_crc(struct super_block *sb)
 	sbi->hk_sb->s_wtime = cpu_to_le32(get_seconds());
 	sbi->hk_sb->s_sum = 0;
 	crc = hk_crc32c(~0, (__u8 *)sbi->hk_sb + sizeof(__le32),
-			sizeof(struct hk_super_block) - sizeof(__le32));
+			sizeof(struct hk_super_block) - sizeof(__le32) + sbi->hk_sb->s_private_data_len);
 	sbi->hk_sb->s_sum = cpu_to_le32(crc);
 }
 

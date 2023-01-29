@@ -104,6 +104,8 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
 	sih->tstamp = 0;
 	sih->h_addr = 0;
 	
+	sih->si = NULL;
+	
     return 0;
 }
 
@@ -199,7 +201,7 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
                 sm_invalid_hdr(sb, addr, conflict_hdr->ino);
 				unuse_layout_for_addr(sb, addr);
                 
-				linix_insert(&sih->ix, hdr->f_blk, sm_get_addr_by_hdr(sb, hdr), true);
+				linix_insert(&sih->ix, hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, sm_get_addr_by_hdr(sb, hdr)), true);
 			}
 			else {	/* Not Insert */
 				addr = sm_get_addr_by_hdr(sb, hdr);
@@ -210,7 +212,7 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
 			}
 		}
 		else {
-			linix_insert(&sih->ix, hdr->f_blk, sm_get_addr_by_hdr(sb, hdr), true);
+			linix_insert(&sih->ix, hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, sm_get_addr_by_hdr(sb, hdr)), true);
 		}
 		
 		switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
@@ -247,7 +249,7 @@ int hk_check_inode(struct super_block *sb, u64 ino) {
 /* initialize hunter inode header and other DRAM data structures */
 int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, bool build_blks)
 {
-	struct hk_inode_info_header *sih = &si->header;
+	struct hk_inode_info_header *sih = si->header;
 	struct hk_inode             *pi;
 	unsigned long				irq_flags = 0;
 	int ret;

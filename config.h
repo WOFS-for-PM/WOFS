@@ -1,6 +1,13 @@
 #ifndef _HK_CONFIG_H_
 #define _HK_CONFIG_H_
 
+/*
+ * The HUNTER filesystem constants/structures
+ */
+#define HUNTER_SUPER_BLKS       2
+#define HUNTER_FIRST_SUPER_BLK  0
+#define HUNTER_SECOND_SUPER_BLK 1
+
 #define HUNTER_SUPER_MAGIC     0x48554E54 /* HUNT */
 #define HUNTER_OBJ_MAGIC       0x484F424A /* HOBJ */
 #define HUNTER_UNO_MAGIC       0x48504B48 /* HUNO */
@@ -8,9 +15,6 @@
 #define HUNTER_VALID_UNMOUNT   0xFFFFFFFF
 #define HUNTER_INVALID_UNMOUNT 0x00000000
 #define HUNTER_ROOT_INO        0
-/*
- * The HUNTER filesystem constants/structures
- */
 
 /*
  * Mount flags
@@ -31,16 +35,14 @@
 #define HUNTER_MOUNT_META_LFS     0x002000 /* Append metadata like LFS */
 #define HUNTER_MOUNT_META_PACK    0x004000 /* Pack meta (physically, logically). i.e., WRITE-ONCE */
 #define HUNTER_MOUNT_HISTORY_W    0x008000 /* History window for file open */
+
 /*
  * Maximal count of links to a file
  */
-#define HK_LINK_MAX 32000
-
+#define HK_LINK_MAX      32000
 #define POSSIBLE_MAX_CPU 1024
-
-#define HK_MAX_LAYOUTS 64
-
-#define PM_ACCESS_GRANU 256
+#define HK_MAX_LAYOUTS   64
+#define PM_ACCESS_GRANU  256
 
 /*
  * HUNTER CONFIGURATIONS
@@ -64,17 +66,11 @@
 #define HK_PERCORE_JSLOTS        (1) /* per core journal slots */
 
 /* ======================= Enhanced Configurations ========================= */
-
-#define CONFIG_CMT_BACKGROUND /* enable background commit system */
-
+#define CONFIG_CMT_BACKGROUND     /* enable background commit system */
 #define CONFIG_PERCORE_IALLOCATOR /* enable per core inode allocator */
-
-#define CONFIG_FINEGRAIN_JOURNAL /* enable fine grain-ed journal  */
-
-#define CONFIG_DYNAMIC_WORKLOAD /* enable dynamic workload detection */
-
+#define CONFIG_FINEGRAIN_JOURNAL  /* enable fine grain-ed journal  */
+#define CONFIG_DYNAMIC_WORKLOAD   /* enable dynamic workload detection */
 // #define CONFIG_ENABLE_EQUALIZER					/* enable layout equalizer */
-
 // #define CONFIG_LAYOUT_TIGHT						/* enable tight layout */
 
 #ifdef CONFIG_LAYOUT_TIGHT

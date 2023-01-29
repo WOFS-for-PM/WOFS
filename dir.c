@@ -10,7 +10,7 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
 	struct hk_inode             *pidir;
 	struct hk_inode				*child_pi;
 	struct hk_inode_info        *si = HK_I(inode);
-	struct hk_inode_info_header *sih = &si->header;
+	struct hk_inode_info_header *sih = si->header;
 
     unsigned bkt;
 	struct hk_dentry_info *cur;

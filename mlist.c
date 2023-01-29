@@ -61,7 +61,7 @@ int hk_range_insert_range(struct super_block *sb, struct list_head *head,
     }
 
     if (!is_insert) {
-        new = hk_alloc_range_node(sb);
+        new = hk_alloc_hk_range_node();
         new->low = range_low;
         new->high = range_high;
 
@@ -99,7 +99,7 @@ int hk_range_insert_value(struct super_block *sb, struct list_head *head, unsign
     }
 
     if (!is_insert) {
-        new = hk_alloc_range_node(sb);
+        new = hk_alloc_hk_range_node();
         new->low = value;
         new->high = value;
 
@@ -148,7 +148,7 @@ int hk_range_remove(struct super_block *sb, struct list_head *head, unsigned lon
         if (range_low <= value && value <= range_high) {
             if (range_low == range_high) {
                 list_del(pos);
-                hk_free_range_node(cur);
+                hk_free_hk_range_node(cur);
                 return 0;
             } else if (range_low == value) {
                 cur->low = value + 1;
@@ -157,7 +157,7 @@ int hk_range_remove(struct super_block *sb, struct list_head *head, unsigned lon
                 cur->high = value - 1;
                 return 0;
             } else {
-                new = hk_alloc_range_node(sb);
+                new = hk_alloc_hk_range_node();
                 BUG_ON(new == NULL);
                 cur->high = value - 1;
                 new->low = value + 1;
@@ -192,14 +192,14 @@ int hk_range_remove_range(struct super_block *sb, struct list_head *head,
 
             if (range_low <= _range_low && _range_high <= range_high) {
                 list_del(pos);
-                hk_free_range_node(cur);
+                hk_free_hk_range_node(cur);
             } else if (range_low <= _range_low && _range_high > range_high) {
                 cur->low = range_high + 1;
             } else if (range_low > _range_low && _range_high <= range_high) {
                 cur->high = range_low - 1;
             } else if (range_low > _range_low && _range_high > range_high) {
                 cur->high = range_low - 1;
-                new = hk_alloc_range_node(sb);
+                new = hk_alloc_hk_range_node();
                 new->low = range_high + 1;
                 new->high = _range_high;
                 list_add_tail(&new->node, pos);
@@ -227,7 +227,7 @@ unsigned long hk_range_pop(struct list_head *head, u64 *len)
             value = range_low;
             *len = range_high - range_low + 1;
             list_del(pos);
-            hk_free_range_node(cur);
+            hk_free_hk_range_node(cur);
             return value;
         } else {
             value = range_low;
@@ -248,6 +248,6 @@ void hk_range_free_all(struct list_head *head)
     {
         cur = list_entry(pos, struct hk_range_node, node);
         list_del(pos);
-        hk_free_range_node(cur);
+        hk_free_hk_range_node(cur);
     }
 }

@@ -32,7 +32,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
 
     pgoff_t index, end_index;
     unsigned long offset;
@@ -72,7 +72,25 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         void *dax_mem = NULL;
         bool zero = false;
 
-        nr = HK_LBLK_SZ(sbi);
+        if (ENABLE_META_PACK(sb)) {
+            obj_ref_data_t *ref = NULL;
+            ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+            blk_addr = get_pm_addr(sbi, ref->data_offset);
+            if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
+                zero = true;
+            } else {
+                dax_mem = hk_get_block(sb, blk_addr);
+            }
+            nr = ref->num * HK_LBLK_SZ(sbi);
+        } else {
+            blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+            if (blk_addr == 0) { /* It's a file hole */
+                zero = true;
+            } else {
+                dax_mem = hk_get_block(sb, blk_addr);
+            }
+            nr = HK_LBLK_SZ(sbi);
+        }
 
         /* nr is the maximum number of bytes to copy from this page */
         if (index >= end_index) {
@@ -81,13 +99,6 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
             nr = ((isize - 1) & ~PAGE_MASK) + 1;
             if (nr <= offset)
                 goto out;
-        }
-
-        blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
-        if (blk_addr == 0) { /* It's a file hole */
-            zero = true;
-        } else {
-            dax_mem = hk_get_block(sb, blk_addr);
         }
 
         nr = nr - offset;
@@ -132,8 +143,8 @@ out:
 
 static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index)
 {
-    struct hk_inode_info_header *sih = &si->header;
     bool is_overlay = false;
+    struct hk_inode_info_header *sih = si->header;
 
     if (index < sih->ix.num_slots && (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT)) != 0) {
         is_overlay = true;
@@ -145,13 +156,14 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
 bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                         u64 start_index, u64 end_index,
                         loff_t each_ofs, size_t *each_size,
-                        size_t len)
+                        loff_t offset, size_t len)
 {
     struct super_block *sb = si->vfs_inode.i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     bool is_overlay = false;
     u64 blk_addr;
+    u32 blks_to_write = 0;
     unsigned long irq_flags = 0;
     INIT_TIMING(partial_time);
 
@@ -159,35 +171,87 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
     is_overlay = hk_check_overlay(si, index);
     HK_END_TIMING(partial_block_t, partial_time);
 
-    if (is_overlay) {
-        if (index == start_index || index == end_index) { /* Might perform cow */
+    if (ENABLE_META_PACK(sb)) {
+        if (is_overlay) {
+            if (index == start_index) {
+                if (each_ofs) {
+                    obj_ref_data_t *ref = NULL;
+                    ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+                    blk_addr = get_pm_addr(sbi, ref->data_offset);
+                    hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                    memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                    hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                    *each_size -= each_ofs;
+                }
+            }
+            blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
+            index += blks_to_write;
+            /* possible addr of end_index */
+            cur_addr += (blks_to_write << PAGE_SHIFT);
+            if (index == end_index) {
+                each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
+                if (each_ofs) {
+                    obj_ref_data_t *ref = NULL;
+                    ref = (obj_ref_data_t *)hk_inode_get_slot(sih, offset);
+                    blk_addr = get_pm_addr(sbi, ref->data_offset);
+                    hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    memcpy_to_pmem_nocache(cur_addr + each_ofs, hk_get_block(sb, blk_addr), HK_LBLK_SZ(sbi) - each_ofs);
+                    hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
+                }
+            }
+        } else {
             if (index == start_index && each_ofs != 0) {
-                blk_addr = (u64) hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+                hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                memset_nt(cur_addr, 0, each_ofs);
+                hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                *each_size -= each_ofs;
+            }
+            blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
+            index += blks_to_write;
+            /* possible addr of end_index */
+            cur_addr += (blks_to_write << PAGE_SHIFT);
+            if (index == end_index) {
+                each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
+                if (each_ofs) {
+                    hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    memset_nt(cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
+                    hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
+                }
+            }
+        }
+    } else { /* 4KB  */
+        if (is_overlay) {
+            if (index == start_index || index == end_index) { /* Might perform cow */
+                if (index == start_index && each_ofs != 0) {
+                    blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+                    *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
+                    hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                    memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                    hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
+                }
+                if (index == end_index && len < HK_LBLK_SZ(sbi)) {
+                    blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+                    *each_size = len;
+                    hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
+                    memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
+                    hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
+                }
+            }
+        } else { /* Set to zero */
+            if (index == start_index && each_ofs != 0) {
                 *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
                 hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                memset_nt(cur_addr, 0, each_ofs);
                 hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
             }
             if (index == end_index && len < HK_LBLK_SZ(sbi)) {
-                blk_addr = (u64) hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                 *each_size = len;
                 hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
+                memset_nt(cur_addr + (len + each_ofs), 0, HK_LBLK_SZ(sbi) - (len + each_ofs));
                 hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
             }
-        }
-    } else { /* Set to zero */
-        if (index == start_index && each_ofs != 0) {
-            *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
-            hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-            memset_nt(cur_addr, 0, each_ofs);
-            hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
-        }
-        if (index == end_index && len < HK_LBLK_SZ(sbi)) {
-            *each_size = len;
-            hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-            memset_nt(cur_addr + (len + each_ofs), 0, HK_LBLK_SZ(sbi) - (len + each_ofs));
-            hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
         }
     }
 
@@ -202,44 +266,175 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                      size_t *out_size)
 {
     u64 i;
+    int ret = 0;
     size_t each_blks, each_size;
     loff_t each_ofs;
-    u64 dst_blks;
+    u64 dst_blks, blks_prepared;
     u64 addr, addr_overlayed;
     bool is_overlay;
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_inode *pi = hk_get_inode(sb, inode);
-    struct hk_header *hdr, *hdr_start;
+    /* for background commit, i.e., async */
     struct hk_cmt_batch batch;
+    /* for pack, i.e., write-once */
+    in_pkg_param_t in_param;
+    out_pkg_param_t out_param;
     unsigned long irq_flags = 0;
 
     INIT_TIMING(memcpy_time);
 
     addr = prep->target_addr;
-    hdr_start = sm_get_hdr_by_addr(sb, addr);
+    blks_prepared = prep->blks_prepared;
     *out_size = 0;
 
-    for (i = 0; i < prep->blks_prepared; i++) {
-        each_size = HK_LBLK_SZ(sbi);
+    if (ENABLE_META_PACK(sb)) {
         each_ofs = ofs & (HK_LBLK_SZ(sbi) - 1);
-        if (ENABLE_META_LOCAL(sb)) {
-            if (i == 0 || i == prep->blks_prepared - 1) {
+        each_size = blks_prepared * HK_LBLK_SZ(sbi);
+        is_overlay = hk_try_perform_cow(si, addr, index_cur,
+                                        start_index, end_index,
+                                        each_ofs, &each_size,
+                                        ofs, size);
+        HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+        hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+        memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+        hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+        HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+        in_param.partial = false;
+        ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), each_size, &in_param, &out_param);
+        if (ret) {
+            return ret;
+        }
+
+        *out_size = each_size;
+    } else {
+        for (i = 0; i < prep->blks_prepared; i++) {
+            each_size = HK_LBLK_SZ(sbi);
+            each_ofs = ofs & (HK_LBLK_SZ(sbi) - 1);
+
+            if (ENABLE_META_LOCAL(sb)) {
+                if (i == 0 || i == prep->blks_prepared - 1) {
+                    is_overlay = hk_try_perform_cow(si, addr, index_cur,
+                                                    start_index, end_index,
+                                                    each_ofs, &each_size,
+                                                    ofs, size);
+
+                    /* try prefetch hdr/region before writing it */
+                    prefetcht2(sm_get_hdr_by_addr(sb, addr));
+                    /* Prefetch Region */
+                    /* prefetcht2((void *)hk_get_region_by_ino(sb, inode->i_ino)); */
+
+                    HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+                    hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+                    /* Make sure Align 64 */
+                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+                    HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+                    if (ENABLE_META_ASYNC(sb)) {
+                        hk_valid_hdr_background(sb, inode, addr, index_cur);
+                        if (is_overlay) {
+                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
+                            hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
+                        }
+                    } else {
+                        use_layout_for_addr(sb, addr);
+                        sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
+                        unuse_layout_for_addr(sb, addr);
+                        if (is_overlay) {
+                            /* commit the inode */
+                            hk_commit_newattr_indram(sb, inode);
+
+                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
+
+                            /* invalid the old one */
+                            use_layout_for_addr(sb, addr_overlayed);
+                            sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
+                            unuse_layout_for_addr(sb, addr_overlayed);
+
+                            hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
+                        }
+                    }
+
+                    linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
+
+                    addr += HK_PBLK_SZ(sbi);
+                    index_cur += 1;
+                } else {
+                    if (prep->blks_prepared - 2 <= 0) {
+                        continue;
+                    } else {
+                        dst_blks = prep->blks_prepared - 2;
+                        each_size = (dst_blks * HK_LBLK_SZ(sbi));
+                    }
+
+                    HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+                    hk_memunlock_range(sb, addr, each_size, &irq_flags);
+                    memcpy_to_pmem_nocache(addr, content, each_size);
+                    hk_memlock_range(sb, addr, each_size, &irq_flags);
+                    HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+                    /* minus 1 due to i++ in the for loop */
+                    i += (dst_blks - 1);
+
+                    hk_init_cmt_batch(sb, &batch, addr, index_cur, dst_blks);
+
+                    while (dst_blks) {
+                        is_overlay = hk_check_overlay(si, index_cur);
+
+                        hk_inc_cmt_batch(sb, &batch);
+
+                        if (ENABLE_META_ASYNC(sb)) {
+                            /* do nothing */
+                            if (is_overlay) {
+                                hk_valid_range_background(sb, inode, &batch);
+                                hk_next_cmt_batch(sb, &batch);
+
+                                addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
+                                hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
+                            }
+                        } else {
+                            use_layout_for_addr(sb, addr);
+                            sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
+                            unuse_layout_for_addr(sb, addr);
+                            if (is_overlay) {
+                                hk_commit_newattr_indram(sb, inode);
+
+                                addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
+                                /* invalid the old one */
+                                use_layout_for_addr(sb, addr_overlayed);
+                                sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
+                                unuse_layout_for_addr(sb, addr_overlayed);
+
+                                hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
+                            }
+                        }
+
+                        linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
+
+                        dst_blks -= 1;
+
+                        addr += HK_PBLK_SZ(sbi);
+                        index_cur += 1;
+                    }
+
+                    if (ENABLE_META_ASYNC(sb)) {
+                        if (hk_is_cmt_batch_valid(sb, &batch)) {
+                            hk_valid_range_background(sb, inode, &batch);
+                        }
+                    }
+                }
+            } else { /* Default is LFS */
                 is_overlay = hk_try_perform_cow(si, addr, index_cur,
                                                 start_index, end_index,
                                                 each_ofs, &each_size,
-                                                size);
-
-                /* try prefetch hdr/region before writing it */                              
-                prefetcht2(sm_get_hdr_by_addr(sb, addr));
-                /* Prefetch Region */
-                /* prefetcht2((void *)hk_get_region_by_ino(sb, inode->i_ino)); */
+                                                ofs, size);
 
                 HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
                 hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                /* Make sure Align 64 */
                 memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
                 hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
                 HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
@@ -255,7 +450,6 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
                     unuse_layout_for_addr(sb, addr);
                     if (is_overlay) {
-                        /* commit the inode */
                         hk_commit_newattr_indram(sb, inode);
 
                         addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
@@ -269,120 +463,17 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     }
                 }
 
-                linix_insert(&sih->ix, index_cur, addr, true);
+                linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
 
                 addr += HK_PBLK_SZ(sbi);
                 index_cur += 1;
-            } else {
-                if (prep->blks_prepared - 2 <= 0) {
-                    continue;
-                } else {
-                    dst_blks = prep->blks_prepared - 2;
-                    each_size = (dst_blks * HK_LBLK_SZ(sbi));
-                }
-
-                HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-                hk_memunlock_range(sb, addr, each_size, &irq_flags);
-                memcpy_to_pmem_nocache(addr, content, each_size);
-                hk_memlock_range(sb, addr, each_size, &irq_flags);
-                HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-                /* minus 1 due to i++ in the for loop */
-                i += (dst_blks - 1);
-                
-                hk_init_cmt_batch(sb, &batch, addr, index_cur, dst_blks);
-
-                while (dst_blks) {
-                    is_overlay = hk_check_overlay(si, index_cur);
-
-                    hk_inc_cmt_batch(sb, &batch);
-                    
-                    if (ENABLE_META_ASYNC(sb)) {
-                        /* do nothing */
-                        if (is_overlay) {
-                            hk_valid_range_background(sb, inode, &batch);
-                            hk_next_cmt_batch(sb, &batch);
-
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                            hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
-                        }
-                    } else {
-                        use_layout_for_addr(sb, addr);
-                        sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
-                        unuse_layout_for_addr(sb, addr);
-                        if (is_overlay) {
-                            hk_commit_newattr_indram(sb, inode);
-
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                            /* invalid the old one */
-                            use_layout_for_addr(sb, addr_overlayed);
-                            sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
-                            unuse_layout_for_addr(sb, addr_overlayed);
-
-                            hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
-                        }
-                    }
-
-                    linix_insert(&sih->ix, index_cur, addr, true);
-
-                    dst_blks -= 1;
-
-                    addr += HK_PBLK_SZ(sbi);
-                    index_cur += 1;
-                }
-
-                if (ENABLE_META_ASYNC(sb)) {
-                    if (hk_is_cmt_batch_valid(sb, &batch)) {
-                        hk_valid_range_background(sb, inode, &batch);
-                    }
-                }
-            }
-        } else {
-            is_overlay = hk_try_perform_cow(si, addr, index_cur,
-                                            start_index, end_index,
-                                            each_ofs, &each_size,
-                                            size);
-
-            HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-            hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-            /* Make sure Align 64 */
-            memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-            hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-            HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-            if (ENABLE_META_ASYNC(sb)) {
-                hk_valid_hdr_background(sb, inode, addr, index_cur);
-                if (is_overlay) {
-                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                    hk_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
-                }
-            } else {
-                use_layout_for_addr(sb, addr);
-                sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
-                unuse_layout_for_addr(sb, addr);
-                if (is_overlay) {
-                    hk_commit_newattr_indram(sb, inode);
-
-                    addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-
-                    /* invalid the old one */
-                    use_layout_for_addr(sb, addr_overlayed);
-                    sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
-                    unuse_layout_for_addr(sb, addr_overlayed);
-
-                    hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
-                }
             }
 
-            linix_insert(&sih->ix, index_cur, addr, true);
-
-            addr += HK_PBLK_SZ(sbi);
-            index_cur += 1;
+            content += each_size;
+            ofs += each_size;
+            size -= each_size;
+            *out_size += each_size;
         }
-
-        content += each_size;
-        ofs += each_size;
-        size -= each_size;
-        *out_size += each_size;
     }
 
     return 0;
@@ -395,7 +486,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_inode *pi = hk_get_inode(sb, inode);
 
     pgoff_t index, start_index, end_index, i;
@@ -478,10 +569,14 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
 
 out:
     if (ENABLE_META_ASYNC(sb)) {
-		/* do nothing */
+        /* do nothing */
     } else {
-        /* Write-Once */
-        /* hk_commit_newattr_indram(sb, inode); */
+        if (ENABLE_META_PACK(sb)) {
+            /* Write-Once */
+            /* do nothing */
+        } else {
+            hk_commit_newattr_indram(sb, inode);
+        }
     }
 
     HK_END_TIMING(write_t, write_time);
@@ -572,9 +667,70 @@ persist:
     return ret;
 }
 
+static ssize_t hk_rw_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+    struct file *filp = iocb->ki_filp;
+    struct inode *inode = filp->f_mapping->host;
+    ssize_t ret = -EIO;
+    ssize_t written = 0;
+    unsigned long seg;
+    unsigned long nr_segs = iter->nr_segs;
+    const struct iovec *iv = iter->iov;
+    INIT_TIMING(wrap_iter_time);
+
+    HK_START_TIMING(wrap_iter_t, wrap_iter_time);
+
+    hk_dbgv("%s %s: %lu segs\n", __func__,
+            iov_iter_rw(iter) == READ ? "read" : "write",
+            nr_segs);
+
+    if (iov_iter_rw(iter) == WRITE) {
+        sb_start_write(inode->i_sb);
+        inode_lock(inode);
+    } else {
+        inode_lock_shared(inode);
+    }
+
+    iv = iter->iov;
+    for (seg = 0; seg < nr_segs; seg++) {
+        if (iov_iter_rw(iter) == READ) {
+            ret = do_dax_mapping_read(filp, iv->iov_base,
+                                      iv->iov_len, &iocb->ki_pos);
+        } else if (iov_iter_rw(iter) == WRITE) {
+            ret = do_hk_file_write(filp, iv->iov_base,
+                                   iv->iov_len, &iocb->ki_pos);
+        } else {
+            BUG();
+        }
+        if (ret < 0)
+            goto err;
+
+        if (iter->count > iv->iov_len)
+            iter->count -= iv->iov_len;
+        else
+            iter->count = 0;
+
+        written += ret;
+        iter->nr_segs--;
+        iv++;
+    }
+    ret = written;
+err:
+    if (iov_iter_rw(iter) == WRITE) {
+        inode_unlock(inode);
+        sb_end_write(inode->i_sb);
+    } else {
+        inode_unlock_shared(inode);
+    }
+
+    HK_END_TIMING(wrap_iter_t, wrap_iter_time);
+    return ret;
+}
+
 /* This callback is called when a file is closed */
 static int hk_flush(struct file *file, fl_owner_t id)
 {
+    /* TODO: we should move some routines in evict inode here ? */
     PERSISTENT_BARRIER();
     return 0;
 }
@@ -589,8 +745,8 @@ const struct file_operations hk_dax_file_operations = {
     .llseek = hk_llseek,
     .read = hk_dax_file_read,
     .write = hk_dax_file_write,
-    .read_iter = NULL,  /* TODO: Not support yet */
-    .write_iter = NULL, /* TODO: Not support yet */
+    .read_iter = hk_rw_iter, 
+    .write_iter = hk_rw_iter, 
     .mmap = NULL,       /* TODO: Not support mmap yet */
     .mmap_supported_flags = MAP_SYNC,
     .open = hk_open,

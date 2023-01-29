@@ -1,12 +1,13 @@
 #include "hunter.h"
 
+/* TODO */
 int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
                      struct inode *inode, const char *symname, int len,
                      void *out_blk_addr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_layout_prep prep;
 	unsigned long blks = 0;
     u64 blk_addr = 0;
@@ -18,22 +19,6 @@ int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
     blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, blk_cur));
 
     if (blk_addr == 0) {
-        // hk_prepare_layouts(sb, 1, true, &preps);
-        // hk_trv_prepared_layouts_init(&preps);
-        // prep = hk_trv_prepared_layouts(sb, &preps);
-        // if (!prep) {
-        // 	hk_dbg("%s: ERROR: No prep found for index\n", __func__);
-        // 	hk_prepare_gap(sb, false, &tmp_prep);
-        // 	if (tmp_prep.target_addr == 0) {
-        // 		hk_dbgv("%s: prepare layout failed\n", __func__);
-        // 		BUG_ON(1);
-        // 		return -ENOSPC;
-        // 	}
-        // 	blk_addr = tmp_prep.target_addr;
-        // }
-        // else {
-        // 	blk_addr = prep->target_addr;
-        // }
 		blks = 1;
 		ret = hk_alloc_blocks(sb, &blks, true, &prep);
 		if (ret) {
@@ -54,7 +39,7 @@ int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
     unuse_layout_for_addr(sb, blk_addr);
 
     /* first block */
-    linix_insert(&sih->ix, blk_cur, blk_addr, true);
+    linix_insert(&sih->ix, blk_cur, TRANS_ADDR_TO_OFS(sbi, blk_addr), true);
 
     if (out_blk_addr) {
         *(u64 *)out_blk_addr = blk_addr;
@@ -91,7 +76,7 @@ static int hk_readlink(struct dentry *dentry, char __user *buffer, int buflen)
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     u64 blk_addr;
 
     blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, 0));
@@ -105,7 +90,7 @@ static const char *hk_get_link(struct dentry *dentry, struct inode *inode,
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     u64 blk_addr;
 
     blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, 0));

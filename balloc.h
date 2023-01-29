@@ -22,7 +22,9 @@ struct hk_indicator {
 
 enum hk_layout_type {
     LAYOUT_APPEND = 0,
-    LAYOUT_GAP
+    LAYOUT_GAP,
+    /* for pack, i.e., write-once layout */
+    LAYOUT_PACK
 };
 
 struct hk_layout_info {

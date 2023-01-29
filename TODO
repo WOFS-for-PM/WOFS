@@ -1,3 +1,12 @@
+# 2023/1/30 ~
+- [ ] Implement File Operations
+- [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
+
+# 2023/1/27 ~ 2023/1/29 
+- [x] Migrate Recovery
+- [x] Implement I/O
+- [x] Declare inode info header as pointer
+
 # 2023/1/25 ~ 2023/1/26
 - [x] Migrate two-layer allocator.
 - [x] Migrate object manager.

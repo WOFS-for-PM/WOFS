@@ -915,55 +915,62 @@ int hk_format_meta(struct super_block *sb)
     struct hk_journal *jnl;
     unsigned long bid, rgid, txid;
 
-    /* Step 1: Format Inode Table */
-    hk_memunlock_range(sb, (void *)sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
-    memset_nt_large((void *)sbi->ino_tab_addr, 0, sbi->ino_tab_size);
-    hk_memlock_range(sb, sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
-
-    /* Step 2: Format Summary Headers  */
-    if (ENABLE_META_LOCAL(sb)) {
-        hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
-        memset_nt_large((void *)sbi->sm_addr, 0, sbi->sm_size);
-        for (bid = 0; bid < sbi->d_blks; bid++) {
-            hdr = sm_get_hdr_by_blk(sb, bid);
-            if (hdr->valid != HDR_INVALID) {
-                hk_info("Not Clean\n");
-            }
-            hdr->valid = HDR_PENDING;
-        }
-        hk_flush_buffer((void *)sbi->sm_addr, sbi->sm_size, false);
-        hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+    if (ENABLE_META_PACK(sb)) {
+        /* Format Bitmaps for Two-Layer Allocator */
+        hk_memunlock_range(sb, (void *)sbi->bm_start, sbi->bm_size, &irq_flags);
+        memset_nt_large((void *)sbi->bm_start, 0, sbi->bm_size);
+        hk_memlock_range(sb, (void *)sbi->bm_start, sbi->bm_size, &irq_flags);    
     } else {
-        // TODO: Implement MAGIC number to prevent all valid at init
-        hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
-        for (bid = 0; bid < sbi->d_blks; bid++) {
-            hdr = sm_get_hdr_by_blk(sb, bid);
-            hdr->valid = HDR_PENDING;
+        /* Step 1: Format Inode Table */
+        hk_memunlock_range(sb, (void *)sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
+        memset_nt_large((void *)sbi->ino_tab_addr, 0, sbi->ino_tab_size);
+        hk_memlock_range(sb, sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
+
+        /* Step 2: Format Summary Headers  */
+        if (ENABLE_META_LOCAL(sb)) {
+            hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+            memset_nt_large((void *)sbi->sm_addr, 0, sbi->sm_size);
+            for (bid = 0; bid < sbi->d_blks; bid++) {
+                hdr = sm_get_hdr_by_blk(sb, bid);
+                if (hdr->valid != HDR_INVALID) {
+                    hk_info("Not Clean\n");
+                }
+                hdr->valid = HDR_PENDING;
+            }
+            hk_flush_buffer((void *)sbi->sm_addr, sbi->sm_size, false);
+            hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+        } else {
+            // TODO: Implement MAGIC number to prevent all valid at init
+            hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+            for (bid = 0; bid < sbi->d_blks; bid++) {
+                hdr = sm_get_hdr_by_blk(sb, bid);
+                hdr->valid = HDR_PENDING;
+            }
+            hk_flush_buffer(sbi->sm_addr, sbi->sm_size, false);
+            hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
         }
-        hk_flush_buffer(sbi->sm_addr, sbi->sm_size, false);
-        hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
-    }
-    hk_dbgv("entries: %llu\n", sbi->sm_size / sizeof(struct hk_header));
-    hk_dbgv("sbi->d_blks: %llu\n", sbi->d_blks);
+        hk_dbgv("entries: %llu\n", sbi->sm_size / sizeof(struct hk_header));
+        hk_dbgv("sbi->d_blks: %llu\n", sbi->d_blks);
 
-    /* Step 3: Format Jentry */
-    hk_memunlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
-    for (txid = 0; txid < sbi->j_slots; txid++) {
-        jnl = hk_get_journal_by_txid(sb, txid);
-        hk_reinit_journal(sb, jnl);
-        hk_flush_buffer((void *)jnl, HK_JOURNAL_SIZE, false);
-    }
-    hk_memlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
+        /* Step 3: Format Jentry */
+        hk_memunlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
+        for (txid = 0; txid < sbi->j_slots; txid++) {
+            jnl = hk_get_journal_by_txid(sb, txid);
+            hk_reinit_journal(sb, jnl);
+            hk_flush_buffer((void *)jnl, HK_JOURNAL_SIZE, false);
+        }
+        hk_memlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
 
-    /* Step 4: Format Regions */
-    hk_memunlock_range(sb, (void *)sbi->rg_addr, sbi->rg_size, &irq_flags);
-    for (rgid = 0; rgid < sbi->rg_slots; rgid++) {
-        rg = hk_get_region_by_rgid(sb, rgid);
-        rg->applying = 0;
-        hk_reinit_region(sb, rg);
-        hk_flush_buffer((void *)rg, sizeof(struct hk_mregion), false);
+        /* Step 4: Format Regions */
+        hk_memunlock_range(sb, (void *)sbi->rg_addr, sbi->rg_size, &irq_flags);
+        for (rgid = 0; rgid < sbi->rg_slots; rgid++) {
+            rg = hk_get_region_by_rgid(sb, rgid);
+            rg->applying = 0;
+            hk_reinit_region(sb, rg);
+            hk_flush_buffer((void *)rg, sizeof(struct hk_mregion), false);
+        }
+        hk_memlock_range(sb, (void *)sbi->rg_addr, sbi->rg_size, &irq_flags);
     }
-    hk_memlock_range(sb, (void *)sbi->rg_addr, sbi->rg_size, &irq_flags);
     hk_info("meta format done.\n");
     return 0;
 }

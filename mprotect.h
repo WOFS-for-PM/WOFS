@@ -136,18 +136,18 @@ static inline void hk_memlock_range(struct super_block *sb, void *p,
 		__hk_memlock_range(p, len, flags);
 }
 
-static inline void hk_memunlock_super(struct super_block *sb, unsigned long *flags)
+static inline void hk_memunlock_super(struct super_block *sb, int n, unsigned long *flags)
 {
-	struct hk_super_block *ps = hk_get_super(sb);
+	struct hk_super_block *ps = hk_get_super(sb, n);
 	struct hk_sb_info *sbi = HK_SB(sb);
 
 	if (hk_is_protected(sb))
 		__hk_memunlock_range(ps, HK_SB_SIZE(sbi), flags);
 }
 
-static inline void hk_memlock_super(struct super_block *sb, unsigned long *flags)
+static inline void hk_memlock_super(struct super_block *sb, int n, unsigned long *flags)
 {
-	struct hk_super_block *ps = hk_get_super(sb);
+	struct hk_super_block *ps = hk_get_super(sb, n);
 	struct hk_sb_info *sbi = HK_SB(sb);
 
 	if (hk_is_protected(sb))

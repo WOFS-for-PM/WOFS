@@ -109,10 +109,6 @@ u64 linix_get(struct linix *ix, u64 index)
 /* Inode Lock must be held before linix insert, and blk_addr */
 int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend) 
 {
-    struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info        *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block          *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info           *sbi = HK_SB(sb);
     /* INIT_TIMING(index_time);
     HK_START_TIMING(linix_set_t, index_time); */
     if (extend) {
@@ -126,7 +122,7 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
         return -1;
     }
 
-    ix->slots[index].blk_addr = TRANS_ADDR_TO_OFS(sbi, blk_addr);
+    ix->slots[index].blk_addr = blk_addr;
     /* HK_END_TIMING(linix_set_t, index_time); */
     return 0;
 }
@@ -135,10 +131,6 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
 int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink) 
 {
     struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info        *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block          *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info           *sbi = HK_SB(sb);
-
     ix->slots[index].blk_addr = 0;
     
     if (shrink && ix->num_slots > HK_LINIX_SLOTS) {

@@ -58,7 +58,9 @@ struct latest_fop_objs {
  * hk-specific inode state kept in DRAM
  */
 struct hk_inode_info_header {
-    struct hlist_node hnode;                /* Hash list */
+    struct hlist_node hnode;
+    struct hk_inode_info *si;
+    unsigned long ino;
     struct linix ix;                        /* Linear Index for blks in use */
     DECLARE_HASHTABLE(dirs, HK_HASH_BITS3); /* Hash table for dirs */
     u64 i_num_dentrys;                      /* Dentrys tail */
@@ -69,7 +71,12 @@ struct hk_inode_info_header {
     unsigned int i_flags;
     unsigned long i_size;
     unsigned long i_blocks;
-    unsigned long ino;
+    u32 i_ctime;
+    u32 i_mtime;
+    u32 i_atime;  /* Access time */
+    u32 i_uid;    /* Owner Uid */
+    u32 i_gid;    /* Group Id */
+    u16 i_links_count;
     int ref;
 
     union {
@@ -79,18 +86,16 @@ struct hk_inode_info_header {
             u64 last_setattr;     /* Last setattr entry */
             u64 last_link_change; /* Last link change entry */
             u64 last_dentry;      /* Last updated dentry */
+            u64 tstamp;           /* Time stamp for Version Control */
+            u64 h_addr;           /* First blk logic offset */
         };
         /* for pack (write-once) */
         struct {
-             struct latest_fop_objs latest_fop;
+            struct latest_fop_objs latest_fop;
         };
     };
-
-    u64 tstamp; /* Time stamp for Version Control */
-    u64 h_addr; /* First blk logic offset */
 };
 
-// TODO: This could be jentry
 /* For rebuild purpose, temporarily store pi infomation */
 struct hk_inode_rebuild {
     u64 i_size;
@@ -111,7 +116,7 @@ struct hk_inode_rebuild {
  * DRAM state for inodes
  */
 struct hk_inode_info {
-    struct hk_inode_info_header header;
+    struct hk_inode_info_header *header;
     struct inode vfs_inode;
 };
 
@@ -123,7 +128,7 @@ static inline struct hk_inode_info *HK_I(struct inode *inode)
 static inline struct hk_inode_info_header *HK_IH(struct inode *inode)
 {
     struct hk_inode_info *si = HK_I(inode);
-    return &si->header;
+    return si->header;
 }
 
 /* If this is part of a read-modify-write of the inode metadata,
@@ -143,11 +148,10 @@ static inline struct hk_inode *hk_get_inode(struct super_block *sb,
                                             struct inode *inode)
 {
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_inode fake_pi;
     void *addr;
     int rc;
-    struct hk_super_block *super = hk_get_super(sb);
 
     addr = sih->pi_addr;
     rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct hk_inode));

@@ -152,10 +152,10 @@ int hk_try_update_dram(struct super_block *sb, u64 srvv_addr, struct hk_header *
             {
             case SPEC_BLK:
             case DATA_BLK:
-                linix_insert(&sih->ix, vict_hdr->f_blk, srvv_addr, true);
+                linix_insert(&sih->ix, vict_hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, srvv_addr), true);
                 break;
             case DENT_BLK:
-                linix_insert(&sih->ix, vict_hdr->f_blk, srvv_addr, true);
+                linix_insert(&sih->ix, vict_hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, srvv_addr), true);
                 hk_update_dir_table_for_blk(sb, vict_hdr->f_blk, sih);
                 break;
             default:
@@ -250,7 +250,7 @@ static u64 hk_drop_latest_gap(struct super_block *sb, int cpuid)
         list_for_each_safe(pos, q, &layout->gaps_list) {
             cur = list_entry(pos, struct hk_range_node, node);
             list_del(pos);
-            hk_free_range_node(cur);
+            hk_free_hk_range_node(cur);
             gaps_to_drop = cur->high - cur->low + 1;
             break;
         }

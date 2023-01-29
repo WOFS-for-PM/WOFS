@@ -11,7 +11,7 @@ int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u1
 int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type);
 
 /* == constructive functions == */
-static inline obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino)
+inline obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino)
 {
     obj_ref_inode_t *ref = hk_alloc_obj_ref_inode();
     ref->hdr.ref = 1;
@@ -20,14 +20,14 @@ static inline obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino)
     return ref;
 }
 
-static inline void ref_inode_destroy(obj_ref_inode_t *ref)
+inline void ref_inode_destroy(obj_ref_inode_t *ref)
 {
     if (ref) {
         hk_free_obj_ref_inode(ref);
     }
 }
 
-static inline obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u32 dep_addr)
+inline obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u32 dep_addr)
 {
     obj_ref_attr_t *ref = hk_alloc_obj_ref_attr();
     ref->hdr.ref = 1;
@@ -38,14 +38,14 @@ static inline obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u
     return ref;
 }
 
-static inline void ref_attr_destroy(obj_ref_attr_t *ref)
+inline void ref_attr_destroy(obj_ref_attr_t *ref)
 {
     if (ref) {
         hk_free_obj_ref_attr(ref);
     }
 }
 
-static inline obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino)
+inline obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino)
 {
     obj_ref_dentry_t *ref = hk_alloc_obj_ref_dentry();
     ref->hdr.addr = addr;
@@ -55,14 +55,14 @@ static inline obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u3
     return ref;
 }
 
-static inline void ref_dentry_destroy(obj_ref_dentry_t *ref)
+inline void ref_dentry_destroy(obj_ref_dentry_t *ref)
 {
     if (ref) {
         hk_free_obj_ref_dentry(ref);
     }
 }
 
-static inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 num, u64 data_offset)
+inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 num, u64 data_offset)
 {
     obj_ref_data_t *ref = hk_alloc_obj_ref_data();
     ref->hdr.ref = 1;
@@ -75,7 +75,7 @@ static inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 nu
     return ref;
 }
 
-static inline void ref_data_destroy(obj_ref_data_t *ref)
+inline void ref_data_destroy(obj_ref_data_t *ref)
 {
     if (ref) {
         hk_free_obj_ref_data(ref);
@@ -392,17 +392,12 @@ int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 
 static inline int __update_dram_meta(struct hk_inode_info_header *sih, attr_update_t *update)
 {
-    struct hk_inode_info *si;
-    struct inode *inode;
-
-    si = container_of(sih, struct hk_inode_info, header);
-    inode = &si->vfs_inode;
-    i_uid_write(inode, update->i_uid);
-    i_gid_write(inode, update->i_gid);
-    inode->i_atime.tv_sec = update->i_atime;
-    inode->i_mtime.tv_sec = update->i_mtime;
-    inode->i_ctime.tv_sec = update->i_ctime;
-    set_nlink(inode, update->i_links_count);
+    sih->i_uid = update->i_uid;
+    sih->i_gid = update->i_gid;
+    sih->i_atime = update->i_atime;
+    sih->i_mtime = update->i_mtime;
+    sih->i_ctime = update->i_ctime;
+    sih->i_links_count = update->i_links_count;
     sih->i_mode = update->i_mode;
     sih->i_size = update->i_size;
     return 0;
@@ -659,20 +654,15 @@ int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_u
 int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t *update)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    struct hk_inode_info *si;
-    struct inode *inode;
     struct linix *ix = &sih->ix;
     obj_ref_data_t *ref;
     u32 ofs_blk = GET_ALIGNED_BLKNR(update->ofs);
     u32 num = update->num;
     int ret, i;
-    
-    si = container_of(sih, struct hk_inode_info, header);
-    inode = &si->vfs_inode;
 
     /* update dram attr */
-    inode->i_ctime.tv_sec = update->i_cmtime;
-    inode->i_mtime.tv_sec = update->i_cmtime;
+    sih->i_ctime = sih->i_mtime = update->i_cmtime;
+    sih->i_atime = update->i_cmtime;
     sih->i_size = update->i_size;
 
     if (!update->build_from_exist) {
@@ -792,12 +782,9 @@ void __fill_pm_inode(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, u32 
 
 void __fill_pm_inode_from_exist(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, inode_update_t *update)
 {
-    struct hk_inode_info *si;
-    struct inode *inode;
     struct hk_inode_info_header *sih = update->sih;
-
-    si = container_of(sih, struct hk_inode_info, header);
-    inode = &si->vfs_inode;
+    BUG_ON(sih->si == NULL);
+    struct inode *inode = &sih->si->vfs_inode;
 
     pm_inode->ino = sih->ino;
     pm_inode->i_create_time = inode->i_ctime.tv_sec;
@@ -861,11 +848,8 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
         i_links_count = 1;
     } else if (FILL_ATTR_TYPE(options) == FILL_ATTR_EXIST) {
         struct hk_inode_info_header *sih = (struct hk_inode_info_header *)attr_param->inherit;
-        struct hk_inode_info *si;
-        struct inode *inode;
-
-        si = container_of(sih, struct hk_inode_info, header);
-        inode = &si->vfs_inode;
+        BUG_ON(sih->si == NULL);
+        struct inode *inode = &sih->si->vfs_inode;
 
         i_mode = inode->i_mode;
         i_atime = inode->i_atime.tv_sec;
@@ -1031,6 +1015,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     }
 
     if (create_pm_only) {
+        BUG_ON(!sih);
         ino = sih->ino;
     } else {
         if (psih) {
@@ -1238,9 +1223,6 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     if (ret) {
         goto out;
     }
-    
-    si = container_of(sih, struct hk_inode_info, header);
-    inode = &si->vfs_inode;
 
     data = (struct hk_obj_data *)(out_param->addr);
 

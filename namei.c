@@ -44,7 +44,7 @@ int hk_insert_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
 {
     struct hk_dentry_info *di;
     /* Insert into hash table */
-    di = hk_alloc_dentry_info(sb);
+    di = hk_alloc_hk_dentry_info();
     if (!di)
         return -ENOMEM;
     di->hash = BKDRHash(name, namelen);
@@ -74,7 +74,7 @@ void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *s
     hash_for_each_safe(sih->dirs, bkt, tmp, di, node)
     {
         hash_del(&di->node);
-        hk_free_dentry_info(di);
+        hk_free_hk_dentry_info(di);
     }
 }
 
@@ -91,7 +91,7 @@ void hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *si
     {
         if (strcmp(di->direntry->name, name) == 0) {
             hash_del(&di->node);
-            hk_free_dentry_info(di);
+            hk_free_hk_dentry_info(di);
             break;
         }
     }
@@ -103,7 +103,7 @@ static ino_t hk_inode_by_name(struct inode *dir, struct qstr *entry,
     struct super_block *sb = dir->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(dir);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_dentry_info *di;
     const char *name;
     unsigned long name_len;
@@ -131,7 +131,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(dir);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     struct hk_inode *pidir;
     struct hk_layout_prep prep;
     struct hk_dentry_info *di;
@@ -205,7 +205,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
         sm_valid_hdr(sb, blk_addr, dir->i_ino, blk_cur, get_version(sbi));
         unuse_layout_for_addr(sb, blk_addr);
 
-        linix_insert(&sih->ix, blk_cur, blk_addr, true);
+        linix_insert(&sih->ix, blk_cur, TRANS_ADDR_TO_OFS(sbi, blk_addr), true);
     }
 
     hk_flush_buffer(direntry, sizeof(struct hk_dentry), false);
@@ -497,13 +497,6 @@ static int hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
     if (ino == -1)
         goto out_err;
 
-        // TODO: No entry now
-        // update.tail = 0;
-        // update.alter_tail = 0;
-        // err = hk_add_dentry(dentry, ino, 0, &update, epoch_id);
-        // if (err)
-        // 	goto out_err;
-
 #ifndef CONFIG_FINEGRAIN_JOURNAL
     txid = hk_start_tx_for_new_inode(sb, ino, dentry, dir, mode, 0);
     if (txid < 0) {
@@ -753,7 +746,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     pi = hk_get_inode(sb, inode);
 
     si = HK_I(inode);
-    sih = &si->header;
+    sih = si->header;
 
     err = hk_block_symlink(sb, pi, inode, symname, len, &sym_blk_addr);
     if (err)
@@ -961,7 +954,7 @@ static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     pidir = hk_get_inode(sb, dir);
     sidir = HK_I(dir);
 
-    sih = &si->header;
+    sih = si->header;
 
     dir->i_blocks = sih->i_blocks;
 
@@ -996,7 +989,7 @@ out_err:
 static bool hk_empty_dir(struct inode *inode)
 {
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = &si->header;
+    struct hk_inode_info_header *sih = si->header;
     unsigned bkt;
     struct hk_dentry_info *cur;
 

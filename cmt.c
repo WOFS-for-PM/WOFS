@@ -33,13 +33,13 @@ struct memory_fetcher {
 static void *alloc_cmt_info(void *ctl_msg, size_t size, gfp_t flags)
 {
     struct pre_alloc_memory_pool_control_msg *msg = ctl_msg;
-    return hk_alloc_cmt_info(msg->sb);
+    return hk_alloc_hk_cmt_info();
 }
 
 static void free_cmt_info(void *ctl_msg, void *node)
 {
     (void) ctl_msg;
-    hk_free_cmt_info(node);
+    hk_free_hk_cmt_info(node);
 }
 
 static int destroy_memory_node_list(struct pre_alloc_memory_pool *pamp, struct list_head *head)
@@ -218,7 +218,7 @@ int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk
     HK_START_TIMING(request_valid_t, request_time);
 
     HK_START_TIMING(prepare_request_t, prepare_time);
-    info = hk_alloc_cmt_info(sb);
+    info = hk_alloc_hk_cmt_info();
     
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
@@ -251,7 +251,7 @@ int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 b
 
     HK_START_TIMING(prepare_request_t, prepare_time);
 
-    info = hk_alloc_cmt_info(sb);
+    info = hk_alloc_hk_cmt_info();
     info->type = CMT_INVALID;
     info->ino = inode->i_ino;
     info->addr_start = blk_addr;
@@ -282,7 +282,7 @@ int hk_valid_range_background(struct super_block *sb, struct inode *inode, struc
     HK_START_TIMING(request_valid_t, request_time);
     HK_START_TIMING(prepare_request_t, prepare_time);
     
-    info = hk_alloc_cmt_info(sb);
+    info = hk_alloc_hk_cmt_info();
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
     info->addr_start = batch->addr_start;
@@ -404,7 +404,7 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
 
     unuse_nvm_inode(sb, ino);
 
-    hk_free_cmt_info(info);
+    hk_free_hk_cmt_info(info);
 
     return 0;
 }

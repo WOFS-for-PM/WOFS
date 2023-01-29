@@ -146,14 +146,14 @@ static inline void hk_dump_super(struct super_block *sb)
     hk_info("hk_sb->s_mtime: 0x%x\n", hk_sb->s_mtime);
     hk_info("hk_sb->s_wtime: 0x%x\n", hk_sb->s_wtime);
     hk_info("hk_sb->s_valid_umount: 0x%x\n", hk_sb->s_valid_umount);
-    hk_info("hk_sb->s_tstamp: 0x%llx\n", hk_sb->s_tstamp);
-
-    for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-        hk_info("layout %d: tail: 0x%llx, valid: %llu, invalid: %llu, free: %llu, total: %llu\n",
-                cpuid, hk_sb->s_layout[cpuid].s_atomic_counter, hk_sb->s_layout[cpuid].s_ind.valid_blks,
-                hk_sb->s_layout[cpuid].s_ind.invalid_blks, hk_sb->s_layout[cpuid].s_ind.free_blks,
-                hk_sb->s_layout[cpuid].s_ind.total_blks);
-    }
+    /* TODO */
+    // hk_info("hk_sb->s_tstamp: 0x%llx\n", hk_sb->s_tstamp);
+    // for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
+    //     hk_info("layout %d: tail: 0x%llx, valid: %llu, invalid: %llu, free: %llu, total: %llu\n",
+    //             cpuid, hk_sb->s_layout[cpuid].s_atomic_counter, hk_sb->s_layout[cpuid].s_ind.valid_blks,
+    //             hk_sb->s_layout[cpuid].s_ind.invalid_blks, hk_sb->s_layout[cpuid].s_ind.free_blks,
+    //             hk_sb->s_layout[cpuid].s_ind.total_blks);
+    // }
 }
 
 #endif /* _HK_DBG_H_ */

@@ -1,11 +1,5 @@
 #include "hunter.h"
 
-#define use_droot(droot, type) (spin_lock(&droot->type##_lock))
-#define rls_droot(droot, type) (spin_unlock(&droot->type##_lock))
-
-#define use_pending_list(pending_list) (spin_lock(pending_list->lock))
-#define rls_pending_list(pending_list) (spin_unlock(pending_list->lock))
-
 /* Global Usage */
 int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u16 pkg_type);
 int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type);
@@ -137,8 +131,7 @@ void *hk_lookup_d_obj_ref_lists(d_root_t *root, u64 ino, u8 type)
 {
     struct hlist_node *node;
     d_obj_ref_list_t *cur;
-    switch (type)
-    {
+    switch (type) {
     case OBJ_DATA:
         hash_for_each_possible(root->data_obj_refs, cur, hnode, ino)
         {
@@ -325,7 +318,7 @@ struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
 {
     imap_t *imap = &mgr->prealloc_imap;
     struct hk_inode_info_header *sih;
-    
+
     hash_for_each_possible(imap->map, sih, hnode, ino)
     {
         if (sih->ino == ino) {
@@ -363,8 +356,9 @@ int obj_mgr_send_claim_request(obj_mgr_t *mgr, claim_req_t *req)
 claim_req_t *obj_mgr_get_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
     claim_req_t *req;
-    
-    hash_for_each_possible(mgr->pending_table, req, hnode, dep_pkg_addr) {
+
+    hash_for_each_possible(mgr->pending_table, req, hnode, dep_pkg_addr)
+    {
         if (req->dep_pkg_addr == dep_pkg_addr) {
             return req;
         }
@@ -736,7 +730,7 @@ int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
     default:
         break;
     }
-    
+
     start_cpuid = hk_get_cpuid(sb);
     for (i = 0; i < sbi->num_layout; i++) {
         cpuid = (start_cpuid + i) % sbi->num_layout;
@@ -768,13 +762,14 @@ typedef struct fill_param {
     void *data;
 } fill_param_t;
 
-void __fill_pm_inode(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, u32 ino, inode_update_t *update)
+void __fill_pm_inode(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, u32 ino, u32 rdev, inode_update_t *update)
 {
     pm_inode->ino = ino;
     pm_inode->i_create_time = 0;
     pm_inode->i_flags = 0;
     pm_inode->i_xattr = 0;
     pm_inode->i_generation = 0;
+    pm_inode->dev.rdev = rdev;
     update->addr = get_pm_offset(sbi, pm_inode);
     update->ino = ino;
     __fill_pm_obj_hdr(sbi, &pm_inode->hdr, OBJ_INODE);
@@ -782,18 +777,23 @@ void __fill_pm_inode(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, u32 
 
 void __fill_pm_inode_from_exist(struct hk_sb_info *sbi, struct hk_obj_inode *pm_inode, inode_update_t *update)
 {
+    struct super_block *sb = sbi->sb;
     struct hk_inode_info_header *sih = update->sih;
     BUG_ON(sih->si == NULL);
     struct inode *inode = &sih->si->vfs_inode;
+    unsigned long irq_flags = 0;
 
+    hk_memunlock_range(sb, pm_inode, sizeof(struct hk_obj_inode), &irq_flags);
     pm_inode->ino = sih->ino;
     pm_inode->i_create_time = inode->i_ctime.tv_sec;
     pm_inode->i_flags = inode->i_flags;
     pm_inode->i_xattr = 0;
     pm_inode->i_generation = inode->i_generation;
+    pm_inode->dev.rdev = inode->i_rdev;
     update->addr = get_pm_offset(sbi, pm_inode);
     update->ino = sih->ino;
     __fill_pm_obj_hdr(sbi, &pm_inode->hdr, OBJ_INODE);
+    hk_memlock_range(sb, pm_inode, sizeof(struct hk_obj_inode), &irq_flags);
 }
 
 typedef struct fill_attr {
@@ -978,7 +978,7 @@ int check_pkg_valid(void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr)
     u32 crc32 = last_obj_hdr->crc32;
     last_obj_hdr->crc32 = 0;
     int valid = 1;
-    
+
     if (!hk_crc32c(~0, (const char *)obj_start, len) == crc32) {
         valid = 0;
     }
@@ -988,8 +988,8 @@ int check_pkg_valid(void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr)
 }
 
 /* create in-pm packages and reclaim in-dram attr */
-/* inode should be passed in without initialization if create_pm_only == false (wrapped in in_param) */
-/* inode should be passed in with initialization if create_pm_only == true (wrapped in in_param) */
+/* inode should be passed in without initialization if create_for_rename == false (wrapped in in_param) */
+/* inode should be passed in with initialization if create_for_rename == true (wrapped in in_param) */
 int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
                          struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
                          in_pkg_param_t *in_param, out_pkg_param_t *out_param)
@@ -1005,18 +1005,26 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     fill_param_t fill_param;
     inode_update_t inode_update;
     attr_update_t attr_update, pattr_update;
-    bool create_pm_only = ((in_create_pkg_param_t *)(in_param->private))->create_pm_only;
-    u32 ino;
-    u32 parent_ino;
+    int create_type = ((in_create_pkg_param_t *)(in_param->private))->create_type;
+    bool create_for_rename = create_type == CREATE_FOR_RENAME ? true : false;
+    bool create_for_link = create_type == CREATE_FOR_LINK ? true : false;
+    bool create_for_symlink = create_type == CREATE_FOR_SYMLINK ? true : false;
+    u32 rdev = ((in_create_pkg_param_t *)(in_param->private))->rdev;
+    u32 ino, parent_ino, orig_ino;
     int ret = 0;
 
     if (strlen(name) > HK_NAME_LEN) {
         return -ENAMETOOLONG;
     }
 
-    if (create_pm_only) {
+    if (create_for_rename || create_for_link) {
         BUG_ON(!sih);
-        ino = sih->ino;
+        if (create_for_link)
+            orig_ino = sih->ino;
+        ret = inode_mgr_alloc(inode_mgr, &ino);
+        if (ret) {
+            goto out;
+        }
     } else {
         if (psih) {
             ret = inode_mgr_alloc(inode_mgr, &ino);
@@ -1036,7 +1044,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
 
     fill_attr_t attr_param;
     cur_addr = out_param->addr;
-    if (create_pm_only) {
+    if (create_for_rename) {
         hk_dbg("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
 
         /* fill inode from existing inode */
@@ -1046,10 +1054,10 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         cur_addr += OBJ_INODE_SIZE;
 
         /* fill attr */
-        attr_param.mode = mode,
-        attr_param.options = FILL_ATTR_EXIST | FILL_ATTR_INHERIT,
-        attr_param.inherit = sih,
-        attr_param.update = &attr_update,
+        attr_param.mode = mode;
+        attr_param.options = FILL_ATTR_EXIST | FILL_ATTR_INHERIT;
+        attr_param.inherit = sih;
+        attr_param.update = &attr_update;
 
         fill_param.ino = ino;
         fill_param.data = &attr_param;
@@ -1061,16 +1069,20 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
 
         /* fill inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
-        __fill_pm_inode(sbi, obj_inode, ino, &inode_update);
+        __fill_pm_inode(sbi, obj_inode, ino, rdev, &inode_update);
         cur_addr += OBJ_INODE_SIZE;
 
         /* fill attr */
-        attr_param.mode = mode,
-        attr_param.options = FILL_ATTR_INIT,
-        attr_param.inherit = NULL,
-        attr_param.update = &attr_update,
+        attr_param.mode = mode;
+        attr_param.options = FILL_ATTR_INIT;
+        attr_param.inherit = NULL;
+        attr_param.update = &attr_update;
 
-        fill_param.ino = ino;
+        if (create_for_link)
+            fill_param.ino = orig_ino;
+        else
+            fill_param.ino = ino;
+
         fill_param.data = &attr_param;
         attr = (struct hk_obj_attr *)cur_addr;
         __fill_pm_attr(sbi, attr, &fill_param);
@@ -1089,7 +1101,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         fill_param.data = &attr_param;
         __fill_pm_attr(sbi, pattr, &fill_param);
     } else {
-        memset(pattr, 0, OBJ_ATTR_SIZE);
+        memset_nt(pattr, 0, OBJ_ATTR_SIZE);
     }
     cur_addr += OBJ_ATTR_SIZE;
 
@@ -1232,7 +1244,11 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data->num = (size >> HUNTER_BLK_SHIFT);
     data->i_cmtime = inode->i_mtime.tv_sec;
     data->i_size = sih->i_size;
-    __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA);
+    if (in_param->partial) {
+        __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA | in_param->wrapper_pkg_type);
+    } else {
+        __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA);
+    }
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_DATA_SIZE, &data->hdr);
 
@@ -1295,7 +1311,7 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
     in_create_pkg_param_t in_create_param;
     obj_mgr_t *obj_mgr = sbi->obj_mgr;
 
-    in_create_param.create_pm_only = true;
+    in_create_param.create_type = CREATE_FOR_RENAME;
     in_param.private = &in_create_param;
 
     in_param.partial = 1;
@@ -1305,6 +1321,28 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
 
     in_param.next = unlink_out_param->addr;
     create_new_inode_pkg(sbi, sih->i_mode, new_name, sih, npsih, &in_param, create_out_param);
+
+    return 0;
+}
+
+int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname,
+                       u64 symaddr, struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
+                       out_pkg_param_t *data_out_param, out_pkg_param_t *create_out_param)
+{
+    in_pkg_param_t in_param;
+    in_create_pkg_param_t in_create_param;
+    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+
+    in_create_param.create_type = CREATE_FOR_SYMLINK;
+    in_param.private = &in_create_param;
+
+    in_param.partial = 1;
+    in_param.wrapper_pkg_type = PKG_SYMLINK;
+    in_param.next = 0;
+    create_data_pkg(sbi, sih, symaddr, 0, HK_LBLK_SZ(sbi), &in_param, data_out_param);
+
+    in_param.next = data_out_param->addr;
+    create_new_inode_pkg(sbi, mode, name, sih, psih, &in_param, create_out_param);
 
     return 0;
 }

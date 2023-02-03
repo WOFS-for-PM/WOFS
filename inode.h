@@ -91,6 +91,7 @@ struct hk_inode_info_header {
         };
         /* for pack (write-once) */
         struct {
+            obj_ref_dentry_t *ref_dentry;
             struct latest_fop_objs latest_fop;
         };
     };

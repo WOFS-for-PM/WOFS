@@ -1,0 +1,857 @@
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:171:26: 错误：initialization of ‘obj_mgr_t *’ {或称 ‘struct obj_mgr *’} from incompatible pointer type ‘struct obj_mgr **’ [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:185:20: 错误：‘sb’ undeclared (first use in this function); did you mean ‘sbi’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/symlink.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:196:58: 错误：‘OBJ_TYPE_DATA’ undeclared (first use in this function); did you mean ‘OBJ_TYPE_NUM’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+./include/linux/kernel.h:979:51: 错误：‘obj_ref_data_t’ {或称 ‘struct obj_ref_data’}没有名为‘list’的成员
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+././include/linux/compiler_types.h:127:35: 错误：‘obj_ref_data_t’ {或称 ‘struct obj_ref_data’}没有名为‘list’的成员
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:222:26: 错误：initialization of ‘obj_mgr_t *’ {或称 ‘struct obj_mgr *’} from incompatible pointer type ‘struct obj_mgr **’ [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/linix.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:236:60: 错误：‘OBJ_TYPE_DENTRY’ undeclared (first use in this function); did you mean ‘OBJ_TYPE_NUM’?
+./include/linux/kernel.h:979:51: 错误：‘obj_ref_dentry_t’ {或称 ‘struct obj_ref_dentry’}没有名为‘list’的成员
+././include/linux/compiler_types.h:127:35: 错误：‘obj_ref_dentry_t’ {或称 ‘struct obj_ref_dentry’}没有名为‘list’的成员
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:242:43: 错误：传递‘hk_insert_dir_table’的第 1 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:242:53: 错误：传递‘hk_insert_dir_table’的第 3 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:242:23: 错误：提供给函数‘hk_insert_dir_table’的实参太少
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:244:28: 错误：‘sb’ undeclared (first use in this function); did you mean ‘sbi’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.c:370:31: 错误：传递‘hk_dump_inode’的第 2 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/stats.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/rebuild.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:45:33: 错误：字段‘allocator’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/super.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/sysfs.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/balloc.h:61:33: 错误：‘HK_MAX_LAYOUTS’ undeclared here (not in a function); did you mean ‘FREE_LAYOUT’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:38:30: 错误：隐式声明函数‘HK_SB’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+cc1：有些警告被当作是错误
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/mlist.o] 错误 1
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:39:24: 错误：隐式声明函数‘HK_PBLK_SZ’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/dir.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:448:32: 错误：initialization of ‘obj_ref_attr_t *’ {或称 ‘struct obj_ref_attr *’} from incompatible pointer type ‘int *’ [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:478:65: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:479:84: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:501:27: 错误：initialization of ‘obj_ref_attr_t *’ {或称 ‘struct obj_ref_attr *’} from incompatible pointer type ‘int *’ [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:624:38: 错误：assignment to ‘int *’ from incompatible pointer type ‘obj_ref_inode_t *’ {或称 ‘struct obj_ref_inode *’} [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:626:37: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:637:37: 错误：assignment to ‘int *’ from incompatible pointer type ‘obj_ref_attr_t *’ {或称 ‘struct obj_ref_attr *’} [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:639:36: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:640:36: 错误：在非结构或联合中请求成员‘from_pkg’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:641:36: 错误：在非结构或联合中请求成员‘dep_addr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:1081:9: 错误：expected expression before ‘if’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:1083:9: 错误：‘else’之前没有‘if’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/objm.c:1210:76: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/cmt.h:75:30: 错误：‘HK_CMT_QUEUE_BITS’未声明(不在函数内)
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:10:29: 错误：dereferencing pointer to incomplete type ‘struct hk_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:30:18: 错误：dereferencing pointer to incomplete type ‘struct hk_mentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:31:10: 错误：‘SET_ATTR’ undeclared (first use in this function); did you mean ‘NET_TR’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:42:10: 错误：‘LINK_CHANGE’ undeclared (first use in this function); did you mean ‘KOBJ_CHANGE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:57:23: 错误：dereferencing pointer to incomplete type ‘struct hk_mregion’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:100:15: 错误：dereferencing pointer to incomplete type ‘struct hk_jentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:101:10: 错误：‘J_INODE’ undeclared (first use in this function); did you mean ‘FS_NRINODE’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:215:33: 错误：传递‘hk_memunlock_dentry’的第 2 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:217:31: 错误：传递‘hk_memlock_dentry’的第 2 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:248:29: 错误：传递‘hk_memunlock_dentry’的第 2 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:257:27: 错误：传递‘hk_memlock_dentry’的第 2 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:104:10: 错误：‘J_DENTRY’ undeclared (first use in this function); did you mean ‘FS_DENTRY’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:118:16: 错误：dereferencing pointer to incomplete type ‘struct hk_journal’
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/objm.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:941:13: 错误：‘errval’ undeclared (first use in this function); did you mean ‘err’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:959:85: 错误：‘strlen’的第 1 个实参类型不兼容
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:9: 错误：隐式声明函数‘traverse_journal_entry’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:125:47: 错误：expected ‘;’ before ‘{’ token
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:137:39: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/dbg.h:140:42: 错误：dereferencing pointer to incomplete type ‘struct hk_super_block’
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:955:13: 错误：标号‘out_err’使用前未定义
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:942:13: 错误：标号‘fail1’使用前未定义
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1027:98: 错误：传递‘hk_remove_dir_table’的第 5 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_inode’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_data’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_attr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct obj_ref_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct claim_req’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/generic_cachep.h:12:50: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_inode_info_header’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:53:5: 错误：未知的类型名‘obj_ref_inode_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:54:5: 错误：未知的类型名‘obj_ref_attr_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:64:18: 错误：字段‘ix’的类型不完全
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:94:13: 错误：未知的类型名‘obj_ref_dentry_t’
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.h:145:35: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:33:13: 错误：dereferencing pointer to incomplete type ‘struct hk_sb_info’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1172:35: 错误：传递‘hk_remove_dir_table’的第 1 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1172:46: 错误：传递‘hk_remove_dir_table’的第 3 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1172:15: 错误：提供给函数‘hk_remove_dir_table’的实参太少
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1180:35: 错误：传递‘hk_insert_dir_table’的第 1 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1180:47: 错误：传递‘hk_insert_dir_table’的第 3 个参数时在不兼容的指针类型间转换 [-Werror=incompatible-pointer-types]
+/home/deadpool/HUNTER-REPO/hunter-kernel/namei.c:1180:15: 错误：提供给函数‘hk_insert_dir_table’的实参太少
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:2: 错误：implicit declaration of function ‘INIT_TIMING’; did you mean ‘INT_LIMIT’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:72:14: 错误：‘wprotect_time’ undeclared (first use in this function); did you mean ‘wprotect_enable’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/ioctl.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/bbuild.c:158:81: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/bbuild.c:338:69: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:2: 错误：implicit declaration of function ‘HK_START_TIMING’; did you mean ‘SEQ_START_TOKEN’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:74:18: 错误：‘wprotect_t’ undeclared (first use in this function); did you mean ‘wprotect’?
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:82:2: 错误：隐式声明函数‘HK_END_TIMING’ [-Werror=implicit-function-declaration]
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/namei.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/inode.c:408:76: 错误：在非结构或联合中请求成员‘hdr’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:141:30: 错误：implicit declaration of function ‘hk_get_super’; did you mean ‘get_super’? [-Werror=implicit-function-declaration]
+cc1：有些警告被当作是错误
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:145:28: 错误：implicit declaration of function ‘HK_SB_SIZE’; did you mean ‘HASH_SIZE’? [-Werror=implicit-function-declaration]
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:212:42: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:216:41: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+/home/deadpool/HUNTER-REPO/hunter-kernel/mprotect.h:223:39: 错误：invalid application of ‘sizeof’ to incomplete type ‘struct hk_dentry’
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/bbuild.o] 错误 1
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:185:34: 错误：与‘HK_SB’类型冲突
+/home/deadpool/HUNTER-REPO/hunter-kernel/super.h:193:38: 错误：与‘hk_get_super’类型冲突
+cc1：有些警告被当作是错误
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/file.o] 错误 1
+cc1：有些警告被当作是错误
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/meta.o] 错误 1
+cc1：有些警告被当作是错误
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/inode.o] 错误 1
+cc1：有些警告被当作是错误
+make[2]: *** [scripts/Makefile.build:276：/home/deadpool/HUNTER-REPO/hunter-kernel/tlalloc.o] 错误 1
+make[1]: *** [Makefile:1571：_module_/home/deadpool/HUNTER-REPO/hunter-kernel] 错误 2
+make: *** [Makefile:12：all] 错误 2

@@ -529,7 +529,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
         out_pkg_param_t out_param;
         out_create_pkg_param_t out_create_param;
         
-        in_create_param.create_pm_only = false;
+        in_create_param.create_type = CREATE_FOR_NORMAL;
         create_param.private = &in_create_param;
         out_param.private = &out_create_param;
         create_param.partial = false;

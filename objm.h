@@ -27,6 +27,7 @@
  *   PKG_CREATE,  |Inode(64B)|AttrChange(64B)|AttrChangeParent(64B)|Dentry(128B)|PKG(64B)| (6 MetaEntry)
  *   PKG_UNLINK,  |AttrChangeParent(64B)|PKG(64B with unlink_spec)| (2 MetaEntry)
  *   PKG_RENAME,  |PKG_CREATE|->|PKG_UNLINK|
+ *   PKG_SYMLINK, |PKG_CREATE|->|PKG_DATA|
  *   PKG_TYPE_NUM
  * } HUNT_PKG_TYPE;
  *
@@ -60,6 +61,7 @@ typedef enum {
     PKG_CREATE,
     PKG_UNLINK,
     PKG_RENAME, /* Rename can be split into create + unlink */
+    PKG_SYMLINK,
     PKG_ATTR,
     PKG_TYPE_NUM
 } HUNT_PKG_TYPE;
@@ -114,8 +116,10 @@ struct hk_obj_inode {
     u64 i_xattr;       /* Extended attribute block */
     u32 i_generation;  /* File version (for NFS) */
     u64 i_create_time; /* Create time */
-
-    u8 reserved[8];
+    struct {
+        __le32 rdev; /* major/minor # */
+    } dev;           /* device inode */
+    u8 reserved[4];
 } __attribute__((__packed__));
 
 static_assert(sizeof(struct hk_obj_inode) == 64);
@@ -190,6 +194,7 @@ typedef struct obj_ref_data {
 
 typedef struct obj_ref_dentry {
     obj_ref_hdr_t hdr;
+    struct hlist_node hnode;
     struct list_head node;
     u32 target_ino;
     unsigned long hash;
@@ -285,8 +290,14 @@ typedef struct in_pkg_param {
     void *private;
 } in_pkg_param_t;
 
+#define CREATE_FOR_NORMAL  0
+#define CREATE_FOR_RENAME  1
+#define CREATE_FOR_LINK    2
+#define CREATE_FOR_SYMLINK 3
+
 typedef struct in_create_pkg_param {
-    bool create_pm_only;    /* for rename */
+    bool create_type;  /* for rename */
+    u32 rdev;
 } in_create_pkg_param_t;
 
 /* out param region */

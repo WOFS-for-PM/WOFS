@@ -672,7 +672,7 @@ static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journ
             symlen = je_pd_sym->jdentry.name_len;
 
             inode = hk_iget(sb, le64_to_cpu(pi->ino));
-            hk_block_symlink(sb, pi, inode, symname, symlen, NULL);
+            hk_block_symlink(sb, inode, symname, symlen, NULL);
             iput(inode);
         }
 

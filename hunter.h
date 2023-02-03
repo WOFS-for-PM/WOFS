@@ -360,9 +360,8 @@ extern const struct file_operations hk_dir_operations;
 
 /* ======================= ANCHOR: symlink.c ========================= */
 extern const struct inode_operations hk_symlink_inode_operations;
-int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
-					 struct inode *inode, const char *symname, int len,
-					 void *out_blk_addr);
+int hk_block_symlink(struct super_block *sb, struct inode *inode, 
+					 const char *symname, int len, void *out_blk_addr);
 
 /* ======================= ANCHOR: ioctl.c ========================= */
 long hk_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
@@ -402,11 +401,9 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
 						   int namelen, u64 ino, u16 link_change, struct hk_dentry **out_direntry);
 struct dentry *hk_get_parent(struct dentry *child);
 int hk_insert_dir_table(struct super_block *sb, struct hk_inode_info_header *sih, const char *name, 
-				  	    int namelen, struct hk_dentry *direntry);
-int hk_update_dir_table(struct super_block *sb, struct hk_inode_info_header *sih, const char *name, 
-				  		int namelen, struct hk_dentry *direntry);
-void hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih, 
-						 const char *name, int namelen);
+				  	    int namelen, void *direntry);
+int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih, 
+						 const char *name, int namelen, void **ret_entry);
 void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *sih);
 
 /* ======================= ANCHOR: meta.c ========================= */
@@ -478,6 +475,9 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
                       obj_ref_dentry_t *ref, struct hk_inode_info_header *sih,
                       struct hk_inode_info_header *psih, struct hk_inode_info_header *npsih,
                       out_pkg_param_t *unlink_out_param, out_pkg_param_t *create_out_param);
+int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname,
+                       u64 symaddr, struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
+                       out_pkg_param_t *data_out_param, out_pkg_param_t *create_out_param);
 
 /* ======================= ANCHOR: cmt.c ========================= */
 int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
@@ -581,6 +581,12 @@ static inline unsigned long BKDRHash(const char *str, int length)
 
 	return hash;
 }
+
+#define use_droot(droot, type) (spin_lock(&droot->type##_lock))
+#define rls_droot(droot, type) (spin_unlock(&droot->type##_lock))
+
+#define use_pending_list(pending_list) (spin_lock(pending_list->lock))
+#define rls_pending_list(pending_list) (spin_unlock(pending_list->lock))
 
 static inline void use_layout(struct hk_layout_info* layout)
 {

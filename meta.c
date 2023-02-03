@@ -165,7 +165,7 @@ int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 t
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
-    /* flush and fence here significantly hinder the performance */ 
+    /* flush and fence here significantly hinder the performance */
     /* So that try killing it, fence once or delaying fence */
     /* hk_flush_buffer(hdr, sizeof(struct hk_header), true); */
     hdr->valid = 1;
@@ -413,7 +413,7 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     struct hk_setattr_entry *setattr;
     struct hk_sb_info *sbi = HK_SB(sb);
     INIT_TIMING(commit_newattr);
-    
+
     HK_START_TIMING(commit_newattr_t, commit_newattr);
 
     setattr = &entry.entry.setattr;
@@ -919,7 +919,7 @@ int hk_format_meta(struct super_block *sb)
         /* Format Bitmaps for Two-Layer Allocator */
         hk_memunlock_range(sb, (void *)sbi->bm_start, sbi->bm_size, &irq_flags);
         memset_nt_large((void *)sbi->bm_start, 0, sbi->bm_size);
-        hk_memlock_range(sb, (void *)sbi->bm_start, sbi->bm_size, &irq_flags);    
+        hk_memlock_range(sb, (void *)sbi->bm_start, sbi->bm_size, &irq_flags);
     } else {
         /* Step 1: Format Inode Table */
         hk_memunlock_range(sb, (void *)sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);

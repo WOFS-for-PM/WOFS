@@ -369,8 +369,8 @@ int tl_alloc_init(tl_allocator_t *alloc, u64 blk, u64 num, u32 blk_size, u32 met
 {
     alloc->rng.low = blk;
     alloc->rng.high = blk + num - 1;
-    tl_mgr_init(alloc, blk_size, meta_size);
     init_tlnode_cache();
+    tl_mgr_init(alloc, blk_size, meta_size);
     return 0;
 }
 

@@ -760,6 +760,8 @@ static int hk_features_exit(struct hk_sb_info *sbi)
     return 0;
 }
 
+extern void * __must_check kvrealloc(void* old_ptr, size_t old_size, size_t new_size, gfp_t mode);
+
 static int hk_misc_init(struct hk_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
@@ -780,7 +782,7 @@ static int hk_misc_init(struct hk_sb_info *sbi)
         destroy_obj_ref_dentry_cache();
     }
     
-    hk_sb = krealloc(sbi->hk_sb, HK_SB_SIZE(sbi), GFP_KERNEL);
+    hk_sb = kvrealloc(sbi->hk_sb, sizeof(struct hk_super_block), HK_SB_SIZE(sbi), GFP_KERNEL);
     if (!hk_sb)
         return -ENOMEM;
     /* Zero out the private data */

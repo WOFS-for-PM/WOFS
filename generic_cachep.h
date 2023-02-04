@@ -3,9 +3,12 @@
 
 #include "hunter.h"
 
+#define DEFINE_GENERIC_CACHEP(type) \
+    struct kmem_cache *type##_cachep;
+
 #define STRFY(x) #x
 #define DECLARE_GENERIC_CACHEP(type, alloc_flags)                                             \
-    static struct kmem_cache *type##_cachep;                                                  \
+    extern struct kmem_cache *type##_cachep;                                                  \
     static inline int __init init_##type##_cache(void)                                               \
     {                                                                                         \
         type##_cachep = kmem_cache_create(STRFY(type##_cachep),                               \

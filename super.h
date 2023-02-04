@@ -57,7 +57,7 @@ struct hk_pack_data {
     u64 s_vtail;
 };
 
-#define HK_SB_SIZE(sbi) roundup(sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len, HK_LBLK_SZ(sbi)) /* must be power of two */
+#define HK_SB_SIZE(sbi) round_up(sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len, HK_LBLK_SZ(sbi)) /* must be power of two */
 
 #define HUNTER_BLK_SIZE  (4 * 1024)
 #define HUNTER_MTA_SIZE  (64) // 64B grained

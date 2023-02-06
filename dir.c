@@ -9,7 +9,7 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = si->header;
+    struct hk_inode_info_header *psih = si->header;
     unsigned long pos = 0;
     unsigned bkt;
     int ret;
@@ -31,13 +31,13 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
         struct hk_obj_dentry *obj_dentry;
         struct hk_inode_info_header *sih;
 
-        hash_for_each(sih->dirs, bkt, ref_dentry, hnode)
+        hash_for_each(psih->dirs, bkt, ref_dentry, hnode)
         {
             obj_dentry = (struct hk_obj_dentry *)get_pm_addr(sbi, ref_dentry->hdr.addr);
             sih = obj_mgr_get_imap_inode(sbi->obj_mgr, ref_dentry->target_ino);
             if (!dir_emit(ctx, obj_dentry->name, strlen(obj_dentry->name),
                           sih->ino,
-                          IF2DT(le16_to_cpu(sih->i_mode)))) {
+                          IF2DT(sih->i_mode))) {
                 hk_dbg("%s: dir_emit failed\n", __func__);
                 return -EIO;
             }
@@ -54,7 +54,7 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
                 __func__, (u64)inode->i_ino,
                 pidir->i_size, ctx->pos);
 
-        hash_for_each(sih->dirs, bkt, cur, node)
+        hash_for_each(psih->dirs, bkt, cur, node)
         {
             child_pi = hk_get_inode_by_ino(sb, cur->direntry->ino);
             if (!dir_emit(ctx, cur->direntry->name, cur->direntry->name_len,

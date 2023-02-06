@@ -257,6 +257,8 @@ __always_inline void tl_build_alloc_param(tlalloc_param_t *param, u64 req, u16 f
 {
     param->flags = flags;
     param->req = req;
+    param->_ret_node = NULL;
+    param->_ret_allocated = 0;
 }
 
 /* num is entrynr(32)|entrynum(32)  */
@@ -471,7 +473,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
         spin_lock(&tmeta_mgr->spin);
         hash_add(tmeta_mgr->used_blks, &node->hnode, node->blk);
 
-        hk_dbg("alloc blk %lu for meta type %x\n", node->blk, TL_ALLOC_MTA_TYPE(flags));
+        hk_dbgv("alloc blk %lu for meta type %x (%s)\n", node->blk, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)));
 
         /* head insert */
         list_add_tail(&node->list, &tmeta_mgr->free_list);

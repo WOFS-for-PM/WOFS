@@ -62,6 +62,22 @@ static __always_inline int meta_type_to_idx(u16 type)
     }
 }
 
+static __always_inline const char *meta_type_to_str(u16 type)
+{
+    switch (type) {
+    case TL_MTA_PKG_ATTR: /* fop: truncate operations */
+        return "pkg_attr";
+    case TL_MTA_PKG_UNLINK: /* fop: unlink operations */
+        return "pkg_unlink";
+    case TL_MTA_PKG_CREATE: /* fop: create/mkdir operations */
+        return "pkg_create";
+    case TL_MTA_PKG_DATA: /* I/O: write operations */
+        return "pkg_data";
+    default:
+        return "unknown";
+    }
+}
+
 #define TL_ALLOC_TYPE(flags)     (flags & TL_TYPE_MSK)
 #define TL_ALLOC_MTA_TYPE(flags) (flags & TL_MTA_TYPE_MSK)
 

@@ -296,7 +296,8 @@ typedef struct in_pkg_param {
 #define CREATE_FOR_SYMLINK 3
 
 typedef struct in_create_pkg_param {
-    bool create_type;  /* for rename */
+    u32 new_ino;
+    bool create_type;  /* for rename/link/symlink */
     u32 rdev;
 } in_create_pkg_param_t;
 

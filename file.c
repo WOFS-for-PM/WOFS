@@ -79,7 +79,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
             if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
                 zero = true;
             } else {
-                dax_mem = hk_get_block(sb, blk_addr);
+                dax_mem = blk_addr;
             }
             nr = ref->num * HK_LBLK_SZ(sbi);
         } else {
@@ -87,7 +87,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
             if (blk_addr == 0) { /* It's a file hole */
                 zero = true;
             } else {
-                dax_mem = hk_get_block(sb, blk_addr);
+                dax_mem = blk_addr;
             }
             nr = HK_LBLK_SZ(sbi);
         }

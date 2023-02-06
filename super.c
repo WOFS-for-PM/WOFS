@@ -529,7 +529,9 @@ static struct hk_inode *hk_init(struct super_block *sb,
         out_pkg_param_t out_param;
         out_create_pkg_param_t out_create_param;
         
+        inode_mgr_restore(sbi->inode_mgr, HK_ROOT_INO);
         in_create_param.create_type = CREATE_FOR_NORMAL;
+        in_create_param.new_ino = HK_ROOT_INO;
         create_param.private = &in_create_param;
         out_param.private = &out_create_param;
         create_param.partial = false;
@@ -539,7 +541,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
             hk_err(sb, "Create root inode failed\n");
             return ERR_PTR(ret);
         }
-        hk_info("Root Inode is initialized at %lx\n", get_pm_blk_offset(sbi, out_param.addr));
+        hk_info("Root Inode is initialized at %lx\n", get_pm_offset(sbi, out_param.addr));
     } else {
         root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
         hk_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);

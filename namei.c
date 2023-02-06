@@ -73,6 +73,7 @@ int hk_insert_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
         hk_dbgv("%s: insert %s hash %lu\n", __func__, name, di->hash);
         hash_add(sih->dirs, &di->node, di->hash);
     }
+    return 0;
 }
 
 void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *sih)
@@ -675,34 +676,42 @@ static int __hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
     if (ENABLE_META_PACK(sb)) {
         in_pkg_param_t param;
-        in_create_pkg_param_t private;
+        in_create_pkg_param_t in_create_param;
         out_pkg_param_t out_param;
+        out_create_pkg_param_t out_create_param;
         obj_ref_dentry_t *ref_dentry;
+        
+        err = inode_mgr_alloc(sbi->inode_mgr, &ino);
+        if (ino == -1)
+            goto out_err;
 
         /* ino is initialized by create_new_inode_pkg() */
-        inode = hk_create_inode(type, dir, 0, mode,
+        inode = hk_create_inode(type, dir, ino, mode,
                                 0, rdev, &dentry->d_name);
         if (IS_ERR(inode))
             goto out_err;
 
-        private.create_type = CREATE_FOR_NORMAL;
+        in_create_param.create_type = CREATE_FOR_NORMAL;
         if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
-            private.rdev = rdev;
+            in_create_param.rdev = rdev;
         } else {
-            private.rdev = 0;
+            in_create_param.rdev = 0;
         }
-
-        param.private = &private;
+        in_create_param.new_ino = ino;
         param.partial = false;
+        param.private = &in_create_param;
+        out_param.private = &out_create_param;
+
         err = create_new_inode_pkg(sbi, mode, dentry->d_name.name, HK_IH(inode), HK_IH(dir), &param, &out_param);
         if (err) {
             goto out_err;
         }
 
-        inode->i_ino = HK_IH(inode)->ino;
-
         ref_dentry = ((out_create_pkg_param_t *)out_param.private)->ref;
         err = hk_insert_dir_table(sb, HK_IH(dir), dentry->d_name.name, strlen(dentry->d_name.name), ref_dentry);
+        if (err) {
+            goto out_err;
+        }
     } else {
         int txid;
         struct hk_dentry *direntry;
@@ -792,7 +801,8 @@ static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     int err = 0;
     INIT_TIMING(mkdir_time);
     HK_START_TIMING(mkdir_t, mkdir_time);
-    err = __hk_create(dir, dentry, mode, false, 0, TYPE_MKDIR);
+    err = __hk_create(dir, dentry, S_IFDIR | mode, false, 0, TYPE_MKDIR);
+    inc_nlink(dir);
     HK_END_TIMING(mkdir_t, mkdir_time);
     return err;
 }
@@ -946,8 +956,14 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         sih->si = NULL;
         sih->i_flags = hk_mask_flags(inode->i_mode, dir->i_flags);
 
+        err = inode_mgr_alloc(sbi->inode_mgr, (u32 *)&sih->ino);
+        if (sih->ino == -1) {
+            goto out;
+        }
+
         private.create_type = CREATE_FOR_LINK;
         private.rdev = 0;
+        private.new_ino = sih->ino;
         param.private = &private;
         param.partial = false;
         err = create_new_inode_pkg(sbi, inode->i_mode, dest_dentry->d_name.name, sih, HK_IH(dir), &param, &out_param);
@@ -957,6 +973,9 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
 
         ref_dentry = ((out_create_pkg_param_t *)out_param.private)->ref;
         err = hk_insert_dir_table(sb, HK_IH(dir), dentry->d_name.name, strlen(dentry->d_name.name), ref_dentry);
+        if (err) {
+            goto out;
+        }
         BUG_ON(ref_dentry->target_ino != inode->i_ino);
     } else {
         struct hk_inode *pidir;

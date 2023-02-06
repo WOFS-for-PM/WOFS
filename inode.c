@@ -407,7 +407,7 @@ static int hk_build_vfs_inode(struct super_block *sb, struct inode *inode,
     if (ENABLE_META_PACK(sb)) {
         u64 create_pkg_addr = get_pm_addr(sbi, sih->latest_fop.latest_inode->hdr.addr);
         struct hk_obj_inode *obj_inode = (struct hk_obj_inode *)create_pkg_addr;
-        
+
         inode->i_mode = sih->i_mode;
         i_uid_write(inode, sih->i_uid);
         i_gid_write(inode, sih->i_gid);
@@ -688,12 +688,15 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
 
     inode->i_generation = atomic_add_return(1, &sbi->next_generation);
     inode->i_size = size;
+    inode->i_mode = mode;
 
     /* chosen inode is in ino */
-    if (ino == 0)
+    if (ino == 0) {
         hk_dbg("%s: create inode without ino initialized\n", __func__);
-    else
+        BUG_ON(1);
+    } else {
         inode->i_ino = ino;
+    }
 
     switch (type) {
     case TYPE_CREATE:
@@ -719,7 +722,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         hk_dbg("Unknown new inode type %d\n", type);
         break;
     }
-    
+
     i_flags = hk_mask_flags(mode, dir->i_flags);
     si = HK_I(inode);
     sih = si->header;
@@ -730,7 +733,8 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
             errval = -ENOMEM;
             goto fail1;
         }
-        hk_dbg("%s: allocate new sih for inode %llu\n");
+        hk_dbg("%s: allocate new sih for inode %llu\n", __func__, ino);
+        si->header = sih;
     }
     hk_init_header(sb, sih, inode->i_mode);
     sih->ino = ino;
@@ -769,7 +773,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
     hk_set_inode_flags(inode, i_xattr, le32_to_cpu(i_flags));
 
     if (insert_inode_locked(inode) < 0) {
-        hk_err(sb, "hk_new_inode failed ino %lx\n", inode->i_ino);
+        hk_dbg("hk_new_inode failed ino %lx\n", inode->i_ino);
         errval = -EINVAL;
         goto fail1;
     }

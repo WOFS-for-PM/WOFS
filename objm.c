@@ -117,6 +117,13 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
         hash_for_each_safe(mgr->prealloc_imap.map, bkt, temp, cur, hnode)
         {
             hash_del(&cur->hnode);
+            if (cur->latest_fop.latest_attr) 
+                ref_attr_destroy(cur->latest_fop.latest_attr);
+            if (cur->latest_fop.latest_inode)
+                ref_inode_destroy(cur->latest_fop.latest_inode);
+            cur->latest_fop.latest_attr = NULL;
+            cur->latest_fop.latest_inode = NULL;
+            hk_free_hk_inode_info_header(cur);
         }
 
         for (root_id = 0; root_id < mgr->num_d_roots; root_id++) {

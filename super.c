@@ -89,18 +89,11 @@ static void hk_i_callback(struct rcu_head *head)
 {
     struct inode *inode = container_of(head, struct inode, i_rcu);
     struct hk_inode_info *vi = HK_I(inode);
-    struct hk_inode_info_header *header = vi->header;
 
     hk_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
-    if (vi->layout_type == HUNTER_MOUNT_META_PACK) {
-        if (header->latest_fop.latest_attr) 
-            ref_attr_destroy(header->latest_fop.latest_attr);
-        if (header->latest_fop.latest_inode)
-            ref_inode_destroy(header->latest_fop.latest_inode);
-        header->latest_fop.latest_attr = NULL;
-        header->latest_fop.latest_inode = NULL;
+    if (vi->layout_type != HUNTER_MOUNT_META_PACK) {
+        hk_free_hk_inode_info_header(vi->header);
     }
-    hk_free_hk_inode_info_header(header);
     kmem_cache_free(hk_inode_cachep, vi);
 }
 
@@ -794,12 +787,6 @@ static int hk_misc_init(struct hk_sb_info *sbi)
 
 static int hk_misc_exit(struct hk_sb_info *sbi)
 {
-    struct super_block *sb = sbi->sb;
-
-    if (ENABLE_META_PACK(sb)) {
-        hk_free_hk_inode_info_header(sbi->rih);
-    }
-
     return 0;
 }
 

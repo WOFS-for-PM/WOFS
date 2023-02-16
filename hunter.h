@@ -111,9 +111,9 @@ extern unsigned int hk_dbgmask;
 			       __FILE__, __LINE__, #x);\
 		       } while (0)
 
-#define hk_set_bit		           __test_and_set_bit_le
-#define hk_clear_bit		       __test_and_clear_bit_le
-#define hk_find_next_zero_bit	   find_next_zero_bit_le
+// #define hk_set_bit		           __test_and_set_bit_le
+// #define hk_clear_bit		       __test_and_clear_bit_le
+// #define hk_find_next_zero_bit	   find_next_zero_bit_le
 
 #define clear_opt(o, opt)	       (o &= ~HUNTER_MOUNT_ ## opt)
 #define set_opt(o, opt)		       (o |= HUNTER_MOUNT_ ## opt)

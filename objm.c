@@ -85,15 +85,7 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr)
     mgr->num_d_roots = cpus;
     mgr->sbi = sbi;
     hash_init(mgr->prealloc_imap.map);
-    if (!mgr->prealloc_imap.map) {
-        ret = -ENOMEM;
-        goto out;
-    }
     hash_init(mgr->pending_table);
-    if (!mgr->pending_table) {
-        ret = -ENOMEM;
-        goto out;
-    }
     mgr->d_roots = (d_root_t *)kzalloc(sizeof(d_root_t) * cpus, GFP_KERNEL);
     if (!mgr->d_roots) {
         ret = -ENOMEM;
@@ -113,7 +105,12 @@ out:
 void obj_mgr_destroy(obj_mgr_t *mgr)
 {
     struct hk_inode_info_header *cur;
-    int bkt;
+    d_obj_ref_list_t *d_obj_list;
+    obj_ref_data_t *ref_data;
+    obj_ref_dentry_t *ref_dentry;
+    struct list_head *pos, *n;
+    d_root_t *root;
+    int bkt, root_id;
     struct hlist_node *temp;
 
     if (mgr) {
@@ -121,6 +118,33 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
         {
             hash_del(&cur->hnode);
         }
+
+        for (root_id = 0; root_id < mgr->num_d_roots; root_id++) {
+            root = &mgr->d_roots[root_id];
+            /* free ref_data and ref_dentry in d_roots */
+            hash_for_each_safe(root->data_obj_refs, bkt, temp, d_obj_list, hnode)
+            {
+                list_for_each_safe(pos, n, &d_obj_list->list) {
+                    ref_data = list_entry(pos, obj_ref_data_t, node);
+                    list_del(pos);
+                    ref_data_destroy(ref_data);
+                }
+                hash_del(&d_obj_list->hnode);
+                kfree(d_obj_list);
+            }
+
+            hash_for_each_safe(root->dentry_obj_refs, bkt, temp, d_obj_list, hnode)
+            {
+                list_for_each_safe(pos, n, &d_obj_list->list) {
+                    ref_dentry = list_entry(pos, obj_ref_dentry_t, node);
+                    list_del(pos);
+                    ref_dentry_destroy(ref_dentry);
+                }
+                hash_del(&d_obj_list->hnode);
+                kfree(d_obj_list);
+            }
+        }
+
         kfree(mgr->d_roots);
         kfree(mgr);
     }
@@ -525,6 +549,7 @@ int reclaim_dram_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     }
     /* since we use kmem cache, allocation and free are very fast */
     ref_attr_destroy(ref);
+    sih->latest_fop.latest_attr = NULL;
     return 0;
 }
 

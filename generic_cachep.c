@@ -10,3 +10,5 @@ DEFINE_GENERIC_CACHEP(hk_range_node);
 DEFINE_GENERIC_CACHEP(hk_dentry_info);
 DEFINE_GENERIC_CACHEP(hk_cmt_info);
 DEFINE_GENERIC_CACHEP(hk_inode_info_header);
+
+DEFINE_GENERIC_CACHEP(tl_node);

@@ -119,6 +119,7 @@ struct hk_inode_rebuild {
 struct hk_inode_info {
     struct hk_inode_info_header *header;
     struct inode vfs_inode;
+    int layout_type;
 };
 
 static inline struct hk_inode_info *HK_I(struct inode *inode)

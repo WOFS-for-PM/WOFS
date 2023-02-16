@@ -25,6 +25,28 @@
 
 #include "hunter.h"
 
+
+int hk_test_bit(u32 bit, u8 *bm)
+{
+    u32 byte = bit >> 3;
+    u32 bit_in_byte = bit & 0x7;
+    return (bm[byte] >> bit_in_byte) & 0x1;
+}
+
+void hk_set_bit(u32 bit, u8 *bm)
+{
+    u32 byte = bit >> 3;
+    u32 bit_in_byte = bit & 0x7;
+    bm[byte] |= (1 << bit_in_byte);
+}
+
+void hk_clear_bit(u32 bit, u8 *bm)
+{
+    u32 byte = bit >> 3;
+    u32 bit_in_byte = bit & 0x7;
+    bm[byte] &= ~(1 << bit_in_byte);
+}
+
 #define BMBLK_ATTR      0
 #define BMBLK_UNLINK    1
 #define BMBLK_CREATE    2
@@ -464,6 +486,9 @@ void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
         break;
     }
 
+    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
+    hk_info("%s: bmblk %d, bm @ 0x%llx\n", __func__, bmblk, bm);
+
     for (i = 0; i < sbi->num_layout; i++) {
         layout = &sbi->layouts[i];
         allocator = &layout->allocator;
@@ -471,8 +496,7 @@ void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
         tmeta_mgr = &meta_mgr->tmeta_mgrs[meta_type_to_idx(m_alloc_type)];
 
         hash_for_each(tmeta_mgr->used_blks, bkt, cur, hnode) {
-            bm = __hk_get_bm_addr(sbi, NULL, bmblk);
-            set_bit(cur->blk, (unsigned long *)bm);
+            hk_set_bit(cur->blk, bm);
         }
     }   
 }
@@ -487,21 +511,20 @@ int hk_save_layouts(struct super_block *sb)
     int ret = 0;
     int cpuid;
 
-    for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-        layout = &sbi->layouts[cpuid];
+    if (ENABLE_META_PACK(sb)) {
+        pd = (struct hk_pack_data *)(hk_sb + sizeof(struct hk_super_block));
+        pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->vtail));
+        hk_dump_bm(sbi, BMBLK_ATTR);
+        hk_dump_bm(sbi, BMBLK_UNLINK);
+        hk_dump_bm(sbi, BMBLK_CREATE);
+        hk_dump_bm(sbi, BMBLK_DATA);
+    } else {
+        for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
+            layout = &sbi->layouts[cpuid];
 
-        if (layout->ind.prep_blks != 0) {
-            hk_dump_layout_info(layout);
-        }
-
-        if (ENABLE_META_PACK(sb)) {
-            pd = (struct hk_pack_data *)(hk_sb + sizeof(struct hk_super_block));
-            pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->vtail));
-            hk_dump_bm(sbi, BMBLK_ATTR);
-            hk_dump_bm(sbi, BMBLK_UNLINK);
-            hk_dump_bm(sbi, BMBLK_CREATE);
-            hk_dump_bm(sbi, BMBLK_DATA);
-        } else {
+            if (layout->ind.prep_blks != 0) {
+                hk_dump_layout_info(layout);
+            }
             nd = (struct hk_normal_data *)(hk_sb + sizeof(struct hk_super_block));
             nd->s_layout->s_atomic_counter = cpu_to_le64(layout->atomic_counter);
             nd->s_layout->s_ind.free_blks = cpu_to_le64(layout->ind.free_blks);
@@ -519,6 +542,7 @@ int hk_save_layouts(struct super_block *sb)
     hk_info("layouts dumped OK\n");
     return ret;
 }
+
 
 /* Apply all regions to inode */
 int hk_save_regions(struct super_block *sb)
@@ -752,6 +776,7 @@ out:
     if (recovery_flags == NEED_FORCE_NORMAL_RECOVERY || !is_failure) {
         if (ENABLE_META_PACK(sb)) {
             pd = (struct hk_pack_data *)(sbi->hk_sb + sizeof(struct hk_super_block));
+            hk_create_dram_bufs(sbi);
             /* Traverse create pkg */
             hk_recovery_create_pkgs(sbi, in_dram_bm_buf, in_dram_blk_buf, &cur_vtail);
             /* Traverse unlink pkg */
@@ -760,6 +785,7 @@ out:
             hk_recovery_attr_pkgs(sbi, in_dram_bm_buf, in_dram_blk_buf, &cur_vtail);
             /* Traverse data pkg */
             hk_recovery_data_pkgs(sbi, in_dram_bm_buf, in_dram_blk_buf, &cur_vtail);
+            hk_destroy_dram_bufs();
             
             atomic64_and(0, &sbi->vtail);
             if (is_failure) {
@@ -899,16 +925,16 @@ void *hk_bmblk_rescuer(void *args)
         probe_type = hk_probe_blk(sbi, cur_blk);
         switch (probe_type) {
             case PKG_ATTR:
-                set_bit(cur_blk, (unsigned long *)work.attr_bm);
+                hk_set_bit(cur_blk, work.attr_bm);
                 break;
             case PKG_DATA:
-                set_bit(cur_blk, (unsigned long *)work.data_bm);
+                hk_set_bit(cur_blk, work.data_bm);
                 break;
             case PKG_CREATE:
-                set_bit(cur_blk, (unsigned long *)work.create_bm);
+                hk_set_bit(cur_blk, work.create_bm);
                 break;
             case PKG_UNLINK:
-                set_bit(cur_blk, (unsigned long *)work.unlink_bm);
+                hk_set_bit(cur_blk, work.unlink_bm);
                 break;
             default:
                 break;

@@ -194,7 +194,7 @@ static inline struct hk_super_block *hk_get_super(struct super_block *sb, int n)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
 
-    return n == HUNTER_FIRST_SUPER_BLK ? (struct hk_super_block *)sbi->virt_addr : (sbi->virt_addr + sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len);
+    return n == HUNTER_FIRST_SUPER_BLK ? (struct hk_super_block *)sbi->virt_addr : (sbi->virt_addr + HK_SB_SIZE(sbi));
 }
 
 /* Update the crc32c value by appending a 64b data word. */

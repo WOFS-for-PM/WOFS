@@ -86,7 +86,6 @@ void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *s
         hash_for_each_safe(sih->dirs, bkt, tmp, ref_dentry, hnode)
         {
             hash_del(&ref_dentry->hnode);
-            hk_free_obj_ref_dentry(ref_dentry);
         }
     } else {
         struct hk_dentry_info *di;
@@ -121,7 +120,7 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
                 if (ret_entry)
                     *ret_entry = ref_dentry;
                 else
-                    hk_free_obj_ref_dentry(ref_dentry);
+                    ref_dentry_destroy(ref_dentry);
                 is_find = 1;
                 break;
             }

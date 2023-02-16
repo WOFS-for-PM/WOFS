@@ -26,38 +26,6 @@
 #define UINT32_BITS 32
 #define UINT64_BITS 64
 
-static struct kmem_cache *tlnode_cachep;
-
-static int __init init_tlnode_cache(void)
-{
-    tlnode_cachep = kmem_cache_create("tlnode_cache",
-                                      sizeof(tl_node_t),
-                                      0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);
-    if (tlnode_cachep == NULL)
-        return -ENOMEM;
-    return 0;
-}
-
-static void destroy_tlnode_cache(void)
-{
-    if (tlnode_cachep)
-        kmem_cache_destroy(tlnode_cachep);
-}
-
-tl_node_t *hk_alloc_tlnode(void)
-{
-    tl_node_t *p;
-
-    p = (tl_node_t *)
-        kmem_cache_alloc(tlnode_cachep, GFP_ATOMIC);
-    return p;
-}
-
-void hk_free_tlnode(tl_node_t *p)
-{
-    kmem_cache_free(tlnode_cachep, p);
-}
-
 /* max supply for consecutive 8 bits */
 const u64 bm64_consecutive_masks[8][64] = {
     /* 1 */
@@ -248,7 +216,7 @@ u8 bm_test(u8 *bm, u32 i)
 
 tl_node_t *tl_create_node(void)
 {
-    tl_node_t *node = hk_alloc_tlnode();
+    tl_node_t *node = hk_alloc_tl_node();
     node->blk = 0;
     return node;
 }
@@ -293,7 +261,7 @@ __always_inline void tl_build_restore_param(tlrestore_param_t *param, u64 blk, u
 void tl_free_node(tl_node_t *node)
 {
     if (node) {
-        hk_free_tlnode(node);
+        hk_free_tl_node(node);
     }
 }
 
@@ -371,7 +339,6 @@ int tl_alloc_init(tl_allocator_t *alloc, u64 blk, u64 num, u32 blk_size, u32 met
 {
     alloc->rng.low = blk;
     alloc->rng.high = blk + num - 1;
-    init_tlnode_cache();
     tl_mgr_init(alloc, blk_size, meta_size);
     return 0;
 }
@@ -717,7 +684,6 @@ void tl_destory(tl_allocator_t *alloc)
             tl_free_node(cur);
         }
     }
-    destroy_tlnode_cache();
 }
 
 bool __tl_dump_dnode(void *key, void *value, void *data)

@@ -46,6 +46,7 @@ function get_fs_options () {
 fs_init=$(get_fs_options init)
 fs_meta_async=$(get_fs_options meta_async) 	  
 fs_meta_local=$(get_fs_options meta_local) 	    
+fs_meta_lfs=$(get_fs_options meta_lfs)
 fs_meta_pack=$(get_fs_options meta_pack) 	    
 fs_history_w=$(get_fs_options history_w) 	    
 fs_wprotect=$(get_fs_options wprotect)	 
@@ -63,6 +64,9 @@ if (( fs_meta_local == 1 )); then
 fi
 if (( fs_meta_pack == 1 )); then
     init_str+=",meta_pack"
+fi
+if (( fs_meta_lfs == 1 )); then
+    init_str+=",meta_lfs"
 fi
 if (( fs_history_w == 1 )); then
     init_str+=",history_w"

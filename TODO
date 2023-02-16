@@ -1,7 +1,16 @@
-# 2023/2/3 ~
+# TODO List
 - [ ] Detect Memory Consumption
-- [ ] Measure the Performance
+- [ ] Measure the Performance (FIO/Filebench/Real-World Trace)
+- [ ] Prepare for Filebench/Fxmark/Trace
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
+
+# 2023/2/7 ~ :Multiple Thread FIO Test Prepare
+- [x] Debug Multi-Thread I/O
+
+# 2023/2/4 ~ 2023/2/6: Single Thread FIO Test Prepare (Mainly work in 2/6)
+- [x] Debug Single Thread I/O
+- [x] Debug Create/Mknod/Mkdir
+- [x] Debug Readdir
 
 # 2023/1/30 ~ 2023/2/3
 - [x] Implement File Operations

@@ -69,8 +69,10 @@ static struct inode *hk_alloc_inode(struct super_block *sb)
         return NULL;
     
     if (ENABLE_META_PACK(sb)) {
+        vi->layout_type = HUNTER_MOUNT_META_PACK;
         vi->header = NULL;
     } else {
+        vi->layout_type = ~HUNTER_MOUNT_META_PACK;
         vi->header = hk_alloc_hk_inode_info_header();
         if (!vi->header) {
             kmem_cache_free(hk_inode_cachep, vi);
@@ -87,16 +89,19 @@ static void hk_i_callback(struct rcu_head *head)
 {
     struct inode *inode = container_of(head, struct inode, i_rcu);
     struct hk_inode_info *vi = HK_I(inode);
-    struct hk_sb_info *sbi = HK_SB(inode->i_sb);
-    struct super_block *sb = inode->i_sb;
+    struct hk_inode_info_header *header = vi->header;
 
     hk_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
-    if (ENABLE_META_PACK(sb)) {
-        kmem_cache_free(hk_inode_cachep, vi);
-    } else {
-        hk_free_hk_inode_info_header(vi->header);
-        kmem_cache_free(hk_inode_cachep, vi);
+    if (vi->layout_type == HUNTER_MOUNT_META_PACK) {
+        if (header->latest_fop.latest_attr) 
+            ref_attr_destroy(header->latest_fop.latest_attr);
+        if (header->latest_fop.latest_inode)
+            ref_inode_destroy(header->latest_fop.latest_inode);
+        header->latest_fop.latest_attr = NULL;
+        header->latest_fop.latest_inode = NULL;
     }
+    hk_free_hk_inode_info_header(header);
+    kmem_cache_free(hk_inode_cachep, vi);
 }
 
 static void hk_destroy_inode(struct inode *inode)
@@ -633,9 +638,9 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     if (ENABLE_META_PACK(sb)) {
         sbi->pblk_sz = PAGE_SIZE;
         sbi->m_addr = sbi->bm_start = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
+        sbi->tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
         sbi->m_size = sbi->bm_size = hk_get_bm_size(sb);
         sbi->fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
-        sbi->tl_per_type_bm_reserved_blks = _round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE);
     } else {
         sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
 
@@ -747,17 +752,11 @@ static int hk_features_exit(struct hk_sb_info *sbi)
 
     if (ENABLE_META_PACK(sb)) {
         obj_mgr_destroy(sbi->obj_mgr);
-        kfree(sbi->obj_mgr);
     } else {
         kfree(sbi->irange_locks);
     }
 
-    if (ENABLE_META_ASYNC(sb)) {
-        hk_free_cmt_queue(sbi->cq);
-    }
-
     inode_mgr_destroy(sbi->inode_mgr);
-    kfree(sbi->inode_mgr);
 
     return 0;
 }
@@ -777,16 +776,14 @@ static int hk_misc_init(struct hk_sb_info *sbi)
         if (!sbi->rih)
             return -ENOMEM;
         hk_init_header(sb, sbi->rih, S_IFPSEUDO);
-        /* we use ref_dentry instead, see objm.c */
-        destroy_hk_dentry_info_cache();
     } else {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_normal_data);
-        destroy_obj_ref_dentry_cache();
     }
     
     hk_sb = kvrealloc(sbi->hk_sb, sizeof(struct hk_super_block), HK_SB_SIZE(sbi), GFP_KERNEL);
     if (!hk_sb)
         return -ENOMEM;
+    hk_info("super block size is extended from %lu to %lu\n", sizeof(struct hk_super_block), HK_SB_SIZE(sbi));
     /* Zero out the private data */
     memset(hk_sb + sizeof(struct hk_super_block), 0, HK_SB_SIZE(sbi) - sizeof(struct hk_super_block));
 
@@ -803,7 +800,6 @@ static int hk_misc_exit(struct hk_sb_info *sbi)
         hk_free_hk_inode_info_header(sbi->rih);
     }
 
-    kfree(sbi->hk_sb);
     return 0;
 }
 
@@ -874,10 +870,10 @@ static int hk_fill_super(struct super_block *sb, void *data, int silent)
         goto out;
     }
 
+    hk_super_constants_init(sbi);
+
     /* init some misc structures */
     hk_misc_init(sbi);
-
-    hk_super_constants_init(sbi);
 
     /* init structures (e.g., inode manager) by CONFIG accordingly */    
     hk_features_init(sbi);
@@ -1086,21 +1082,23 @@ static void hk_put_super(struct super_block *sb)
 
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {
-        hk_save_regions(sb);
+        if (!ENABLE_META_PACK(sb)) {
+            hk_save_regions(sb);
+        }
         hk_save_layouts(sb);
         hk_umount_over(sb);
         sbi->virt_addr = NULL;
     }
 
-    hk_misc_exit(sbi);
     hk_super_constants_init_exit(sbi);
+    hk_misc_exit(sbi);
     hk_layouts_free(sbi);
     hk_features_exit(sbi);
     hk_sysfs_exit(sb);
 
     hk_dbgmask = 0;
 
-    kfree(sbi->hk_sb);
+    kvfree(sbi->hk_sb);
     kfree(sbi);
     sb->s_fs_info = NULL;
 }
@@ -1192,6 +1190,7 @@ void hk_destory_slab_caches(void)
     destroy_obj_ref_data_cache();
     destroy_claim_req_cache();
     destroy_hk_inode_info_header_cache();
+    destroy_tl_node_cache();
 }
 
 static int __init hk_create_slab_caches(void)
@@ -1232,6 +1231,10 @@ static int __init hk_create_slab_caches(void)
         goto out;
 
     rc = init_hk_inode_info_header_cache();
+    if (rc)
+        goto out;
+
+    rc = init_tl_node_cache();
     if (rc)
         goto out;
 

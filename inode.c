@@ -131,26 +131,38 @@ int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
     unsigned long irq_flags = 0;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_header *hdr;
-    struct hk_layout_info *layout;
-    struct hk_inode_info *si;
     struct inode *inode;
 
     /* TODO: pass in hk_inode_info instead of hk_inode_info_header */
     // si = container_of(sih, struct hk_inode_info, header);
     // inode = &si->vfs_inode;
+    if (ENABLE_META_PACK(sb)) {
+        /* Do Nothing */
+        obj_mgr_t *obj_mgr = sbi->obj_mgr;
+        data_update_t update;
 
-    traverse_inode_hdr(sbi, pi, hdr)
-    {
-        if (ENABLE_META_ASYNC(sb)) {
-            blk_addr = sm_get_addr_by_hdr(sb, hdr);
-            hk_invalid_hdr_background(sb, inode, blk_addr, hdr->f_blk);
-        } else {
-            hk_memunlock_hdr(sb, hdr, &irq_flags);
-            hdr->valid = 0;
-            hk_memlock_hdr(sb, hdr, &irq_flags);
-            hk_flush_buffer(hdr, sizeof(struct hk_header), false);
+        update.ofs = 0;
+        update.num = (sih->i_size - 1) >> PAGE_SHIFT + 1;
+
+        while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
+            ;
         }
-        freed += HK_PBLK_SZ(sbi);
+
+        freed = update.num;
+    } else {
+        traverse_inode_hdr(sbi, pi, hdr)
+        {
+            if (ENABLE_META_ASYNC(sb)) {
+                blk_addr = sm_get_addr_by_hdr(sb, hdr);
+                hk_invalid_hdr_background(sb, inode, blk_addr, hdr->f_blk);
+            } else {
+                hk_memunlock_hdr(sb, hdr, &irq_flags);
+                hdr->valid = 0;
+                hk_memlock_hdr(sb, hdr, &irq_flags);
+                hk_flush_buffer(hdr, sizeof(struct hk_header), false);
+            }
+            freed += HK_PBLK_SZ(sbi);
+        }
     }
 
     return freed;
@@ -183,8 +195,7 @@ static int hk_get_cpuid_by_ino(struct super_block *sb, u64 ino)
     return cpuid;
 }
 
-static int hk_free_inode(struct super_block *sb, struct hk_inode *pi,
-                         struct hk_inode_info_header *sih)
+static int hk_free_inode(struct super_block *sb, struct hk_inode_info_header *sih)
 {
     int err = 0;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -197,7 +208,7 @@ static int hk_free_inode(struct super_block *sb, struct hk_inode *pi,
     sih->i_size = 0;
     sih->i_blocks = 0;
 
-    err = inode_mgr_free(sbi->inode_mgr, le64_to_cpu(pi->ino));
+    err = inode_mgr_free(sbi->inode_mgr, sih->ino);
 
     HK_END_TIMING(free_inode_t, free_time);
     return err;
@@ -206,30 +217,33 @@ static int hk_free_inode(struct super_block *sb, struct hk_inode *pi,
 static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
                                   struct hk_inode_info_header *sih)
 {
-    unsigned long last_blocknr;
     int ret = 0;
     int freed = 0;
     unsigned long irq_flags = 0;
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
-    pi->valid = 0;
-    if (pi->valid) {
-        hk_dbg("%s: inode %lu still valid\n",
-               __func__, sih->ino);
+    if (ENABLE_META_PACK(sb)) {
+        hk_free_inode_blks(sb, NULL, sih);
+    } else {
+        hk_memunlock_inode(sb, pi, &irq_flags);
         pi->valid = 0;
+        if (pi->valid) {
+            hk_dbg("%s: inode %lu still valid\n",
+                __func__, sih->ino);
+            pi->valid = 0;
+        }
+        hk_flush_buffer(pi, sizeof(struct hk_inode), false);
+        hk_memlock_inode(sb, pi, &irq_flags);
+
+        /* invalid blks hdr belongs to inode */
+        hk_free_inode_blks(sb, pi, sih);
     }
-    hk_flush_buffer(pi, sizeof(struct hk_inode), false);
-    hk_memlock_inode(sb, pi, &irq_flags);
-
-    /* invalid blks hdr belongs to inode */
-    hk_free_inode_blks(sb, pi, sih);
-
+    
     freed = hk_free_dram_resource(sb, sih);
 
     hk_dbg_verbose("%s: %d Blks Freed\n", __func__, freed);
 
     /* Then we can free the inode */
-    ret = hk_free_inode(sb, pi, sih);
+    ret = hk_free_inode(sb, sih);
     if (ret)
         hk_err(sb, "%s: free inode %lu failed\n",
                __func__, sih->ino);
@@ -249,7 +263,6 @@ void hk_evict_inode(struct inode *inode)
 {
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode *pi = hk_get_inode(sb, inode);
     struct hk_inode_info_header *sih = HK_IH(inode);
     INIT_TIMING(evict_time);
     int destroy = 0;
@@ -263,36 +276,54 @@ void hk_evict_inode(struct inode *inode)
         goto out;
     }
 
-    // pi can be NULL if the file has already been deleted, but a handle
-    // remains.
-    if (pi && pi->ino != inode->i_ino) {
-        hk_err(sb, "%s: inode %lu ino does not match: %llu\n",
-               __func__, inode->i_ino, pi->ino);
-        hk_dbg("sih: ino %lu, inode size %lu, mode %u, inode mode %u\n",
-               sih->ino, sih->i_size,
-               sih->i_mode, inode->i_mode);
-    }
-
     if (ENABLE_HISTORY_W(sb)) {
         hk_dw_forward(&sbi->dw, sih->i_size);
     }
 
     hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
-    if (!inode->i_nlink && !is_bad_inode(inode)) {
-        if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
-            goto out;
+    
+    if (ENABLE_META_PACK(sb)) {
+        if (!inode->i_nlink && !is_bad_inode(inode)) {
+            if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+                goto out;
 
-        if (pi) {
-            ret = hk_free_inode_resource(sb, pi, sih);
+            ret = hk_free_inode_resource(sb, NULL, sih);
             if (ret)
                 goto out;
+
+            destroy = 1;
+
+            inode->i_mtime = inode->i_ctime = current_time(inode);
+            inode->i_size = 0;
+        }
+    } else {
+        struct hk_inode *pi = hk_get_inode(sb, inode);
+        // pi can be NULL if the file has already been deleted, but a handle
+        // remains.
+        if (pi && pi->ino != inode->i_ino) {
+            hk_err(sb, "%s: inode %lu ino does not match: %llu\n",
+                __func__, inode->i_ino, pi->ino);
+            hk_dbg("sih: ino %lu, inode size %lu, mode %u, inode mode %u\n",
+                sih->ino, sih->i_size,
+                sih->i_mode, inode->i_mode);
         }
 
-        destroy = 1;
-        pi = NULL; /* we no longer own the hk_inode */
+        if (!inode->i_nlink && !is_bad_inode(inode)) {
+            if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+                goto out;
 
-        inode->i_mtime = inode->i_ctime = current_time(inode);
-        inode->i_size = 0;
+            if (pi) {
+                ret = hk_free_inode_resource(sb, pi, sih);
+                if (ret)
+                    goto out;
+            }
+
+            destroy = 1;
+            pi = NULL; /* we no longer own the hk_inode */
+
+            inode->i_mtime = inode->i_ctime = current_time(inode);
+            inode->i_size = 0;
+        }
     }
 out:
     if (destroy == 0) {

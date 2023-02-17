@@ -417,7 +417,6 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
                 /* too full to allocate */
                 if ((node->mnode.bm & tmeta_mgr->entries_mask) == tmeta_mgr->entries_mask) {
                     list_del(&node->list);
-                    tl_free_node(node);
                 }
                 spin_unlock(&tmeta_mgr->spin);
                 return 0;

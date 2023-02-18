@@ -303,7 +303,8 @@ static inline u64 _round_down(u64 value, u64 align)
 static inline u64 _round_up(u64 value, u64 align)
 {
 	BUG_ON(!align);
-	if (align & (align - 1) == 0) {
+	/* check if align is power of 2 */
+	if (align && (!(align & (align - 1)))) {
 		return round_up(value, align);
 	}
 	else {

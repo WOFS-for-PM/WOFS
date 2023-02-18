@@ -178,24 +178,35 @@ u32 bm64_fast_search_consecutive_bits(u64 bm, u32 bits)
     const u64 *mask = bm64_consecutive_masks[bits - 1];
     u32 i = 0;
     u64 res1, res2, res3, res4;
+    INIT_TIMING(time);
 
     bm = ~bm;
+    HK_START_TIMING(bm_search_t, time);
     for (i = 0; i < UINT64_BITS; i += 4) {
         res1 = (bm & mask[i]) ^ mask[i];
         res2 = (bm & mask[i + 1]) ^ mask[i + 1];
         res3 = (bm & mask[i + 2]) ^ mask[i + 2];
         res4 = (bm & mask[i + 3]) ^ mask[i + 3];
 
-        if (!res1)
+        if (!res1) {
+            HK_END_TIMING(bm_search_t, time);
             return i;
-        else if (!res2)
+        }
+        else if (!res2) {
+            HK_END_TIMING(bm_search_t, time);
             return i + 1;
-        else if (!res3)
+        }
+        else if (!res3) {
+            HK_END_TIMING(bm_search_t, time);
             return i + 2;
-        else if (!res4)
+        }
+        else if (!res4) {
+            HK_END_TIMING(bm_search_t, time);
             return i + 3;
+        }
     }
 
+    HK_END_TIMING(bm_search_t, time);
     return UINT64_BITS;
 }
 

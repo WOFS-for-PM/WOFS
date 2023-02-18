@@ -1,6 +1,6 @@
 {
     "modules": {
-        "measure_timing": 1,
+        "measure_timing": 0,
         "wprotect": 0
     },
     "fs": {
@@ -10,6 +10,6 @@
         "meta_lfs": 0,
         "meta_pack": 1,
         "history_w": 1,	    
-        "wprotect":	1  
+        "wprotect":	0
     }
 }

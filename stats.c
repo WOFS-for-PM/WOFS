@@ -31,7 +31,6 @@ const char *Timingstring[TIMING_NUM] = {
 	"dax_read",
 	"do_cow_write",
 	"cow_write",
-	"inplace_write",
 	"copy_to_nvmm",
 	"dax_get_block",
 	"read_iter",
@@ -54,51 +53,22 @@ const char *Timingstring[TIMING_NUM] = {
 	"free_blocks",
 	"free_data_blocks",
 	"free_log_blocks",
+	"reserve_pkg",
+	"reserve_pkg_in_layout",
 
 	/* Transaction */
 	"================= Transaction ==================",
 	"transaction_new_inode",
-	"transaction_link_change",
-	"update_tail",
-
-	/* Logging */
-	"============= Logging operations ===============",
-	"append_dir_entry",
-	"append_file_entry",
-	"append_mmap_entry",
-	"append_link_change",
-	"append_setattr",
-	"append_snapshot_info",
-	"inplace_update_entry",
-
-	/* Tree */
-	"=============== Tree operations ================",
-	"checking_entry",
-	"assign_blocks",
-
-	/* GC */
-	"============= Garbage collection ===============",
-	"log_fast_gc",
-	"log_thorough_gc",
-	"check_invalid_log",
-
-	/* Integrity */
-	"============ Integrity operations ==============",
-	"block_csum",
-	"block_parity",
-	"block_csum_parity",
-	"protect_memcpy",
-	"protect_file_data",
-	"verify_entry_csum",
-	"verify_data_csum",
-	"calc_entry_csum",
-	"restore_file_data",
-	"reset_mapping",
-	"reset_vma",
+	"transaction_new_data",
+	"transaction_new_unlink",
+	"transaction_new_attr",
+	"transaction_new_rename",
+	"transaction_new_link",
+	"transaction_new_symlink",
+	"write_once_commit",
 
 	/* Others */
 	"================ Miscellaneous =================",
-	"find_cache_page",
 	"fsync",
 	"write_pages",
 	"fallocate",
@@ -113,6 +83,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"evict_inode",
 	"test_perf",
 	"wprotect",
+	"bitmap_find_free",
 
 	/* Mmap */
 	"=============== MMap operations ================",
@@ -131,15 +102,6 @@ const char *Timingstring[TIMING_NUM] = {
 	"=================== Rebuild ====================",
 	"rebuild_dir",
 	"rebuild_file",
-	"rebuild_snapshot_table",
-
-	/* Snapshot */
-	"=================== Snapshot ===================",
-	"create_snapshot",
-	"init_snapshot_info",
-	"delete_snapshot",
-	"append_snapshot_filedata",
-	"append_snapshot_inode",
 
 	/* Meta Operations */
 	"=================== Meta ===================", 
@@ -152,11 +114,7 @@ const char *Timingstring[TIMING_NUM] = {
 
 	"=================== LinIX ===================",
 	"linix_set",
-	"linix_get",
-
-	"=================== FriendlyGC ===================",
-	"layout_equalizer_migrates",
-	"self_gc_migrates"
+	"linix_get"
 };
 
 u64 Timingstats[TIMING_NUM];
@@ -212,7 +170,6 @@ static void hk_clear_timing_stats(void)
 static void hk_clear_IO_stats(struct super_block *sb)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
-	struct free_list *free_list;
 	int i;
 	int cpu;
 

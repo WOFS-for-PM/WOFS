@@ -94,23 +94,23 @@ int linix_shrink(struct linix *ix)
 u64 linix_get(struct linix *ix, u64 index)
 {
     u64 blk_addr;
-    /* INIT_TIMING(index_time);
-    HK_START_TIMING(linix_get_t, index_time); */
+    INIT_TIMING(index_time);
+    HK_START_TIMING(linix_get_t, index_time);
     if (index >= ix->num_slots)
     {
-        /* HK_END_TIMING(linix_get_t, index_time); */
+        HK_END_TIMING(linix_get_t, index_time);
         return 0;
     }
     blk_addr = ix->slots[index].blk_addr;
-    /* HK_END_TIMING(linix_get_t, index_time); */
+    HK_END_TIMING(linix_get_t, index_time);
     return blk_addr;
 }
 
 /* Inode Lock must be held before linix insert, and blk_addr */
 int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend) 
 {
-    /* INIT_TIMING(index_time);
-    HK_START_TIMING(linix_set_t, index_time); */
+    INIT_TIMING(index_time);
+    HK_START_TIMING(linix_set_t, index_time);
     if (extend) {
         while (index >= ix->num_slots) {
             linix_extend(ix);
@@ -118,12 +118,12 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
     }
 
     if (index >= ix->num_slots) {
-         /* HK_END_TIMING(linix_set_t, index_time); */
+        HK_END_TIMING(linix_set_t, index_time);
         return -1;
     }
 
     ix->slots[index].blk_addr = blk_addr;
-    /* HK_END_TIMING(linix_set_t, index_time); */
+    HK_END_TIMING(linix_set_t, index_time);
     return 0;
 }
 

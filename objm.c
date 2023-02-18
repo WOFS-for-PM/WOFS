@@ -2,7 +2,7 @@
 
 /* Global Usage */
 int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u16 pkg_type);
-int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type);
+static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type);
 
 /* == constructive functions == */
 inline obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino)
@@ -717,11 +717,13 @@ int reserve_pkg_space_in_layout(obj_mgr_t *mgr, struct hk_layout_info *layout, u
     tlalloc_param_t param;
     u32 addr, entrynr;
     s32 ret = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(reserve_pkg_in_layout_t, time);
     tl_build_alloc_param(&param, num, TL_MTA | m_alloc_type);
     ret = tlalloc(alloc, &param);
     if (ret) {
-        hk_dbgv("%s failed %d\n", __func__, ret);
+        hk_dbg("%s failed %d\n", __func__, ret);
         goto out;
     }
 
@@ -731,10 +733,11 @@ int reserve_pkg_space_in_layout(obj_mgr_t *mgr, struct hk_layout_info *layout, u
     *pm_addr = get_pm_entry_addr(sbi, addr, entrynr);
 
 out:
+    HK_END_TIMING(reserve_pkg_in_layout_t, time);
     return ret;
 }
 
-int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
+static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
 {
     struct hk_sb_info *sbi = mgr->sbi;
     struct super_block *sb = sbi->sb;
@@ -743,7 +746,9 @@ int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
     u32 start_cpuid, cpuid, i;
     bool found = false;
     int ret = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(reserve_pkg_t, time);
     switch (m_alloc_type) {
     case TL_MTA_PKG_ATTR: /* fop: truncate operations */
         num = MTA_PKG_ATTR_BLK;
@@ -776,15 +781,17 @@ int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
         ret = -ENOSPC;
     }
 
+    HK_END_TIMING(reserve_pkg_t, time);
     return ret;
 }
 
 /* == Transactional file operations/IO managements == */
-void __fill_pm_obj_hdr(struct hk_sb_info *sbi, struct hk_obj_hdr *hdr, u32 type)
+static void __always_inline __fill_pm_obj_hdr(struct hk_sb_info *sbi, struct hk_obj_hdr *hdr, u32 type)
 {
     hdr->magic = HUNTER_OBJ_MAGIC;
     hdr->type = type;
     hdr->vtail = hk_inc_and_get_vtail(sbi);
+    hdr->crc32 = 0;
 }
 
 typedef struct fill_param {
@@ -988,17 +995,20 @@ void __fill_pm_pkg_hdr(struct hk_sb_info *sbi, struct hk_pkg_hdr *pkg_hdr, fill_
     hk_memlock_range(sb, pkg_hdr, sizeof(struct hk_pkg_hdr), &flags);
 }
 
+/* TODO: obj_start should be in-DRAM address */
 void commit_pkg(struct hk_sb_info *sbi, void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr)
 {
     struct super_block *sb = sbi->sb;
     unsigned long flags = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(wr_once_t, time);
     hk_memunlock_range(sb, last_obj_hdr, sizeof(struct hk_obj_hdr), &flags);
-    last_obj_hdr->crc32 = 0;
-    last_obj_hdr->crc32 = hk_crc32c(~0, (const char *)obj_start, len);
     /* fence-once */
+    last_obj_hdr->crc32 = hk_crc32c(~0, (const char *)obj_start, len);
     hk_flush_buffer(obj_start, len, true);
     hk_memlock_range(sb, last_obj_hdr, sizeof(struct hk_obj_hdr), &flags);
+    HK_END_TIMING(wr_once_t, time);
 }
 
 int check_pkg_valid(void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr)
@@ -1250,8 +1260,11 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     struct hk_inode_info *si;
     data_update_t data_update;
     size_t aligned_size = _round_up(size, HK_LBLK_SZ(sbi));
+    u64 blk = 0, num = 0;
     int ret = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(new_data_trans_t, time);
     ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA);
     if (ret) {
         goto out;
@@ -1260,30 +1273,33 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data = (struct hk_obj_data *)(out_param->addr);
 
     data->ino = sih->ino;
-    data->blk = get_pm_blk(sbi, data_addr);
+    data->blk = blk = get_pm_blk(sbi, data_addr);
     data->ofs = offset;
-    data->num = (aligned_size >> HUNTER_BLK_SHIFT);
+    data->num = num = (aligned_size >> HUNTER_BLK_SHIFT);
     data->i_cmtime = sih->i_ctime;
-    data->i_size = sih->i_size;
+    data->i_size = sih->i_size + size;
     if (in_param->partial) {
         __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA | in_param->wrapper_pkg_type);
     } else {
         __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA);
     }
+
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_DATA_SIZE, &data->hdr);
 
+    /* NOTE: prevent read after persist  */
     data_update.build_from_exist = false;
     data_update.exist_ref = NULL;
     data_update.addr = get_pm_offset(sbi, data);
-    data_update.blk = data->blk;
+    data_update.blk = blk;
     data_update.ofs = offset;
-    data_update.num = data->num;
+    data_update.num = num;
     data_update.i_cmtime = sih->i_ctime;
-    data_update.i_size = sih->i_size;
+    data_update.i_size = sih->i_size + size;
 
     ur_dram_data(obj_mgr, sih, &data_update);
 
+    HK_END_TIMING(new_data_trans_t, time);
 out:
     return ret;
 }

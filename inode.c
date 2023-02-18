@@ -1127,15 +1127,6 @@ void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
 
         ref = (obj_ref_data_t *)linix_get(&sih->ix, ofs_blk);
         if (!ref) {
-            /* try find the first not null in linix */
-            blk = ofs_blk;
-            while (!ref && blk != -1) {
-                ref = (obj_ref_data_t *)linix_get(&sih->ix, blk);
-                blk--;
-            }
-        }
-
-        if (!ref) {
             return NULL;
         }
 

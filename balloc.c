@@ -233,8 +233,8 @@ int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, stru
                 goto retry;
             }
         }
-        HK_END_TIMING(new_data_blocks_t, alloc_time);
     }
+    HK_END_TIMING(new_data_blocks_t, alloc_time);
     return prep->blks_prepared == 0 ? -1 : 0;
 }
 

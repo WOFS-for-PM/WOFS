@@ -55,7 +55,6 @@ enum timing_category {
 	dax_read_t,
 	do_cow_write_t,
 	cow_write_t,
-	inplace_write_t,
 	copy_to_nvmm_t,
 	dax_get_block_t,
 	read_iter_t,
@@ -78,51 +77,22 @@ enum timing_category {
 	free_blocks_t,
 	free_data_t,
 	free_log_t,
+	reserve_pkg_t,
+	reserve_pkg_in_layout_t,
 
 	/* Transaction */
 	trans_title_t,
-	create_trans_t,
-	link_trans_t,
-	update_tail_t,
-
-	/* Logging */
-	logging_title_t,
-	append_dir_entry_t,
-	append_file_entry_t,
-	append_mmap_entry_t,
-	append_link_change_t,
-	append_setattr_t,
-	append_snapshot_info_t,
-	update_entry_t,
-
-	/* Tree */
-	tree_title_t,
-	check_entry_t,
-	assign_t,
-
-	/* GC */
-	gc_title_t,
-	fast_gc_t,
-	thorough_gc_t,
-	check_invalid_t,
-
-	/* Integrity */
-	integrity_title_t,
-	block_csum_t,
-	block_parity_t,
-	block_csum_parity_t,
-	protect_memcpy_t,
-	protect_file_data_t,
-	verify_entry_csum_t,
-	verify_data_csum_t,
-	calc_entry_csum_t,
-	restore_data_t,
-	reset_mapping_t,
-	reset_vma_t,
+	new_inode_trans_t,
+	new_data_trans_t,
+	new_unlink_trans_t,
+	new_attr_trans_t,
+	new_rename_trans_t,
+	new_link_trans_t,
+	new_symlink_trans_t,
+	wr_once_t,
 
 	/* Others */
 	others_title_t,
-	find_cache_t,
 	fsync_t,
 	write_pages_t,
 	fallocate_t,
@@ -137,6 +107,7 @@ enum timing_category {
 	evict_inode_t,
 	perf_t,
 	wprotect_t,
+	bm_search_t,
 
 	/* Mmap */
 	mmap_title_t,
@@ -155,15 +126,6 @@ enum timing_category {
 	rebuild_title_t,
 	rebuild_dir_t,
 	rebuild_blks_t,
-	rebuild_snapshot_t,
-
-	/* Snapshot */
-	snapshot_title_t,
-	create_snapshot_t,
-	init_snapshot_info_t,
-	delete_snapshot_t,
-	append_snapshot_file_t,
-	append_snapshot_inode_t,
 
 	/* Meta Operations */
 	meta_title_t, 
@@ -178,11 +140,6 @@ enum timing_category {
 	linix_title_t,
 	linix_set_t,
 	linix_get_t,
-
-	/* FriendlyGC */
-	friendly_gc_title_t,
-	equalizer_migrates_t,
-	self_gc_migrates_t,
 
 	/* Sentinel */
 	TIMING_NUM,

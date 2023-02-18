@@ -395,7 +395,7 @@ static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct den
 
     int ret = 0;
 
-    HK_START_TIMING(create_trans_t, trans_time);
+    HK_START_TIMING(new_inode_trans_t, trans_time);
     pidir = hk_get_inode(sb, dir);
     if (!pidir) {
         ret = -ENOENT;
@@ -430,7 +430,7 @@ static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct den
     }
 
 out:
-    HK_END_TIMING(create_trans_t, trans_time);
+    HK_END_TIMING(new_inode_trans_t, trans_time);
     return ret;
 }
 #else
@@ -445,7 +445,7 @@ static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_
     INIT_TIMING(trans_time);
 
     int ret = 0;
-    HK_START_TIMING(create_trans_t, trans_time);
+    HK_START_TIMING(new_inode_trans_t, trans_time);
     pidir = hk_get_inode(sb, dir);
     if (!pidir) {
         ret = -ENOENT;
@@ -474,7 +474,7 @@ static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_
     hk_memlock_inode(sb, pi, &irq_flags);
 
 out:
-    HK_END_TIMING(create_trans_t, trans_time);
+    HK_END_TIMING(new_inode_trans_t, trans_time);
     return ret;
 }
 #endif

@@ -3,9 +3,13 @@
 - [ ] Measure the Performance (FIO/Filebench/Real-World Trace)
 - [ ] Prepare for Filebench/Fxmark/Trace
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
+- [ ] Pass fill_param to __fill_in_pm_inode
+- [ ] Pass out in-DRAM object
 
-# 2023/2/7 ~ :Multiple Thread FIO Test Prepare
+# 2023/2/7 ~ 2023/2/17:Multiple Thread FIO Test Prepare
 - [x] Debug Multi-Thread I/O
+- [x] Debug Mount Write Unmount sequence
+- [x] Fix many double free errors 
 
 # 2023/2/4 ~ 2023/2/6: Single Thread FIO Test Prepare (Mainly work in 2/6)
 - [x] Debug Single Thread I/O

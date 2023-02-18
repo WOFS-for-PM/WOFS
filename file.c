@@ -276,7 +276,6 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = si->header;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
     /* for background commit, i.e., async */
     struct hk_cmt_batch batch;
     /* for pack, i.e., write-once */
@@ -311,6 +310,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
         *out_size = each_size;
     } else {
+        struct hk_inode *pi = hk_get_inode(sb, inode);
         for (i = 0; i < prep->blks_prepared; i++) {
             each_size = HK_LBLK_SZ(sbi);
             each_ofs = ofs & (HK_LBLK_SZ(sbi) - 1);
@@ -487,8 +487,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = si->header;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
-
     pgoff_t index, start_index, end_index, i;
     unsigned long blks;
     loff_t isize, pos;

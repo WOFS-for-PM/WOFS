@@ -876,8 +876,10 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
     if (FILL_ATTR_TYPE(options) == FILL_ATTR_INIT) {
         if (S_ISDIR(mode)) {
             i_mode = S_IFDIR | mode;
-        } else {
+        } else if (S_ISREG(mode)) {
             i_mode = S_IFREG | mode;
+        } else {
+            i_mode = mode;
         }
         i_mtime = i_ctime = i_atime = attr_param->time;
         i_size = 0;
@@ -1059,7 +1061,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         ino = sih->ino;
         break;
     case CREATE_FOR_LINK:
-        orig_ino = sih->ino;
+        orig_ino = ((in_create_pkg_param_t *)(in_param->private))->old_ino;
         /* fall thru */
     case CREATE_FOR_SYMLINK:
     case CREATE_FOR_NORMAL:
@@ -1097,7 +1099,12 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         __fill_pm_attr(sbi, attr, &fill_param);
         cur_addr += OBJ_ATTR_SIZE;
     } else {
-        hk_dbg("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
+        if (create_type == CREATE_FOR_LINK)
+            hk_dbg("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
+        else if (create_type == CREATE_FOR_SYMLINK)
+            hk_dbg("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next, cur_addr, get_pm_offset(sbi, cur_addr));
+        else 
+            hk_dbg("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
 
         /* fill inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
@@ -1170,8 +1177,13 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     if (psih) {
         ur_dram_latest_attr(obj_mgr, psih, &pattr_update);
     }
-    /* handle dentry to obj mgr  */
-    ref_dentry = ref_dentry_create(get_pm_offset(sbi, (u64)obj_dentry), name, strlen(name), ino, parent_ino);
+
+    if (create_type == CREATE_FOR_LINK) {
+        ref_dentry = ref_dentry_create(get_pm_offset(sbi, (u64)obj_dentry), name, strlen(name), orig_ino, parent_ino);
+    } else {
+        /* handle dentry to obj mgr  */
+        ref_dentry = ref_dentry_create(get_pm_offset(sbi, (u64)obj_dentry), name, strlen(name), ino, parent_ino);
+    }
     obj_mgr_load_dobj_control(obj_mgr, (void *)ref_dentry, OBJ_DENTRY);
     ((out_create_pkg_param_t *)out_param->private)->ref = ref_dentry;
 
@@ -1365,7 +1377,7 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
     return 0;
 }
 
-int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname,
+int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname, u32 ino,
                        u64 symaddr, struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
                        out_pkg_param_t *data_out_param, out_pkg_param_t *create_out_param)
 {
@@ -1374,10 +1386,7 @@ int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const
     obj_mgr_t *obj_mgr = sbi->obj_mgr;
     int ret = 0;
 
-    ret = inode_mgr_alloc(sbi->inode_mgr, &in_create_param.new_ino);
-    if (ret) {
-        goto out;
-    }
+    in_create_param.new_ino = ino;
     in_create_param.create_type = CREATE_FOR_SYMLINK;
     in_param.private = &in_create_param;
 

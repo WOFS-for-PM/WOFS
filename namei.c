@@ -830,10 +830,15 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
         out_pkg_param_t out_param_for_data;
         out_pkg_param_t out_param_for_create;
         out_create_pkg_param_t create_out_param_for_create;
+        obj_ref_dentry_t *ref_dentry;
+        
+        err = inode_mgr_alloc(sbi->inode_mgr, &ino);
+        if (ino == -1)
+            goto out_fail;
 
         out_param_for_create.private = &create_out_param_for_create;
 
-        inode = hk_create_inode(TYPE_SYMLINK, dir, 0, S_IFLNK | 0777,
+        inode = hk_create_inode(TYPE_SYMLINK, dir, ino, S_IFLNK | 0777,
                                 len, 0, &dentry->d_name);
         if (IS_ERR(inode)) {
             err = PTR_ERR(inode);
@@ -844,7 +849,13 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
         if (err)
             goto out_fail;
 
-        create_symlink_pkg(sbi, inode->i_mode, dentry->d_name.name, symname, sym_blk_addr, HK_IH(inode), HK_IH(dir), &out_param_for_data, &out_param_for_create);
+        create_symlink_pkg(sbi, inode->i_mode, dentry->d_name.name, symname, ino, sym_blk_addr, HK_IH(inode), HK_IH(dir), &out_param_for_data, &out_param_for_create);
+
+        ref_dentry = ((out_create_pkg_param_t *)out_param_for_create.private)->ref;
+        err = hk_insert_dir_table(sb, HK_IH(dir), dentry->d_name.name, strlen(dentry->d_name.name), ref_dentry);
+        if (err) {
+            goto out_fail;
+        }
 
     } else {
         struct hk_inode *pidir, *pi;
@@ -902,9 +913,10 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
 
         hk_finish_tx(sb, txid);
 
-        d_instantiate(dentry, inode);
-        unlock_new_inode(inode);
     }
+
+    d_instantiate(dentry, inode);
+    unlock_new_inode(inode);
 
 out:
     HK_END_TIMING(symlink_t, symlink_time);
@@ -942,6 +954,7 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         in_pkg_param_t param;
         in_create_pkg_param_t private;
         out_pkg_param_t out_param;
+        out_create_pkg_param_t out_create_param;
         obj_ref_dentry_t *ref_dentry;
         struct hk_inode_info_header *sih;
 
@@ -963,8 +976,11 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         private.create_type = CREATE_FOR_LINK;
         private.rdev = 0;
         private.new_ino = sih->ino;
+        private.old_ino = inode->i_ino;
         param.private = &private;
         param.partial = false;
+        out_param.private = &out_create_param;
+
         err = create_new_inode_pkg(sbi, inode->i_mode, dest_dentry->d_name.name, sih, HK_IH(dir), &param, &out_param);
         if (err) {
             goto out;
@@ -975,6 +991,8 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         if (err) {
             goto out;
         }
+        inode->i_ctime = current_time(inode);
+        inc_nlink(inode);
         BUG_ON(ref_dentry->target_ino != inode->i_ino);
     } else {
         struct hk_inode *pidir;

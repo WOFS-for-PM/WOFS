@@ -1,13 +1,10 @@
 #!/usr/bin/bash
-mkdir mnt && mount -t HUNTER -o init /dev/pmem0 /mnt && cd /mnt
-# Create
-echo 123 >c
-# soft link
-ln -s c c_soft
-
-cat c_soft
+echo 123 > /mnt/c
+ln -s /mnt/c /mnt/c_soft
+stat /mnt/c_soft
+ls /mnt/
+cat /mnt/c_soft
 
 # hard link
-ln c c_hard
-
-cat c_hard
+ln /mnt/c /mnt/c_hard
+cat /mnt/c_hard

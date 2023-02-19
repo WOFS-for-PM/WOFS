@@ -476,7 +476,7 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
                       obj_ref_dentry_t *ref, struct hk_inode_info_header *sih,
                       struct hk_inode_info_header *psih, struct hk_inode_info_header *npsih,
                       out_pkg_param_t *unlink_out_param, out_pkg_param_t *create_out_param);
-int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname,
+int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const char *symname, u32 ino,
                        u64 symaddr, struct hk_inode_info_header *sih, struct hk_inode_info_header *psih,
                        out_pkg_param_t *data_out_param, out_pkg_param_t *create_out_param);
 

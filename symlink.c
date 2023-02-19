@@ -17,7 +17,9 @@ int hk_block_symlink(struct super_block *sb, struct inode *inode,
     if (ENABLE_META_PACK(sb)) {
         obj_ref_data_t *ref = NULL;
         ref = (obj_ref_data_t *)hk_inode_get_slot(sih, 0);
-        blk_addr = get_pm_addr(sbi, ref->data_offset);
+        if (ref) {
+            blk_addr = get_pm_addr(sbi, ref->data_offset);
+        }
     } else {
         blk_addr = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, 0));
     }

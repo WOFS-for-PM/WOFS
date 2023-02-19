@@ -297,9 +297,9 @@ int tl_tree_insert_node(struct rb_root *tree, tl_node_t *new_node)
         compVal = tl_node_compare(curr->blk, new_node->blk);
         parent = *temp;
 
-        if (compVal == -1) {
+        if (compVal < 0) {
             temp = &((*temp)->rb_left);
-        } else if (compVal == 1) {
+        } else if (compVal > 0) {
             temp = &((*temp)->rb_right);
         } else {
             hk_dbg("%s: node %lu - %lu already exists: "

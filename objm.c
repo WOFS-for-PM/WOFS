@@ -569,7 +569,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
     tlfree_param_t param;
     obj_ref_data_t *ref, *new_ref;
     u32 ofs_blk = GET_ALIGNED_BLKNR(update->ofs);
-    u32 blk;
+    u32 old_blk, new_blk = update->blk;
     u32 est_ofs_blk, est_num;
     u32 reclaimed_blks;
     u32 before_remained_blks;
@@ -590,6 +590,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         return 0;
     } else if (DATA_IS_REF(ref->type)) {
         est_ofs_blk = GET_ALIGNED_BLKNR(ref->ofs);
+        old_blk = GET_ALIGNED_BLKNR(ref->data_offset);
         est_num = ref->num;
         before_remained_blks = ofs_blk - est_ofs_blk;
         behind_remained_blks = est_num < before_remained_blks + update->num ? 0 : est_num - before_remained_blks - update->num;
@@ -631,7 +632,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
 
         /* release data blocks */
         layout = &sbi->layouts[get_layout_idx(sbi, ref->data_offset)];
-        tl_build_free_param(&param, ofs_blk, reclaimed_blks, TL_BLK);
+        tl_build_free_param(&param, old_blk, reclaimed_blks, TL_BLK);
         tlfree(&layout->allocator, &param);
 
         update->num = before_remained_blks + update->num - est_num;
@@ -684,11 +685,6 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     u32 num = update->num;
     int ret, i;
 
-    /* update dram attr */
-    sih->i_ctime = sih->i_mtime = update->i_cmtime;
-    sih->i_atime = update->i_cmtime;
-    sih->i_size = update->i_size;
-
     if (!update->build_from_exist) {
         /* handle data to obj mgr */
         ref = ref_data_create(update->addr, sih->ino, update->ofs, update->num, get_pm_blk_offset(sbi, update->blk));
@@ -701,6 +697,11 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     while (reclaim_dram_data(mgr, sih, update) == -EAGAIN) {
         ;
     }
+
+    /* update dram attr */
+    sih->i_ctime = sih->i_mtime = update->i_cmtime;
+    sih->i_atime = update->i_cmtime;
+    sih->i_size = update->i_size;
 
     /* make data visible to user */
     for (i = 0; i < num; i++) {
@@ -723,7 +724,7 @@ int reserve_pkg_space_in_layout(obj_mgr_t *mgr, struct hk_layout_info *layout, u
     tl_build_alloc_param(&param, num, TL_MTA | m_alloc_type);
     ret = tlalloc(alloc, &param);
     if (ret) {
-        hk_dbg("%s failed %d\n", __func__, ret);
+        hk_dbgv("%s failed %d\n", __func__, ret);
         goto out;
     }
 
@@ -1260,6 +1261,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     struct hk_inode_info *si;
     data_update_t data_update;
     size_t aligned_size = _round_up(size, HK_LBLK_SZ(sbi));
+    size_t size_after_write = offset + size > sih->i_size ? offset + size : sih->i_size;
     u64 blk = 0, num = 0;
     int ret = 0;
     INIT_TIMING(time);
@@ -1277,7 +1279,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data->ofs = offset;
     data->num = num = (aligned_size >> HUNTER_BLK_SHIFT);
     data->i_cmtime = sih->i_ctime;
-    data->i_size = sih->i_size + size;
+    data->i_size = size_after_write;
     if (in_param->partial) {
         __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA | in_param->wrapper_pkg_type);
     } else {
@@ -1295,7 +1297,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data_update.ofs = offset;
     data_update.num = num;
     data_update.i_cmtime = sih->i_ctime;
-    data_update.i_size = sih->i_size + size;
+    data_update.i_size = size_after_write;
 
     ur_dram_data(obj_mgr, sih, &data_update);
 

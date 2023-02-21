@@ -156,4 +156,10 @@ static inline void hk_dump_super(struct super_block *sb)
     // }
 }
 
+static inline void hk_dump_ref_data(obj_ref_data_t *ref_data)
+{
+    hk_info("logical: %lu - %lu\n", ref_data->ofs >> PAGE_SHIFT, (ref_data->ofs >> PAGE_SHIFT) + ref_data->num - 1);
+    hk_info("physical: %lu - %lu\n", ref_data->data_offset >> PAGE_SHIFT, (ref_data->data_offset >> PAGE_SHIFT) + ref_data->num - 1);
+}
+
 #endif /* _HK_DBG_H_ */

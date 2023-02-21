@@ -134,7 +134,9 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         if (ret) {
             return 0;
         }
-
+        
+        hk_dbgv("%s: alloc blk range: %llu - %llu\n", __func__, param._ret_rng.low, param._ret_rng.high);
+            
         target_addr = get_pm_blk_addr(sbi, param._ret_rng.low);
         if (blks_prepared != NULL) {
             *blks_prepared = param._ret_allocated;

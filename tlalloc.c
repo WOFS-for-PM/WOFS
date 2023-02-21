@@ -483,6 +483,11 @@ bool __tl_try_insert_data_blks(void *key, void *value, void *data)
     return false;
 }
 
+static bool __list_check_entry_freed(struct list_head *entry)
+{
+    return entry->next == LIST_POISON1 && entry->prev == LIST_POISON2;
+}
+
 void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
 {
     data_mgr_t *data_mgr = &alloc->data_manager;
@@ -496,6 +501,8 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
     if (TL_ALLOC_TYPE(flags) == TL_BLK) {
         u64 blk = param->blk;
         u64 num = param->num;
+        
+        hk_dbgv("free blk %lu, num %lu\n", blk, num);
 
         spin_lock(&data_mgr->spin);
         tl_traverse_tree(&data_mgr->free_tree, temp, node)
@@ -522,6 +529,8 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         typed_meta_mgr_t *tmeta_mgr;
         tl_node_t *cur;
         int idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
+        
+        hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s)", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)));
 
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
 
@@ -536,7 +545,12 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
                 /* rls block */
                 if (cur->mnode.bm == 0) {
                     hash_del(&cur->hnode);
-                    list_del(&cur->list);
+                    /* The corner case is that one node is held by only used_blks table, */
+                    /* since it is too full to do further allocation, see `tlalloc()`. */ 
+                    /* Thus, we shall not del node from list again. */
+                    if (__list_check_entry_freed(&cur->list) == false) {
+                        list_del(&cur->list);
+                    }
                     tl_free_node(cur);
 
                     tlfree_param_t free_blk_param;

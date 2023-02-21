@@ -8,3 +8,6 @@ cat /mnt/c_soft
 # hard link
 ln /mnt/c /mnt/c_hard
 cat /mnt/c_hard
+
+mkdir -p tmp
+filebench -f fileserver-50.f

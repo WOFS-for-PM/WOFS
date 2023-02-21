@@ -84,8 +84,11 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr)
     /* init obj_mgr */
     mgr->num_d_roots = cpus;
     mgr->sbi = sbi;
+    
+    rng_lock_init(&mgr->prealloc_imap.rng_lock, cpus, NULL);
     hash_init(mgr->prealloc_imap.map);
-    hash_init(mgr->pending_table);
+    rng_lock_init(&mgr->pending_table.rng_lock, cpus, NULL);
+    hash_init(mgr->pending_table.tbl);
     mgr->d_roots = (d_root_t *)kzalloc(sizeof(d_root_t) * cpus, GFP_KERNEL);
     if (!mgr->d_roots) {
         ret = -ENOMEM;
@@ -105,6 +108,7 @@ out:
 void obj_mgr_destroy(obj_mgr_t *mgr)
 {
     struct hk_inode_info_header *cur;
+    claim_req_t *req_cur;
     d_obj_ref_list_t *d_obj_list;
     obj_ref_data_t *ref_data;
     obj_ref_dentry_t *ref_dentry;
@@ -114,6 +118,7 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
     struct hlist_node *temp;
 
     if (mgr) {
+        rng_lock_destroy(&mgr->prealloc_imap.rng_lock);
         hash_for_each_safe(mgr->prealloc_imap.map, bkt, temp, cur, hnode)
         {
             hash_del(&cur->hnode);
@@ -124,6 +129,13 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
             cur->latest_fop.latest_attr = NULL;
             cur->latest_fop.latest_inode = NULL;
             hk_free_hk_inode_info_header(cur);
+        }
+
+        rng_lock_destroy(&mgr->pending_table.rng_lock);
+        hash_for_each_safe(mgr->pending_table.tbl, bkt, temp, req_cur, hnode)
+        {
+            hash_del(&req_cur->hnode);
+            hk_free_claim_req(req_cur);
         }
 
         for (root_id = 0; root_id < mgr->num_d_roots; root_id++) {
@@ -158,7 +170,8 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
 }
 
 /* lookup data lists for inode. data head could be dentry lists or data block list*/
-void *hk_lookup_d_obj_ref_lists(d_root_t *root, u64 ino, u8 type)
+/* 32 bits ino */
+void *hk_lookup_d_obj_ref_lists(d_root_t *root, u32 ino, u8 type)
 {
     struct hlist_node *node;
     d_obj_ref_list_t *cur;
@@ -285,7 +298,7 @@ int obj_mgr_unload_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type)
     return 0;
 }
 
-int obj_mgr_get_dobjs(obj_mgr_t *mgr, u64 ino, u8 type, void **obj_refs)
+int obj_mgr_get_dobjs(obj_mgr_t *mgr, u32 ino, u8 type, void **obj_refs)
 {
     struct hk_layout_info *layout;
     struct hk_sb_info *sbi = mgr->sbi;
@@ -330,7 +343,9 @@ int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     int ret = 0;
     imap_t *imap = &mgr->prealloc_imap;
 
+    rng_lock(&imap->rng_lock, sih->ino);
     hash_add(imap->map, &sih->hnode, sih->ino);
+    rng_unlock(&imap->rng_lock, sih->ino);
 
     return ret;
 }
@@ -340,7 +355,9 @@ int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih
     int ret = 0;
     imap_t *imap = &mgr->prealloc_imap;
 
+    rng_lock(&imap->rng_lock, sih->ino);
     hash_del(&sih->hnode);
+    rng_unlock(&imap->rng_lock, sih->ino);
 
     return ret;
 }
@@ -350,13 +367,15 @@ struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
     imap_t *imap = &mgr->prealloc_imap;
     struct hk_inode_info_header *sih;
 
+    rng_lock(&imap->rng_lock, ino);
     hash_for_each_possible(imap->map, sih, hnode, ino)
     {
         if (sih->ino == ino) {
+            rng_unlock(&imap->rng_lock, ino);
             return sih;
         }
     }
-
+    rng_unlock(&imap->rng_lock, ino);
     return NULL;
 }
 
@@ -380,35 +399,40 @@ static void claim_req_destroy(claim_req_t *req)
 /* For now, only handle UNLINK request */
 int obj_mgr_send_claim_request(obj_mgr_t *mgr, claim_req_t *req)
 {
-    hash_add(mgr->pending_table, &req->hnode, req->dep_pkg_addr);
+    rng_lock(&mgr->pending_table.rng_lock, req->dep_pkg_addr);
+    hash_add(mgr->pending_table.tbl, &req->hnode, req->dep_pkg_addr);
+    rng_unlock(&mgr->pending_table.rng_lock, req->dep_pkg_addr);
+
     return 0;
 }
 
-claim_req_t *obj_mgr_get_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
+claim_req_t *obj_mgr_remove_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
     claim_req_t *req;
 
-    hash_for_each_possible(mgr->pending_table, req, hnode, dep_pkg_addr)
+    rng_lock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+    hash_for_each_possible(mgr->pending_table.tbl, req, hnode, dep_pkg_addr)
     {
         if (req->dep_pkg_addr == dep_pkg_addr) {
+            hash_del(&req->hnode);
+            rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
             return req;
         }
     }
+    rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
     return NULL;
 }
 
 int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
-    struct hlist_head *pending_table = mgr->pending_table;
     struct hk_sb_info *sbi = mgr->sbi;
-    claim_req_t *req = obj_mgr_get_claim_request(mgr, dep_pkg_addr);
+    claim_req_t *req = obj_mgr_remove_claim_request(mgr, dep_pkg_addr);
     int ret = 0;
     if (req) {
         /* we've finish processing the request */
-        hash_del(&req->hnode);
         ret = do_reclaim_dram_pkg(sbi, mgr, req->req_pkg_addr, req->req_pkg_type);
-        if (ret == 0) {
-            hk_dbg("Claim request (0x%lx, 0x%lx) is processed\n", req->req_pkg_addr, req->dep_pkg_addr);
+        if (ret != 0) {
+            hk_dbgv("Claim request (0x%lx, 0x%lx) is processed\n", req->req_pkg_addr, req->dep_pkg_addr);
         }
         claim_req_destroy(req);
     }
@@ -632,13 +656,13 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
 
         /* release data blocks */
         layout = &sbi->layouts[get_layout_idx(sbi, ref->data_offset)];
-        tl_build_free_param(&param, old_blk, reclaimed_blks, TL_BLK);
+        tl_build_free_param(&param, old_blk + before_remained_blks, reclaimed_blks, TL_BLK);
         tlfree(&layout->allocator, &param);
 
         update->num = before_remained_blks + update->num - est_num;
         if (update->num > 0) {
             update->blk = est_ofs_blk + est_num;
-            update->ofs = ref->ofs + ((est_num - before_remained_blks) << HUNTER_BLK_SHIFT);
+            update->ofs = update->blk << HUNTER_BLK_SHIFT;
             ret = -EAGAIN;
         }
     }
@@ -1079,7 +1103,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     fill_attr_t attr_param;
     cur_addr = out_param->addr;
     if (create_type == CREATE_FOR_RENAME) {
-        hk_dbg("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
+        hk_dbgv("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
 
         /* fill inode from existing inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
@@ -1100,11 +1124,11 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         cur_addr += OBJ_ATTR_SIZE;
     } else {
         if (create_type == CREATE_FOR_LINK)
-            hk_dbg("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
         else if (create_type == CREATE_FOR_SYMLINK)
-            hk_dbg("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next, cur_addr, get_pm_offset(sbi, cur_addr));
         else 
-            hk_dbg("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
 
         /* fill inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;

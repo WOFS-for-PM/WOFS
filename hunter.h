@@ -79,11 +79,11 @@
 #endif
 
 /* #define hk_dbg(s, args...)		pr_debug(s, ## args) */
-#define hk_dbg(s, args ...)		    pr_info(s, ## args)
+#define hk_dbg(s, args ...)		    pr_info("cpu-%d: "s, smp_processor_id(), ## args)
 #define hk_dbg1(s, args ...)
 #define hk_err(sb, s, args ...)	    hk_error_mng(sb, s, ## args)
 #define hk_warn(s, args ...)		pr_warn(s, ## args)
-#define hk_info(s, args ...)		pr_info(s, ## args)
+#define hk_info(s, args ...)		pr_info("cpu-%d: "s, smp_processor_id(), ## args)
 
 extern unsigned int hk_dbgmask;
 #define HK_DBGMASK_MMAPHUGE	        (0x00000001)
@@ -140,6 +140,7 @@ struct hk_range_node {
 
 /* ======================= ANCHOR: HUNTER Includes ========================= */
 #include "chash.h"
+#include "rng_lock.h"
 #include "stats.h"
 #include "config.h"
 #include "dw.h"
@@ -448,7 +449,7 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr);
 void obj_mgr_destroy(obj_mgr_t *mgr);
 int obj_mgr_load_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
 int obj_mgr_unload_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
-int obj_mgr_get_dobjs(obj_mgr_t *mgr, u64 ino, u8 type, void **obj_refs);
+int obj_mgr_get_dobjs(obj_mgr_t *mgr, u32 ino, u8 type, void **obj_refs);
 int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
 int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
 struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino);
@@ -492,7 +493,7 @@ struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers);
 void hk_free_cmt_queue(struct hk_cmt_queue *cq);
 
 /* ======================= ANCHOR: rebuild.c ========================= */
-int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, bool build_blks);
+int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, bool build_blks);
 
 /* ======================= ANCHOR: linix.c ========================= */
 int linix_init(struct linix *ix, u64 num_slots);

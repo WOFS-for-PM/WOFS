@@ -227,8 +227,14 @@ typedef struct d_root {
 
 /* imap: key ino, value hk_inode_info_header */
 typedef struct imap {
+    rng_lock_t rng_lock;
     DECLARE_HASHTABLE(map, HK_HASH_BITS7);
 } imap_t;
+
+typedef struct pendtbl {
+    rng_lock_t rng_lock;
+    DECLARE_HASHTABLE(tbl, HK_HASH_BITS7); 
+} pendtbl_t;
 
 /* for pending table */
 typedef struct claim_req {
@@ -245,7 +251,7 @@ typedef struct obj_mgr {
     d_root_t *d_roots;                               /* the root of all objs, the number equals to the number of split layouts */
     int num_d_roots;                                 /* the number of d_roots */
     imap_t prealloc_imap;                            /* used to fast locate per file objs, key is ino, value is hk_inode */
-    DECLARE_HASHTABLE(pending_table, HK_HASH_BITS7); /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
+    pendtbl_t pending_table;                         /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
 } obj_mgr_t;
 
 typedef struct attr_update {

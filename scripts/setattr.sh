@@ -6,3 +6,6 @@ echo 123 >c
 echo 12 >c
 # Setattr
 chmod +x c
+
+mkdir -p tmp
+filebench -f fileserver-1-500.f

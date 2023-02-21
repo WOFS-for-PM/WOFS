@@ -164,7 +164,7 @@ static int hk_rebuild_dir_table_for_blk(struct super_block *sb, u64 f_blk, struc
     }
 }
 
-extern void *hk_lookup_d_obj_ref_lists(d_root_t *root, u64 ino, u8 type);
+extern void *hk_lookup_d_obj_ref_lists(d_root_t *root, u32 ino, u8 type);
 
 static int hk_rebuild_data(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u32 ino)
 {
@@ -350,7 +350,7 @@ int hk_check_inode(struct super_block *sb, u64 ino)
 }
 
 /* initialize hunter inode header and other DRAM data structures */
-int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, bool build_blks)
+int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, bool build_blks)
 {
     struct hk_inode_info_header *sih = si->header;
     struct hk_sb_info *sbi = HK_SB(sb);

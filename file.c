@@ -179,7 +179,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                     ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     blk_addr = get_pm_addr(sbi, ref->data_offset);
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                    memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                     *each_size -= each_ofs;
                 }
@@ -195,7 +195,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                     ref = (obj_ref_data_t *)hk_inode_get_slot(sih, offset);
                     blk_addr = get_pm_addr(sbi, ref->data_offset);
                     hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr + each_ofs, hk_get_block(sb, blk_addr), HK_LBLK_SZ(sbi) - each_ofs);
+                    memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
                     hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
                 }
@@ -267,7 +267,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 {
     u64 i;
     int ret = 0;
-    size_t each_blks, each_size;
+    size_t each_blks, each_size, aligned_each_size;
     loff_t each_ofs;
     u64 dst_blks, blks_prepared;
     u64 addr, addr_overlayed;
@@ -291,7 +291,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
     if (ENABLE_META_PACK(sb)) {
         each_ofs = ofs & (HK_LBLK_SZ(sbi) - 1);
-        each_size = blks_prepared * HK_LBLK_SZ(sbi);
+        aligned_each_size = each_size = blks_prepared * HK_LBLK_SZ(sbi);
         is_overlay = hk_try_perform_cow(si, addr, index_cur,
                                         start_index, end_index,
                                         each_ofs, &each_size,
@@ -303,7 +303,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
         in_param.partial = false;
-        ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), each_size, &in_param, &out_param);
+        ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), aligned_each_size, &in_param, &out_param);
         if (ret) {
             return ret;
         }
@@ -530,8 +530,8 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
 
     inode->i_ctime = inode->i_mtime = current_time(inode);
 
-    hk_dbgv("%s: inode %lu, offset %lld, blks %lu\n",
-            __func__, inode->i_ino, pos, blks);
+    hk_dbgv("%s: inode %lu, offset %lld, size %lu, blks %lu\n",
+            __func__, inode->i_ino, pos, len, blks);
 
     while (index <= end_index) {
         ret = hk_alloc_blocks(sb, &blks, false, &prep);

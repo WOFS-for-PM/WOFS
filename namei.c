@@ -648,13 +648,6 @@ static struct dentry *hk_lookup(struct inode *dir, struct dentry *dentry,
                    __func__, (unsigned long)ino);
             return ERR_PTR(-EIO);
         }
-        sih = HK_IH(inode);
-        if (ENABLE_META_PACK(dir->i_sb)) {
-            BUG_ON(sih->ref_dentry);
-            sih->ref_dentry = ref;
-        } else {
-            /* Do nothing */
-        }
     }
 
     HK_END_TIMING(lookup_t, lookup_time);
@@ -1060,10 +1053,18 @@ static int __hk_remove(struct inode *dir, struct dentry *dentry)
         sih = HK_IH(inode);
         psih = HK_IH(dir);
 
+        hk_dbgv("%s: remove %lu from %lu\n", __func__, sih->ino, psih->ino);
+        
         retval = hk_remove_dir_table(sb, psih, dentry->d_name.name, strlen(dentry->d_name.name), (void *)&ref);
         if (retval)
             goto out_err;
+        
+        inode->i_ctime = dir->i_ctime;
+        
+        if (inode->i_nlink)
+            drop_nlink(inode);
 
+        /* FIXME: create_unlink_pkg in evict inode, and we just create an attr change pkg here */
         in_param.partial = false;
         create_unlink_pkg(sbi, sih, psih, ref, &in_param, &out_param);
     } else {
@@ -1195,6 +1196,7 @@ static int hk_rename(struct inode *old_dir,
         }
     }
 
+    /* FIXME: add droplink */
     if (ENABLE_META_PACK(sb)) {
         struct hk_inode_info_header *psih = HK_IH(old_dir);
         struct hk_inode_info_header *npsih = HK_IH(new_dir);

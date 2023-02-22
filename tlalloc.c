@@ -560,6 +560,11 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
                 break;
             }
         }
+
+        if (param->freed == 0) {
+            BUG_ON(1);
+        }
+        
         spin_unlock(&tmeta_mgr->spin);
     }
 }

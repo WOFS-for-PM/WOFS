@@ -208,7 +208,7 @@ typedef struct obj_ref_inode { /* __INODE_MANAGE_THIS */
 typedef struct obj_ref_attr { /* __INODE_MANAGE_THIS */
     obj_ref_hdr_t hdr;
     u16 from_pkg;
-    u32 dep_addr;
+    u64 dep_ofs; /* in pm dependent inode offset */
 } obj_ref_attr_t;
 
 typedef struct d_obj_ref_list {
@@ -233,31 +233,37 @@ typedef struct imap {
 
 typedef struct pendtbl {
     rng_lock_t rng_lock;
-    DECLARE_HASHTABLE(tbl, HK_HASH_BITS7); 
+    DECLARE_HASHTABLE(tbl, HK_HASH_BITS7);
 } pendtbl_t;
+
+typedef struct pendlst {
+    struct hlist_node hnode;
+    struct list_head list;
+    u64 dep_pkg_addr;
+} pendlst_t;
 
 /* for pending table */
 typedef struct claim_req {
-    struct hlist_node hnode;
+    struct list_head node;
     u64 req_pkg_addr;
-    u64 dep_pkg_addr;
     u16 req_pkg_type;
     u16 dep_pkg_type;
+    u32 ino;
 } claim_req_t;
 
 /* build this in the mount time */
 typedef struct obj_mgr {
-    struct hk_sb_info *sbi;                          /* the superblock */
-    d_root_t *d_roots;                               /* the root of all objs, the number equals to the number of split layouts */
-    int num_d_roots;                                 /* the number of d_roots */
-    imap_t prealloc_imap;                            /* used to fast locate per file objs, key is ino, value is hk_inode */
-    pendtbl_t pending_table;                         /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
+    struct hk_sb_info *sbi;  /* the superblock */
+    d_root_t *d_roots;       /* the root of all objs, the number equals to the number of split layouts */
+    int num_d_roots;         /* the number of d_roots */
+    imap_t prealloc_imap;    /* used to fast locate per file objs, key is ino, value is hk_inode */
+    pendtbl_t pending_table; /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
 } obj_mgr_t;
 
 typedef struct attr_update {
     u64 addr;          /* In-PM attr offset */
     u16 from_pkg;      /* From which pkg */
-    u64 dep_addr;      /* If from_pkg is UNLINK, then dep_addr points the CREATE pkg */
+    u64 dep_ofs;       /* If from_pkg is UNLINK, then dep_ofs points the CREATE pkg */
     u16 i_mode;        /* File mode */
     u32 i_uid;         /* Owner Uid */
     u32 i_gid;         /* Group Id */
@@ -302,10 +308,10 @@ typedef struct in_pkg_param {
 #define CREATE_FOR_SYMLINK 3
 
 typedef struct in_create_pkg_param {
-    int create_type;  /* for rename/link/symlink */
+    int create_type; /* for rename/link/symlink */
     u32 new_ino;
     u32 rdev;
-    u32 old_ino;      /* for link */
+    u32 old_ino; /* for link */
 } in_create_pkg_param_t;
 
 /* out param region */

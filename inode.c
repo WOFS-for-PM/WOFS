@@ -248,6 +248,12 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
         hk_err(sb, "%s: free inode %lu failed\n",
                __func__, sih->ino);
 
+    if (ENABLE_META_PACK(sb)) {
+        obj_mgr_t *obj_mgr = HK_SB(sb)->obj_mgr;
+        obj_mgr_unload_imap_control(obj_mgr, sih);
+        hk_free_hk_inode_info_header(sih);
+    }
+
     return ret;
 }
 
@@ -764,7 +770,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
             errval = -ENOMEM;
             goto fail1;
         }
-        hk_dbg("%s: allocate new sih for inode %llu\n", __func__, ino);
+        hk_dbgv("%s: allocate new sih for inode %llu\n", __func__, ino);
         si->header = sih;
     }
     hk_init_header(sb, sih, inode->i_mode);
@@ -868,7 +874,7 @@ void hk_prepare_truncate(struct super_block *sb,
     if (ENABLE_META_PACK(sb)) {
         obj_ref_data_t *ref = NULL;
         ref = (obj_ref_data_t *)hk_inode_get_slot(sih, index << PAGE_SHIFT);
-        addr = get_pm_addr(sbi, ref->data_offset);
+        addr = get_pm_addr_by_data_ref(sbi, ref, index << PAGE_SHIFT);
     } else {
         addr = TRANS_OFS_TO_ADDR(sbi, (u64)hk_inode_get_slot(sih, index << PAGE_SHIFT));
     }
@@ -1095,7 +1101,7 @@ struct inode *hk_iget(struct super_block *sb, unsigned long ino)
 
     err = hk_rebuild_inode(sb, si, ino, true);
     if (err) {
-        hk_dbg("%s: failed to rebuild inode %lu\n", __func__, ino);
+        hk_dbg("%s: failed to rebuild inode %lu, ret %d\n", __func__, ino, err);
         goto fail;
     }
 

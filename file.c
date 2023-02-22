@@ -177,7 +177,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                 if (each_ofs) {
                     obj_ref_data_t *ref = NULL;
                     ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
-                    blk_addr = get_pm_addr(sbi, ref->data_offset);
+                    blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
                     memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
@@ -192,11 +192,17 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                 each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
                 if (each_ofs) {
                     obj_ref_data_t *ref = NULL;
-                    ref = (obj_ref_data_t *)hk_inode_get_slot(sih, offset);
-                    blk_addr = get_pm_addr(sbi, ref->data_offset);
-                    hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
-                    hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    ref = (obj_ref_data_t *)hk_inode_get_slot(sih, offset + len);
+                    if (ref) {
+                        blk_addr = get_pm_addr_by_data_ref(sbi, ref, offset + len);
+                        hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                        memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
+                        hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    } else {
+                        hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                        memset_nt(cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
+                        hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    }
                     *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
                 }
             }

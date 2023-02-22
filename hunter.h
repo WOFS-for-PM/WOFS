@@ -439,7 +439,7 @@ int hk_finish_tx(struct super_block *sb, int txid);
 /* ======================= ANCHOR: objm.c ========================= */
 obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino);
 void ref_inode_destroy(obj_ref_inode_t *ref);
-obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u32 dep_addr);
+obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u64 dep_ofs);
 void ref_attr_destroy(obj_ref_attr_t *ref);
 obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino);
 void ref_dentry_destroy(obj_ref_dentry_t *ref);
@@ -530,6 +530,8 @@ static inline int hk_get_cpuid(struct super_block *sb)
 	return smp_processor_id() % sbi->cpus;
 }
 
+#define BITS32_TO_BITS64(hi, lo) (((u64)(hi) << 32) | (lo))
+
 static u64 inline get_pm_blk_addr(struct hk_sb_info *sbi, u32 blk)
 {
     return (u64)sbi->virt_addr + ((u64)blk << HUNTER_BLK_SHIFT);
@@ -543,6 +545,15 @@ static u64 inline get_pm_entry_addr(struct hk_sb_info *sbi, u32 blk, u32 entrynr
 static u64 inline get_pm_addr(struct hk_sb_info *sbi, u64 offset)
 {
     return (u64)sbi->virt_addr + offset;
+}
+
+static u64 inline get_pm_addr_by_data_ref(struct hk_sb_info *sbi, obj_ref_data_t *ref, u64 in_file_offset)
+{
+	BUG_ON(!ref);
+	if (in_file_offset < ref->ofs) {
+		return 0;
+	}
+	return get_pm_addr(sbi, ref->data_offset) + in_file_offset - ref->ofs;
 }
 
 static u64 inline get_pm_offset(struct hk_sb_info *sbi, u64 addr)
@@ -562,7 +573,7 @@ static u64 inline get_pm_blk(struct hk_sb_info *sbi, u64 addr)
 
 static u64 inline get_layout_idx(struct hk_sb_info *sbi, u64 offset)
 {
-    return offset / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
+    return (offset - get_pm_offset(sbi, sbi->fs_start)) / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
 }
 
 static inline struct tl_allocator *get_tl_allocator(struct hk_sb_info *sbi, u64 offset)

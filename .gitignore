@@ -7,8 +7,9 @@
 *.ko.cmd
 Module.symvers
 modules.order
-pattern
+patter
 .vscode
 .tmp_versions
 LOG
-
+tests/bin
+tests/.vscode

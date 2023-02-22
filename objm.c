@@ -21,14 +21,14 @@ inline void ref_inode_destroy(obj_ref_inode_t *ref)
     }
 }
 
-inline obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u32 dep_addr)
+inline obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u64 dep_ofs)
 {
     obj_ref_attr_t *ref = hk_alloc_obj_ref_attr();
     ref->hdr.ref = 1;
     ref->hdr.addr = addr;
     ref->hdr.ino = ino;
     ref->from_pkg = from_pkg;
-    ref->dep_addr = dep_addr;
+    ref->dep_ofs = dep_ofs;
     return ref;
 }
 
@@ -84,7 +84,7 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr)
     /* init obj_mgr */
     mgr->num_d_roots = cpus;
     mgr->sbi = sbi;
-    
+
     rng_lock_init(&mgr->prealloc_imap.rng_lock, cpus, NULL);
     hash_init(mgr->prealloc_imap.map);
     rng_lock_init(&mgr->pending_table.rng_lock, cpus, NULL);
@@ -108,7 +108,8 @@ out:
 void obj_mgr_destroy(obj_mgr_t *mgr)
 {
     struct hk_inode_info_header *cur;
-    claim_req_t *req_cur;
+    pendlst_t *pendlst;
+    claim_req_t *req;
     d_obj_ref_list_t *d_obj_list;
     obj_ref_data_t *ref_data;
     obj_ref_dentry_t *ref_dentry;
@@ -122,7 +123,7 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
         hash_for_each_safe(mgr->prealloc_imap.map, bkt, temp, cur, hnode)
         {
             hash_del(&cur->hnode);
-            if (cur->latest_fop.latest_attr) 
+            if (cur->latest_fop.latest_attr)
                 ref_attr_destroy(cur->latest_fop.latest_attr);
             if (cur->latest_fop.latest_inode)
                 ref_inode_destroy(cur->latest_fop.latest_inode);
@@ -132,10 +133,16 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
         }
 
         rng_lock_destroy(&mgr->pending_table.rng_lock);
-        hash_for_each_safe(mgr->pending_table.tbl, bkt, temp, req_cur, hnode)
+        hash_for_each_safe(mgr->pending_table.tbl, bkt, temp, pendlst, hnode)
         {
-            hash_del(&req_cur->hnode);
-            hk_free_claim_req(req_cur);
+            hash_del(&pendlst->hnode);
+            list_for_each_safe(pos, n, &pendlst->list)
+            {
+                req = list_entry(pos, claim_req_t, node);
+                list_del(pos);
+                hk_free_claim_req(req);
+            }
+            kfree(pendlst);
         }
 
         for (root_id = 0; root_id < mgr->num_d_roots; root_id++) {
@@ -143,7 +150,8 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
             /* free ref_data and ref_dentry in d_roots */
             hash_for_each_safe(root->data_obj_refs, bkt, temp, d_obj_list, hnode)
             {
-                list_for_each_safe(pos, n, &d_obj_list->list) {
+                list_for_each_safe(pos, n, &d_obj_list->list)
+                {
                     ref_data = list_entry(pos, obj_ref_data_t, node);
                     list_del(pos);
                     ref_data_destroy(ref_data);
@@ -154,7 +162,8 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
 
             hash_for_each_safe(root->dentry_obj_refs, bkt, temp, d_obj_list, hnode)
             {
-                list_for_each_safe(pos, n, &d_obj_list->list) {
+                list_for_each_safe(pos, n, &d_obj_list->list)
+                {
                     ref_dentry = list_entry(pos, obj_ref_dentry_t, node);
                     list_del(pos);
                     ref_dentry_destroy(ref_dentry);
@@ -379,13 +388,13 @@ struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
     return NULL;
 }
 
-static claim_req_t *claim_req_create(u64 req_addr, u64 dep_addr, u16 req_type, u16 dep_type)
+static claim_req_t *claim_req_create(u64 req_addr, u16 req_type, u16 dep_type, u32 ino)
 {
     claim_req_t *req = hk_alloc_claim_req();
     req->req_pkg_addr = req_addr;
-    req->dep_pkg_addr = dep_addr;
     req->req_pkg_type = req_type;
     req->dep_pkg_type = dep_type;
+    req->ino = ino;
     return req;
 }
 
@@ -397,26 +406,51 @@ static void claim_req_destroy(claim_req_t *req)
 }
 
 /* For now, only handle UNLINK request */
-int obj_mgr_send_claim_request(obj_mgr_t *mgr, claim_req_t *req)
+int obj_mgr_send_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr, claim_req_t *req)
 {
-    rng_lock(&mgr->pending_table.rng_lock, req->dep_pkg_addr);
-    hash_add(mgr->pending_table.tbl, &req->hnode, req->dep_pkg_addr);
-    rng_unlock(&mgr->pending_table.rng_lock, req->dep_pkg_addr);
+    struct hk_sb_info *sbi = mgr->sbi;
+    pendlst_t *pendlst;
+    bool found = false;
 
+    hk_dbgv("send req: [Unlink PKG for %lu](req_blk=%llu:%u(B)), [Parent file %lu](dep_blk=%llu:%u(B))\n",
+            ((struct hk_pkg_hdr *)(req->req_pkg_addr + OBJ_ATTR_SIZE))->unlink_hdr.unlinked_ino,
+            get_pm_blk(sbi, req->req_pkg_addr), req->req_pkg_addr & ~PAGE_MASK,
+            ((struct hk_obj_inode *)dep_pkg_addr)->ino,
+            get_pm_blk(sbi, dep_pkg_addr), dep_pkg_addr & ~PAGE_MASK);
+
+    rng_lock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+    hash_for_each_possible(mgr->pending_table.tbl, pendlst, hnode, dep_pkg_addr)
+    {
+        if (pendlst->dep_pkg_addr == dep_pkg_addr) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        pendlst = kmalloc(sizeof(pendlst_t), GFP_ATOMIC);
+        if (!pendlst) {
+            rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+            return -ENOMEM;
+        }
+        INIT_LIST_HEAD(&pendlst->list);
+    }
+    list_add_tail(&req->node, &pendlst->list);
+    rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
     return 0;
 }
 
-claim_req_t *obj_mgr_remove_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
+pendlst_t *obj_mgr_get_pendlst(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
-    claim_req_t *req;
+    pendlst_t *pendlst;
+    struct hk_sb_info *sbi = mgr->sbi;
 
     rng_lock(&mgr->pending_table.rng_lock, dep_pkg_addr);
-    hash_for_each_possible(mgr->pending_table.tbl, req, hnode, dep_pkg_addr)
+    hash_for_each_possible(mgr->pending_table.tbl, pendlst, hnode, dep_pkg_addr)
     {
-        if (req->dep_pkg_addr == dep_pkg_addr) {
-            hash_del(&req->hnode);
+        if (pendlst->dep_pkg_addr == dep_pkg_addr) {
+            hash_del(&pendlst->hnode);
             rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
-            return req;
+            return pendlst;
         }
     }
     rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
@@ -426,16 +460,26 @@ claim_req_t *obj_mgr_remove_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    claim_req_t *req = obj_mgr_remove_claim_request(mgr, dep_pkg_addr);
+    pendlst_t *pendlst = obj_mgr_get_pendlst(mgr, dep_pkg_addr);
+    claim_req_t *req;
+    struct list_head *pos, *n;
     int ret = 0;
-    if (req) {
-        /* we've finish processing the request */
-        ret = do_reclaim_dram_pkg(sbi, mgr, req->req_pkg_addr, req->req_pkg_type);
-        if (ret != 0) {
-            hk_dbgv("Claim request (0x%lx, 0x%lx) is processed\n", req->req_pkg_addr, req->dep_pkg_addr);
+
+    if (pendlst) {
+        list_for_each_safe(pos, n, &pendlst->list)
+        {
+            req = list_entry(pos, claim_req_t, node);
+            hk_dbgv("process req: req_blk=%llu (%u), dep_blk=%llu (%u), ino=%d\n", get_pm_blk(sbi, req->req_pkg_addr), req->req_pkg_addr & ~PAGE_MASK, get_pm_blk(sbi, dep_pkg_addr), dep_pkg_addr & ~PAGE_MASK, req->ino);
+            ret = do_reclaim_dram_pkg(sbi, mgr, req->req_pkg_addr, req->req_pkg_type);
+            if (ret != 0) {
+                hk_dbgv("Claim request (0x%lx, 0x%lx) is processed\n", req->req_pkg_addr, dep_pkg_addr);
+            }
+            list_del(pos);
+            claim_req_destroy(req);
         }
-        claim_req_destroy(req);
+        kfree(pendlst);
     }
+
     return 0;
 }
 
@@ -503,8 +547,7 @@ int reclaim_dram_unlink(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     obj_ref_attr_t *ref_attr = sih->latest_fop.latest_attr;
     struct hk_pkg_hdr *pkg_hdr;
     claim_req_t *req;
-    u32 cur_ofs;
-    u32 dep_ofs;
+    u64 cur_ofs, dep_ofs;
     int ret = 0;
 
     if (ref_attr == NULL) {
@@ -512,14 +555,14 @@ int reclaim_dram_unlink(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     }
 
     cur_ofs = ref_attr->hdr.addr;
-    dep_ofs = ref_attr->dep_addr;
+    dep_ofs = ref_attr->dep_ofs;
 
-    req = claim_req_create(get_pm_addr(sbi, cur_ofs), get_pm_addr(sbi, dep_ofs), PKG_UNLINK, PKG_CREATE);
+    req = claim_req_create(get_pm_addr(sbi, cur_ofs), PKG_UNLINK, PKG_CREATE, sih->ino);
     if (req == NULL) {
         return -ENOMEM;
     }
 
-    ret = obj_mgr_send_claim_request(mgr, req);
+    ret = obj_mgr_send_claim_request(mgr, get_pm_addr(sbi, dep_ofs), req);
     if (ret) {
         return ret;
     }
@@ -628,10 +671,10 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         }
 
         if (behind_remained_blks > 0) {
-            u32 length = ((est_num - behind_remained_blks) << HUNTER_BLK_SHIFT);
-            u32 new_data_ofs = ref->data_offset + length;
-            u32 new_ofs = ref->ofs + length;
-            u32 new_addr = ref->hdr.addr + length;
+            u64 length = ((est_num - behind_remained_blks) << HUNTER_BLK_SHIFT);
+            u64 new_data_ofs = ref->data_offset + length;
+            u64 new_ofs = ref->ofs + length;
+            u64 new_addr = ref->hdr.addr + length;
             u64 addr;
 
             ret = reserve_pkg_space(mgr, &addr, TL_MTA_PKG_DATA);
@@ -675,6 +718,7 @@ int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode
 {
     u32 ino = update->ino;
     u64 pm_inode = update->addr;
+    struct hk_sb_info *sbi = mgr->sbi;
 
     if (!sih->latest_fop.latest_inode) {
         sih->latest_fop.latest_inode = ref_inode_create(pm_inode, sih->ino);
@@ -682,21 +726,26 @@ int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode
         sih->latest_fop.latest_inode->hdr.addr = pm_inode;
     }
     sih->ino = ino;
+    hk_dbgv("create inode %lu, blk %llu (%u)\n", ino, get_pm_blk(sbi, get_pm_addr(sbi, pm_inode)), get_pm_addr(sbi, pm_inode) & ~PAGE_MASK);
     return 0;
 }
 
 /* update and reclaim in-DRAM attr, called when rename/create/truncate invoked */
 int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_update_t *update)
 {
+    struct hk_sb_info *sbi = mgr->sbi;
     reclaim_dram_attr(mgr, sih);
     if (!sih->latest_fop.latest_attr) {
-        sih->latest_fop.latest_attr = ref_attr_create(update->addr, sih->ino, update->from_pkg, update->dep_addr);
+        sih->latest_fop.latest_attr = ref_attr_create(update->addr, sih->ino, update->from_pkg, update->dep_ofs);
     } else {
         sih->latest_fop.latest_attr->hdr.addr = update->addr;
         sih->latest_fop.latest_attr->from_pkg = update->from_pkg;
-        sih->latest_fop.latest_attr->dep_addr = update->dep_addr;
+        sih->latest_fop.latest_attr->dep_ofs = update->dep_ofs;
     }
     __update_dram_meta(sih, update);
+    
+    hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), ino=%d\n", get_pm_blk(sbi, get_pm_addr(sbi, update->addr)), get_pm_addr(sbi, update->addr) & ~PAGE_MASK, get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)), get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK, sih->ino);
+    
     return 0;
 }
 
@@ -740,7 +789,7 @@ int reserve_pkg_space_in_layout(obj_mgr_t *mgr, struct hk_layout_info *layout, u
     struct hk_sb_info *sbi = mgr->sbi;
     tl_allocator_t *alloc = &layout->allocator;
     tlalloc_param_t param;
-    u32 addr, entrynr;
+    unsigned long addr, entrynr;
     s32 ret = 0;
     INIT_TIMING(time);
 
@@ -912,7 +961,7 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
         i_links_count = 1;
     } else if (FILL_ATTR_TYPE(options) == FILL_ATTR_EXIST) {
         struct hk_inode_info_header *sih = (struct hk_inode_info_header *)attr_param->inherit;
-        
+
         i_mode = sih->i_mode;
         i_atime = sih->i_atime;
         i_ctime = sih->i_ctime;
@@ -953,7 +1002,7 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
         attr_param->update->i_links_count = i_links_count;
         attr_param->update->addr = get_pm_offset(sbi, attr);
         attr_param->update->from_pkg = PKG_CREATE;
-        attr_param->update->dep_addr = 0;
+        attr_param->update->dep_ofs = 0;
     }
 
     __fill_pm_obj_hdr(sbi, &attr->hdr, OBJ_ATTR);
@@ -1079,8 +1128,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         return -ENAMETOOLONG;
     }
 
-    switch (create_type)
-    {
+    switch (create_type) {
     case CREATE_FOR_RENAME:
         ino = sih->ino;
         break;
@@ -1127,7 +1175,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
             hk_dbgv("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
         else if (create_type == CREATE_FOR_SYMLINK)
             hk_dbgv("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next, cur_addr, get_pm_offset(sbi, cur_addr));
-        else 
+        else
             hk_dbgv("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
 
         /* fill inode */
@@ -1267,6 +1315,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     } else {
         pkg_hdr_param.type = PKG_UNLINK;
     }
+    pkg_hdr_param.unlinked_ino = sih->ino;
     fill_param.data = &pkg_hdr_param;
     __fill_pm_pkg_hdr(sbi, pkg_hdr, &fill_param);
     cur_addr += OBJ_PKGHDR_SIZE;
@@ -1276,14 +1325,13 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 
     /* handle dram updates */
     pattr_update.from_pkg = PKG_UNLINK;
-    pattr_update.dep_addr = get_pm_offset(sbi, sih->latest_fop.latest_inode->hdr.addr);
+    pattr_update.dep_ofs = psih->latest_fop.latest_inode->hdr.addr;
     ur_dram_latest_attr(obj_mgr, psih, &pattr_update);
 
     /* remove existing create pkg */
     reclaim_dram_create(obj_mgr, sih, ref);
 
-    /* unload inode from imap */
-    obj_mgr_unload_imap_control(obj_mgr, sih);
+    /* unload inode from imap when evict inode */
 out:
     return ret;
 }

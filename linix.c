@@ -36,6 +36,10 @@ int linix_destroy(struct linix *ix)
 {
     if (ix->slots) {
         kvfree(ix->slots);
+        ix->slots = NULL;
+    } else {
+        hk_warn("double free in linix_destroy\n");
+        BUG_ON(1);
     }
     return 0;
 }

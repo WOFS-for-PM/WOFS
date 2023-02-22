@@ -365,7 +365,6 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
             return -ENOENT;
         }
         si->header = sih;
-        si->header->ref_dentry = NULL;
         pi = NULL;
     } else {
         ret = hk_check_inode(sb, ino);

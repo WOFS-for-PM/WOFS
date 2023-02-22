@@ -188,7 +188,7 @@ void __hk_build_attr_update_from_pm(struct hk_sb_info *sbi, struct hk_obj_attr *
 {
     attr_update->addr = get_pm_offset(sbi, get_pm_offset(sbi, (u64)attr));
     attr_update->from_pkg = PKG_CREATE;
-    attr_update->dep_addr = 0;
+    attr_update->dep_ofs = 0;
     attr_update->i_atime = attr->i_atime;
     attr_update->i_mtime = attr->i_mtime;
     attr_update->i_ctime = attr->i_ctime;
@@ -357,7 +357,7 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
 
                 __hk_build_attr_update_from_pm(sbi, pattr, &pattr_update);
                 pattr_update.from_pkg = PKG_UNLINK;
-                pattr_update.dep_addr = sih->latest_fop.latest_inode->hdr.addr;
+                pattr_update.dep_ofs = sih->latest_fop.latest_inode->hdr.addr;
                 ur_dram_latest_attr(sbi->obj_mgr, psih, &pattr_update);
                 if (sih) {
                     hk_warn("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);

@@ -1067,6 +1067,8 @@ static int __hk_remove(struct inode *dir, struct dentry *dentry)
         /* FIXME: create_unlink_pkg in evict inode, and we just create an attr change pkg here */
         in_param.partial = false;
         create_unlink_pkg(sbi, sih, psih, ref, &in_param, &out_param);
+
+        hk_free_obj_ref_dentry(ref);
     } else {
         int txid;
         struct hk_inode *pi = hk_get_inode(sb, inode);

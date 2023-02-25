@@ -279,7 +279,7 @@ typedef struct data_update {
     void *exist_ref;
     u64 addr;     /* In-PM data pkg offset */
     u32 blk;      /* In-PM blk */
-    u32 ofs;      /* In-File offset */
+    u64 ofs;      /* In-File offset */
     u32 num;      /* Number of blocks */
     u32 i_cmtime; /* for both mtime and ctime */
     u64 i_size;
@@ -298,7 +298,7 @@ typedef struct in_pkg_param {
     bool partial;
     /* if the package belongs to an larger package, then pass these arguments */
     u16 wrapper_pkg_type;
-    u32 next;
+    u64 next;
     void *private;
 } in_pkg_param_t;
 

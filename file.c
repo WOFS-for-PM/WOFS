@@ -72,26 +72,6 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         void *dax_mem = NULL;
         bool zero = false;
 
-        if (ENABLE_META_PACK(sb)) {
-            obj_ref_data_t *ref = NULL;
-            ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
-            blk_addr = get_pm_addr(sbi, ref->data_offset);
-            if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
-                zero = true;
-            } else {
-                dax_mem = blk_addr;
-            }
-            nr = ref->num * HK_LBLK_SZ(sbi);
-        } else {
-            blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
-            if (blk_addr == 0) { /* It's a file hole */
-                zero = true;
-            } else {
-                dax_mem = blk_addr;
-            }
-            nr = HK_LBLK_SZ(sbi);
-        }
-
         /* nr is the maximum number of bytes to copy from this page */
         if (index >= end_index) {
             if (index > end_index)
@@ -99,6 +79,26 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
             nr = ((isize - 1) & ~PAGE_MASK) + 1;
             if (nr <= offset)
                 goto out;
+        }
+
+        if (ENABLE_META_PACK(sb)) {
+            obj_ref_data_t *ref = NULL;
+            ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+            blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
+            if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
+                zero = true;
+            } else {
+                dax_mem = blk_addr;
+            }
+            nr = (ref->num - (index - (ref->ofs << PAGE_SHIFT))) * HK_LBLK_SZ(sbi);
+        } else {
+            blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
+            if (blk_addr == 0) { /* It's a file hole */
+                zero = true;
+            } else {
+                dax_mem = blk_addr;
+            }
+            nr = nr <= HK_LBLK_SZ(sbi) ? nr : HK_LBLK_SZ(sbi);
         }
 
         nr = nr - offset;
@@ -187,7 +187,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
             blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
             index += blks_to_write;
             /* possible addr of end_index */
-            cur_addr += (blks_to_write << PAGE_SHIFT);
+            cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
             if (index == end_index) {
                 each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
                 if (each_ofs) {
@@ -216,7 +216,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
             blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
             index += blks_to_write;
             /* possible addr of end_index */
-            cur_addr += (blks_to_write << PAGE_SHIFT);
+            cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
             if (index == end_index) {
                 each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
                 if (each_ofs) {

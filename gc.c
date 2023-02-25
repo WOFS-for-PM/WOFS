@@ -3,11 +3,6 @@
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
- * Copyright 2012-2013 Intel Corporation
- * Copyright 2009-2011 Marco Stornelli <marco.stornelli@gmail.com>
- * Copyright 2003 Sony Corporation
- * Copyright 2003 Matsushita Electric Industrial Co., Ltd.
- * 2003-2004 (c) MontaVista Software, Inc. , Steve Longerbeam
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,

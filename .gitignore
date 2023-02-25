@@ -13,3 +13,4 @@ patter
 LOG
 tests/bin
 tests/.vscode
+build_log

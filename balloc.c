@@ -301,7 +301,7 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout->layout_end = layout->layout_start + size_per_layout;
         mutex_init(&layout->layout_lock);
         if (ENABLE_META_PACK(sb)) {
-            tl_alloc_init(&layout->allocator, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE); 
+            tl_alloc_init(&layout->allocator, cpuid, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE); 
         } else {
             layout->atomic_counter = 0;
             layout->num_gaps_indram = 0;

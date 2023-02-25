@@ -142,8 +142,10 @@ int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
         data_update_t update;
 
         update.ofs = 0;
-        update.num = (sih->i_size - 1) >> PAGE_SHIFT + 1;
+        update.num = ((sih->i_size - 1) >> PAGE_SHIFT) + 1;
 
+        hk_dbgv("free %d pages for ino %lu\n", update.num, sih->ino);
+        
         while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
             ;
         }
@@ -242,17 +244,22 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
 
     hk_dbg_verbose("%s: %d Blks Freed\n", __func__, freed);
 
+    /* NOTE: we must unload sih first, or hk_create() will re-hold */ 
+    /* the sih if hk_free_inode() is called first since inode number */
+    /* does not be held by sih, and can be allocated. */
+    if (ENABLE_META_PACK(sb)) {
+        obj_mgr_t *obj_mgr = HK_SB(sb)->obj_mgr;
+        obj_mgr_unload_imap_control(obj_mgr, sih);
+    }
+
+    sih->si->header = NULL;
     /* Then we can free the inode */
     ret = hk_free_inode(sb, sih);
     if (ret)
         hk_err(sb, "%s: free inode %lu failed\n",
                __func__, sih->ino);
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_mgr_t *obj_mgr = HK_SB(sb)->obj_mgr;
-        obj_mgr_unload_imap_control(obj_mgr, sih);
-        hk_free_hk_inode_info_header(sih);
-    }
+    hk_free_hk_inode_info_header(sih);
 
     return ret;
 }
@@ -333,6 +340,7 @@ void hk_evict_inode(struct inode *inode)
     }
 out:
     if (destroy == 0) {
+        /* Called when umount/close */
         hk_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
         hk_free_dram_resource(sb, sih);
     }
@@ -718,6 +726,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         errval = -ENOMEM;
         goto fail2;
     }
+    
 
     inode_init_owner(inode, dir, mode);
     inode->i_blocks = inode->i_size = 0;
@@ -1141,7 +1150,8 @@ void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
             return ref;
         }
 
-        hk_warn("offset %u is not in ref %u, inconsistency happened\n", offset, ref->data_offset);
+        hk_dbg("offset %lu (%lu) is not in ref [%lu, %lu] ([%lu, %lu]), inconsistency happened\n", offset, ofs_blk, ref->ofs, ref->ofs + (ref->num << HUNTER_BLK_SHIFT), GET_ALIGNED_BLKNR(ref->ofs), GET_ALIGNED_BLKNR(ref->ofs + (ref->num << HUNTER_BLK_SHIFT)));
+        BUG_ON(1);
     } else {
         return (void *)linix_get(&sih->ix, ofs_blk);
     }

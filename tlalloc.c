@@ -329,7 +329,9 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
     node->blk = alloc->rng.low;
     node->dnode.num = blk;
     tl_tree_insert_node(&data_mgr->free_tree, node);
-
+    
+    hk_dbgv("%s: free tree: %lu - %lu for cpu %d\n", __func__, node->blk, node->blk + blk - 1, alloc->cpuid);
+    
     /* typed metadata managers */
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
         tmeta_mgr = &alloc->meta_manager.tmeta_mgrs[i];
@@ -346,10 +348,11 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
     }
 }
 
-int tl_alloc_init(tl_allocator_t *alloc, u64 blk, u64 num, u32 blk_size, u32 meta_size)
+int tl_alloc_init(tl_allocator_t *alloc, int cpuid, u64 blk, u64 num, u32 blk_size, u32 meta_size)
 {
     alloc->rng.low = blk;
     alloc->rng.high = blk + num - 1;
+    alloc->cpuid = cpuid;
     tl_mgr_init(alloc, blk_size, meta_size);
     return 0;
 }
@@ -503,6 +506,10 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         u64 num = param->num;
         
         hk_dbgv("free blk %lu, num %lu\n", blk, num);
+        if (alloc->rng.low > blk || alloc->rng.high < blk + num - 1) {
+            hk_dbg("try free blk %lu, num %lu at %d\n", blk, num, alloc->cpuid);
+            BUG_ON(1);
+        }
 
         spin_lock(&data_mgr->spin);
         tl_traverse_tree(&data_mgr->free_tree, temp, node)

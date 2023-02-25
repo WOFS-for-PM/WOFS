@@ -776,11 +776,11 @@ static int hk_misc_init(struct hk_sb_info *sbi)
     hk_sb = kvrealloc(sbi->hk_sb, sizeof(struct hk_super_block), HK_SB_SIZE(sbi), GFP_KERNEL);
     if (!hk_sb)
         return -ENOMEM;
+    sbi->hk_sb = hk_sb;
+    
     hk_info("super block size is extended from %lu to %lu\n", sizeof(struct hk_super_block), HK_SB_SIZE(sbi));
     /* Zero out the private data */
-    memset(hk_sb + sizeof(struct hk_super_block), 0, HK_SB_SIZE(sbi) - sizeof(struct hk_super_block));
-
-    sbi->hk_sb = hk_sb;
+    memset(((char *)hk_sb) + sizeof(struct hk_super_block), 0, HK_SB_SIZE(sbi) - sizeof(struct hk_super_block));
 
     return 0;
 }

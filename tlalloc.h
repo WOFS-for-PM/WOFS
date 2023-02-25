@@ -132,6 +132,7 @@ typedef struct tl_allocator {
     data_mgr_t data_manager;
     meta_mgr_t meta_manager;
     struct hk_range_node rng;
+    int cpuid;
 } tl_allocator_t;
 
 typedef struct tlalloc_param {

@@ -351,10 +351,11 @@ int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 {
     int ret = 0;
     imap_t *imap = &mgr->prealloc_imap;
+    int slot = hash_min(sih->ino, HASH_BITS(imap->map));
 
-    rng_lock(&imap->rng_lock, sih->ino);
-    hash_add(imap->map, &sih->hnode, sih->ino);
-    rng_unlock(&imap->rng_lock, sih->ino);
+    rng_lock(&imap->rng_lock, slot);
+    hlist_add_head(&sih->hnode, &imap->map[slot]);
+    rng_unlock(&imap->rng_lock, slot);
 
     return ret;
 }
@@ -363,10 +364,11 @@ int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih
 {
     int ret = 0;
     imap_t *imap = &mgr->prealloc_imap;
-
-    rng_lock(&imap->rng_lock, sih->ino);
+    int slot = hash_min(sih->ino, HASH_BITS(imap->map));
+    
+    rng_lock(&imap->rng_lock, slot);
     hash_del(&sih->hnode);
-    rng_unlock(&imap->rng_lock, sih->ino);
+    rng_unlock(&imap->rng_lock, slot);
 
     return ret;
 }
@@ -375,16 +377,16 @@ struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
 {
     imap_t *imap = &mgr->prealloc_imap;
     struct hk_inode_info_header *sih;
+    int slot = hash_min(ino, HASH_BITS(imap->map));
 
-    rng_lock(&imap->rng_lock, ino);
-    hash_for_each_possible(imap->map, sih, hnode, ino)
-    {
+    rng_lock(&imap->rng_lock, slot);
+    hlist_for_each_entry(sih, &imap->map[slot], hnode) {
         if (sih->ino == ino) {
-            rng_unlock(&imap->rng_lock, ino);
+            rng_unlock(&imap->rng_lock, slot);
             return sih;
         }
     }
-    rng_unlock(&imap->rng_lock, ino);
+    rng_unlock(&imap->rng_lock, slot);
     return NULL;
 }
 
@@ -411,16 +413,16 @@ int obj_mgr_send_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr, claim_req_t *re
     struct hk_sb_info *sbi = mgr->sbi;
     pendlst_t *pendlst;
     bool found = false;
-
+    int slot = hash_min(dep_pkg_addr, HASH_BITS(mgr->pending_table.tbl));
+    
     hk_dbgv("send req: [Unlink PKG for %lu](req_blk=%llu:%u(B)), [Parent file %lu](dep_blk=%llu:%u(B))\n",
             ((struct hk_pkg_hdr *)(req->req_pkg_addr + OBJ_ATTR_SIZE))->unlink_hdr.unlinked_ino,
             get_pm_blk(sbi, req->req_pkg_addr), req->req_pkg_addr & ~PAGE_MASK,
             ((struct hk_obj_inode *)dep_pkg_addr)->ino,
             get_pm_blk(sbi, dep_pkg_addr), dep_pkg_addr & ~PAGE_MASK);
 
-    rng_lock(&mgr->pending_table.rng_lock, dep_pkg_addr);
-    hash_for_each_possible(mgr->pending_table.tbl, pendlst, hnode, dep_pkg_addr)
-    {
+    rng_lock(&mgr->pending_table.rng_lock, slot);
+    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode) {
         if (pendlst->dep_pkg_addr == dep_pkg_addr) {
             found = true;
             break;
@@ -429,13 +431,13 @@ int obj_mgr_send_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr, claim_req_t *re
     if (!found) {
         pendlst = kmalloc(sizeof(pendlst_t), GFP_ATOMIC);
         if (!pendlst) {
-            rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+            rng_unlock(&mgr->pending_table.rng_lock, slot);
             return -ENOMEM;
         }
         INIT_LIST_HEAD(&pendlst->list);
     }
     list_add_tail(&req->node, &pendlst->list);
-    rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+    rng_unlock(&mgr->pending_table.rng_lock, slot);
     return 0;
 }
 
@@ -443,17 +445,17 @@ pendlst_t *obj_mgr_get_pendlst(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
     pendlst_t *pendlst;
     struct hk_sb_info *sbi = mgr->sbi;
+    int slot = hash_min(dep_pkg_addr, HASH_BITS(mgr->pending_table.tbl));
 
-    rng_lock(&mgr->pending_table.rng_lock, dep_pkg_addr);
-    hash_for_each_possible(mgr->pending_table.tbl, pendlst, hnode, dep_pkg_addr)
-    {
+    rng_lock(&mgr->pending_table.rng_lock, slot);
+    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode) {
         if (pendlst->dep_pkg_addr == dep_pkg_addr) {
             hash_del(&pendlst->hnode);
-            rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+            rng_unlock(&mgr->pending_table.rng_lock, slot);
             return pendlst;
         }
     }
-    rng_unlock(&mgr->pending_table.rng_lock, dep_pkg_addr);
+    rng_unlock(&mgr->pending_table.rng_lock, slot);
     return NULL;
 }
 
@@ -574,7 +576,6 @@ int reclaim_dram_create(obj_mgr_t *mgr, struct hk_inode_info_header *sih, obj_re
 {
     struct hk_sb_info *sbi = mgr->sbi;
     u64 pkg_addr = get_pm_addr(sbi, sih->latest_fop.latest_inode->hdr.addr);
-    d_root_t *root = &mgr->d_roots[get_layout_idx(sbi, sih->latest_fop.latest_inode->hdr.addr)];
     int ret = 0;
 
     /* reclaim in-DRAM structures */
@@ -637,7 +638,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
     obj_ref_data_t *ref, *new_ref;
     u32 ofs_blk = GET_ALIGNED_BLKNR(update->ofs);
     u32 old_blk, new_blk = update->blk;
-    u32 est_ofs_blk, est_num;
+    u32 est_ofs_blk, est_num, blk;
     u32 reclaimed_blks;
     u32 before_remained_blks;
     u32 behind_remained_blks;
@@ -662,6 +663,8 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         before_remained_blks = ofs_blk - est_ofs_blk;
         behind_remained_blks = est_num < before_remained_blks + update->num ? 0 : est_num - before_remained_blks - update->num;
 
+        hk_dbgv("ino: %lu, est_ofs_blk: %u, est_num: %u, update_blk: %u, update_num: %u, before: %u, behind: %u\n", sih->ino, est_ofs_blk, est_num, ofs_blk, update->num, before_remained_blks, behind_remained_blks);
+
         if (behind_remained_blks == 0) {
             /* completely overlapped */
             reclaimed_blks = est_num - before_remained_blks;
@@ -671,10 +674,9 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         }
 
         if (behind_remained_blks > 0) {
-            u64 length = ((est_num - behind_remained_blks) << HUNTER_BLK_SHIFT);
+            u64 length = ((u64)(est_num - behind_remained_blks) << HUNTER_BLK_SHIFT);
             u64 new_data_ofs = ref->data_offset + length;
             u64 new_ofs = ref->ofs + length;
-            u64 new_addr = ref->hdr.addr + length;
             u64 addr;
 
             ret = reserve_pkg_space(mgr, &addr, TL_MTA_PKG_DATA);
@@ -683,12 +685,17 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
             }
 
             new_ref = ref_data_create(get_pm_offset(sbi, addr), sih->ino, new_ofs, behind_remained_blks, new_data_ofs);
-            linix_insert(&sih->ix, GET_ALIGNED_BLKNR(new_ofs), new_ref, false);
+            for (blk = 0; blk < behind_remained_blks; blk++) {
+                linix_insert(&sih->ix, GET_ALIGNED_BLKNR(new_ofs) + blk, new_ref, false);
+            }
             obj_mgr_load_dobj_control(mgr, (void *)new_ref, OBJ_DATA);
         }
 
         if (before_remained_blks == 0) {
-            linix_insert(&sih->ix, est_ofs_blk, NULL, false);
+            /* This might be not needed? */
+            for (blk = 0; blk < reclaimed_blks; blk++) {
+                linix_insert(&sih->ix, est_ofs_blk + blk, NULL, false);
+            }
             ref->hdr.ref--;
             obj_mgr_unload_dobj_control(mgr, (void *)ref, OBJ_DATA);
             do_reclaim_dram_pkg(sbi, mgr, get_pm_addr(sbi, ref->hdr.addr), PKG_DATA);
@@ -698,14 +705,18 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         }
 
         /* release data blocks */
-        layout = &sbi->layouts[get_layout_idx(sbi, ref->data_offset)];
+        hk_dbgv("ino: %lu, free %u, num %u\n", sih->ino, old_blk + before_remained_blks, reclaimed_blks);
+        layout = &sbi->layouts[get_layout_idx(sbi, ((u64)(old_blk + before_remained_blks)) << HUNTER_BLK_SHIFT)];
         tl_build_free_param(&param, old_blk + before_remained_blks, reclaimed_blks, TL_BLK);
         tlfree(&layout->allocator, &param);
 
-        update->num = before_remained_blks + update->num - est_num;
+        /* note that update->num, before_remained_blks, update->num and est_num */ 
+        /* are all unsigned numbers. Thus we cannot directly subtract them. */
+        update->num = before_remained_blks + update->num > est_num ? before_remained_blks + update->num - est_num
+                                                                   : 0;
         if (update->num > 0) {
             update->blk = est_ofs_blk + est_num;
-            update->ofs = update->blk << HUNTER_BLK_SHIFT;
+            update->ofs = (u64)update->blk << HUNTER_BLK_SHIFT;
             ret = -EAGAIN;
         }
     }
@@ -743,9 +754,9 @@ int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_u
         sih->latest_fop.latest_attr->dep_ofs = update->dep_ofs;
     }
     __update_dram_meta(sih, update);
-    
+
     hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), ino=%d\n", get_pm_blk(sbi, get_pm_addr(sbi, update->addr)), get_pm_addr(sbi, update->addr) & ~PAGE_MASK, get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)), get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK, sih->ino);
-    
+
     return 0;
 }
 

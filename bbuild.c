@@ -512,7 +512,7 @@ int hk_save_layouts(struct super_block *sb)
     int cpuid;
 
     if (ENABLE_META_PACK(sb)) {
-        pd = (struct hk_pack_data *)(hk_sb + sizeof(struct hk_super_block));
+        pd = (struct hk_pack_data *)(((void *)hk_sb) + sizeof(struct hk_super_block));
         pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->vtail));
         hk_dump_bm(sbi, BMBLK_ATTR);
         hk_dump_bm(sbi, BMBLK_UNLINK);
@@ -525,7 +525,7 @@ int hk_save_layouts(struct super_block *sb)
             if (layout->ind.prep_blks != 0) {
                 hk_dump_layout_info(layout);
             }
-            nd = (struct hk_normal_data *)(hk_sb + sizeof(struct hk_super_block));
+            nd = (struct hk_normal_data *)(((void *)hk_sb) + sizeof(struct hk_super_block));
             nd->s_layout->s_atomic_counter = cpu_to_le64(layout->atomic_counter);
             nd->s_layout->s_ind.free_blks = cpu_to_le64(layout->ind.free_blks);
             nd->s_layout->s_ind.invalid_blks = cpu_to_le64(layout->ind.invalid_blks);

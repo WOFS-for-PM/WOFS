@@ -328,7 +328,7 @@ void hk_range_free_all(struct list_head *head);
 void tl_build_free_param(tlfree_param_t *param, u64 blk, u64 num, u16 flags);
 void tl_build_alloc_param(tlalloc_param_t *param, u64 req, u16 flags);
 void tl_build_restore_param(tlrestore_param_t *param, u64 blk, u64 num, u16 flags);
-int tl_alloc_init(tl_allocator_t *alloc, u64 blk, u64 num, u32 blk_size, u32 meta_size);
+int tl_alloc_init(tl_allocator_t *alloc, int cpuid, u64 blk, u64 num, u32 blk_size, u32 meta_size);
 s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param);
 void tlfree(tl_allocator_t *alloc, tlfree_param_t *param);
 void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param);
@@ -573,7 +573,8 @@ static u64 inline get_pm_blk(struct hk_sb_info *sbi, u64 addr)
 
 static u64 inline get_layout_idx(struct hk_sb_info *sbi, u64 offset)
 {
-    return (offset - get_pm_offset(sbi, sbi->fs_start)) / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
+	u64 idx = (offset - get_pm_offset(sbi, sbi->fs_start)) / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
+    return idx >= sbi->num_layout ? sbi->num_layout - 1 : idx;
 }
 
 static inline struct tl_allocator *get_tl_allocator(struct hk_sb_info *sbi, u64 offset)

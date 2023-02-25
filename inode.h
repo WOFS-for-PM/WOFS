@@ -60,7 +60,7 @@ struct latest_fop_objs {
 struct hk_inode_info_header {
     struct hlist_node hnode;
     struct hk_inode_info *si;
-    unsigned long ino;
+    u32 ino;
     struct linix ix;                        /* Linear Index for blks in use */
     DECLARE_HASHTABLE(dirs, HK_HASH_BITS3); /* Hash table for dirs */
     u64 i_num_dentrys;                      /* Dentrys tail */

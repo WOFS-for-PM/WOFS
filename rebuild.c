@@ -20,8 +20,22 @@
 
 #include "hunter.h"
 
-static void hk_update_inode_with_rebuild(struct super_block *sb,
-                                         struct hk_inode_rebuild *reb,
+struct hk_inode_rebuild {
+    u64 i_size;
+    u32 i_flags;       /* Inode flags */
+    u32 i_ctime;       /* Inode modification time */
+    u32 i_mtime;       /* Inode b-tree Modification time */
+    u32 i_atime;       /* Access time */
+    u32 i_uid;         /* Owner Uid */
+    u32 i_gid;         /* Group Id */
+    u32 i_generation;  /* File version (for NFS) */
+    u16 i_links_count; /* Links count */
+    u16 i_mode;        /* File mode */
+    u64 i_num_entrys;  /* Number of entries in this inode */
+    u64 tstamp;
+};
+
+static void hk_update_inode_with_rebuild(struct super_block *sb, struct hk_inode_rebuild *reb,
                                          struct hk_inode *pi)
 {
     pi->i_size = cpu_to_le64(reb->i_size);
@@ -73,7 +87,7 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
     sih->i_size = 0;
     sih->ino = 0;
     sih->i_blocks = 0;
-    sih->pi_addr = 0;
+    sih->norm_spec.pi_addr = 0;
 
     if (S_ISPSEUDO(i_mode)) {
         linix_init(&sih->ix, 0);
@@ -95,55 +109,18 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
 
     sih->i_mode = i_mode;
     sih->i_flags = 0;
-    sih->last_setattr = 0;
-    sih->last_link_change = 0;
-    sih->last_dentry = 0;
 
-    sih->tstamp = 0;
-    sih->h_addr = 0;
+    if (ENABLE_META_PACK(sb)) {
+        sih->pack_spec.latest_fop.latest_attr = NULL;
+        sih->pack_spec.latest_fop.latest_inode = NULL;
+        sih->pack_spec.latest_fop.latest_inline_attr = 0;
+    } else {
+        sih->norm_spec.tstamp = 0;
+        sih->norm_spec.h_addr = 0;
+    }
 
     sih->si = NULL;
 
-    return 0;
-}
-
-static int hk_rebuild_blks_start(struct super_block *sb,
-                                 struct hk_inode *pi, struct hk_inode_info_header *sih,
-                                 struct hk_inode_rebuild *reb, u64 pi_addr)
-{
-    int ret;
-
-    sih->h_addr = le64_to_cpu(pi->h_addr);
-
-    ret = hk_init_inode_rebuild(sb, reb, pi);
-    if (ret)
-        return ret;
-
-    sih->pi_addr = pi_addr;
-
-    hk_dbg_verbose("Blk Summary head 0x%llx\n",
-                   sih->h_addr);
-
-    return ret;
-}
-
-static int hk_rebuild_blks_finish(struct super_block *sb, struct hk_inode *pi,
-                                  struct hk_inode_info_header *sih,
-                                  struct hk_inode_rebuild *reb)
-{
-    unsigned long irq_flags = 0;
-
-    sih->i_size = le64_to_cpu(reb->i_size);
-    sih->i_mode = le64_to_cpu(reb->i_mode);
-    sih->i_flags = le32_to_cpu(reb->i_flags);
-    sih->i_num_dentrys = le64_to_cpu(reb->i_num_entrys);
-    sih->tstamp = reb->tstamp;
-
-    hk_memunlock_inode(sb, pi, &irq_flags);
-    hk_update_inode_with_rebuild(sb, reb, pi);
-    hk_memlock_inode(sb, pi, &irq_flags);
-
-    hk_flush_buffer(pi, sizeof(struct hk_inode), true);
     return 0;
 }
 
@@ -168,7 +145,7 @@ extern void *hk_lookup_d_obj_ref_lists(d_root_t *root, u32 ino, u8 type);
 
 static int hk_rebuild_data(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u32 ino)
 {
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     d_root_t *root;
     d_obj_ref_list_t *data_list;
     struct list_head *pos;
@@ -220,7 +197,7 @@ out:
 
 int hk_rebuild_dirs(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u32 ino)
 {
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     d_root_t *root;
     d_obj_ref_list_t *dentry_list;
     struct list_head *pos;
@@ -286,9 +263,20 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
     } else {
         struct hk_header *hdr;
         struct hk_header *conflict_hdr;
+        unsigned long irq_flags = 0;
 
         reb = &rebuild;
-        ret = hk_rebuild_blks_start(sb, pi, sih, reb, (u64)pi);
+        sih->norm_spec.h_addr = le64_to_cpu(pi->h_addr);
+
+        ret = hk_init_inode_rebuild(sb, reb, pi);
+        if (ret)
+            return ret;
+
+        sih->norm_spec.pi_addr = (u64)pi;
+
+        hk_dbg_verbose("Blk Summary head 0x%llx\n",
+                    sih->norm_spec.h_addr);
+
         if (ret)
             goto out;
 
@@ -328,7 +316,17 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
             }
         }
 
-        ret = hk_rebuild_blks_finish(sb, pi, sih, reb);
+        sih->i_size = le64_to_cpu(reb->i_size);
+        sih->i_mode = le64_to_cpu(reb->i_mode);
+        sih->i_flags = le32_to_cpu(reb->i_flags);
+        sih->i_num_dentrys = le64_to_cpu(reb->i_num_entrys);
+        sih->norm_spec.tstamp = reb->tstamp;
+
+        hk_memunlock_inode(sb, pi, &irq_flags);
+        hk_update_inode_with_rebuild(sb, reb, pi);
+        hk_memlock_inode(sb, pi, &irq_flags);
+
+        hk_flush_buffer(pi, sizeof(struct hk_inode), true);
     }
     sih->i_blocks = sih->i_size / HK_LBLK_SZ(sbi);
 
@@ -360,7 +358,7 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
 
     if (ENABLE_META_PACK(sb)) {
 		BUG_ON(sih);
-        sih = obj_mgr_get_imap_inode(sbi->obj_mgr, ino);
+        sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!sih) {
             return -ENOENT;
         }
@@ -385,7 +383,7 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
 
         // We need this valid in case we need to evict the inode.
         hk_init_header(sb, sih, le16_to_cpu(pi->i_mode));
-        sih->pi_addr = (u64)pi;
+        sih->norm_spec.pi_addr = (u64)pi;
 
         if (pi->valid == 0) {
             hk_dbg("%s: inode %llu is invalid or deleted.\n", __func__, ino);
@@ -393,7 +391,7 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
         }
 
         hk_dbgv("%s: inode %llu, addr 0x%llx, valid %d, head 0x%llx\n",
-                __func__, ino, sih->pi_addr, pi->valid, pi->h_addr);
+                __func__, ino, sih->norm_spec.pi_addr, pi->valid, pi->h_addr);
     }
 
     sih->ino = ino;

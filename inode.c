@@ -22,7 +22,7 @@ int hk_init_free_inode_list(struct super_block *sb, bool is_init)
     struct hk_inode *pi;
     struct hk_sb_info *sbi = HK_SB(sb);
     inode_mgr_t *mgr = sbi->inode_mgr;
-    imap_t *imap = &sbi->obj_mgr.prealloc_imap;
+    imap_t *imap = &sbi->pack_layout.obj_mgr.prealloc_imap;
     struct hlist_head *map = imap->map;
     struct hk_inode_info_header *cur;
     int bkt;
@@ -57,7 +57,7 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
     struct hk_inode *pi;
     struct hk_sb_info *sbi = HK_SB(sb);
     inode_mgr_t *mgr = sbi->inode_mgr;
-    imap_t *imap = &sbi->obj_mgr->prealloc_imap;
+    imap_t *imap = &sbi->pack_layout.obj_mgr->prealloc_imap;
     struct hk_inode_info_header *cur;
     int bkt;
     u64 start_ino, end_ino;
@@ -138,7 +138,7 @@ int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
     // inode = &si->vfs_inode;
     if (ENABLE_META_PACK(sb)) {
         /* Do Nothing */
-        obj_mgr_t *obj_mgr = sbi->obj_mgr;
+        obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
         data_update_t update;
 
         update.ofs = 0;
@@ -206,7 +206,7 @@ static int hk_free_inode(struct super_block *sb, struct hk_inode_info_header *si
     HK_START_TIMING(free_inode_t, free_time);
 
     sih->i_mode = 0;
-    sih->pi_addr = 0;
+    sih->norm_spec.pi_addr = 0;
     sih->i_size = 0;
     sih->i_blocks = 0;
 
@@ -248,7 +248,7 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
     /* the sih if hk_free_inode() is called first since inode number */
     /* does not be held by sih, and can be allocated. */
     if (ENABLE_META_PACK(sb)) {
-        obj_mgr_t *obj_mgr = HK_SB(sb)->obj_mgr;
+        obj_mgr_t *obj_mgr = HK_SB(sb)->pack_layout.obj_mgr;
         obj_mgr_unload_imap_control(obj_mgr, sih);
     }
 
@@ -450,7 +450,7 @@ static int hk_build_vfs_inode(struct super_block *sb, struct inode *inode,
     int ret = -EIO;
 
     if (ENABLE_META_PACK(sb)) {
-        u64 create_pkg_addr = get_pm_addr(sbi, sih->latest_fop.latest_inode->hdr.addr);
+        u64 create_pkg_addr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr);
         struct hk_obj_inode *obj_inode = (struct hk_obj_inode *)create_pkg_addr;
 
         inode->i_mode = sih->i_mode;
@@ -789,6 +789,8 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
 
     if (ENABLE_META_PACK(sb)) {
         i_xattr = 0;
+        sih->i_uid = i_uid_read(inode);
+        sih->i_gid = i_gid_read(inode);
     } else {
         struct hk_inode *diri = NULL;
         struct hk_inode *pi;
@@ -811,8 +813,8 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         hk_flush_buffer(pi, sizeof(struct hk_inode), false);
         hk_memlock_inode(sb, pi, &irq_flags);
 
-        sih->pi_addr = (u64)pi;
-        sih->tstamp = le64_to_cpu(pi->tstamp);
+        sih->norm_spec.pi_addr = (u64)pi;
+        sih->norm_spec.tstamp = le64_to_cpu(pi->tstamp);
         i_xattr = 0;
     }
 
@@ -927,7 +929,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
         return;
 
     if (ENABLE_META_PACK(sb)) {
-        obj_mgr_t *obj_mgr = sbi->obj_mgr;
+        obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
         data_update_t update;
 
         update.ofs = start_index << PAGE_SHIFT;

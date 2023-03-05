@@ -146,7 +146,7 @@ struct hk_sb_info {
 
             /* for inode management */
             struct mutex *irange_locks; /* For In-NVMM Inode Lock */
-        };
+        } norm_layout;
         /* for pack layout */
         struct {
             /* bitmaps for saving packages allocation info */
@@ -157,7 +157,7 @@ struct hk_sb_info {
             atomic64_t vtail;
             struct obj_mgr *obj_mgr;
             struct hk_inode_info_header *rih; /* root header */
-        };
+        } pack_layout;
     };
 
     /* per cpu structure */
@@ -179,7 +179,7 @@ struct hk_sb_info {
 
 static u64 inline hk_inc_and_get_vtail(struct hk_sb_info *sbi)
 {
-    return (u64)atomic64_fetch_add(1, &sbi->vtail);
+    return (u64)atomic64_fetch_add(1, &sbi->pack_layout.vtail);
 }
 
 static inline struct hk_sb_info *HK_SB(struct super_block *sb)

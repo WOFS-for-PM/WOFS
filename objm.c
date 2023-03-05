@@ -2,7 +2,7 @@
 
 /* Global Usage */
 int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u16 pkg_type);
-static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type);
+static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type, u32 num);
 
 /* == constructive functions == */
 inline obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino)
@@ -123,12 +123,12 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
         hash_for_each_safe(mgr->prealloc_imap.map, bkt, temp, cur, hnode)
         {
             hash_del(&cur->hnode);
-            if (cur->latest_fop.latest_attr)
-                ref_attr_destroy(cur->latest_fop.latest_attr);
-            if (cur->latest_fop.latest_inode)
-                ref_inode_destroy(cur->latest_fop.latest_inode);
-            cur->latest_fop.latest_attr = NULL;
-            cur->latest_fop.latest_inode = NULL;
+            if (cur->pack_spec.latest_fop.latest_attr)
+                ref_attr_destroy(cur->pack_spec.latest_fop.latest_attr);
+            if (cur->pack_spec.latest_fop.latest_inode)
+                ref_inode_destroy(cur->pack_spec.latest_fop.latest_inode);
+            cur->pack_spec.latest_fop.latest_attr = NULL;
+            cur->pack_spec.latest_fop.latest_inode = NULL;
             hk_free_hk_inode_info_header(cur);
         }
 
@@ -365,7 +365,7 @@ int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih
     int ret = 0;
     imap_t *imap = &mgr->prealloc_imap;
     int slot = hash_min(sih->ino, HASH_BITS(imap->map));
-    
+
     rng_lock(&imap->rng_lock, slot);
     hash_del(&sih->hnode);
     rng_unlock(&imap->rng_lock, slot);
@@ -380,7 +380,8 @@ struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
     int slot = hash_min(ino, HASH_BITS(imap->map));
 
     rng_lock(&imap->rng_lock, slot);
-    hlist_for_each_entry(sih, &imap->map[slot], hnode) {
+    hlist_for_each_entry(sih, &imap->map[slot], hnode)
+    {
         if (sih->ino == ino) {
             rng_unlock(&imap->rng_lock, slot);
             return sih;
@@ -414,7 +415,7 @@ int obj_mgr_send_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr, claim_req_t *re
     pendlst_t *pendlst;
     bool found = false;
     int slot = hash_min(dep_pkg_addr, HASH_BITS(mgr->pending_table.tbl));
-    
+
     hk_dbgv("send req: [Unlink PKG for %lu](req_blk=%llu:%u(B)), [Parent file %lu](dep_blk=%llu:%u(B))\n",
             ((struct hk_pkg_hdr *)(req->req_pkg_addr + OBJ_ATTR_SIZE))->unlink_hdr.unlinked_ino,
             get_pm_blk(sbi, req->req_pkg_addr), req->req_pkg_addr & ~PAGE_MASK,
@@ -422,7 +423,8 @@ int obj_mgr_send_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr, claim_req_t *re
             get_pm_blk(sbi, dep_pkg_addr), dep_pkg_addr & ~PAGE_MASK);
 
     rng_lock(&mgr->pending_table.rng_lock, slot);
-    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode) {
+    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode)
+    {
         if (pendlst->dep_pkg_addr == dep_pkg_addr) {
             found = true;
             break;
@@ -448,7 +450,8 @@ pendlst_t *obj_mgr_get_pendlst(obj_mgr_t *mgr, u64 dep_pkg_addr)
     int slot = hash_min(dep_pkg_addr, HASH_BITS(mgr->pending_table.tbl));
 
     rng_lock(&mgr->pending_table.rng_lock, slot);
-    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode) {
+    hlist_for_each_entry(pendlst, &mgr->pending_table.tbl[slot], hnode)
+    {
         if (pendlst->dep_pkg_addr == dep_pkg_addr) {
             hash_del(&pendlst->hnode);
             rng_unlock(&mgr->pending_table.rng_lock, slot);
@@ -462,11 +465,14 @@ pendlst_t *obj_mgr_get_pendlst(obj_mgr_t *mgr, u64 dep_pkg_addr)
 int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    pendlst_t *pendlst = obj_mgr_get_pendlst(mgr, dep_pkg_addr);
+    pendlst_t *pendlst;
     claim_req_t *req;
     struct list_head *pos, *n;
     int ret = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(process_claim_req_t, time);
+    pendlst = obj_mgr_get_pendlst(mgr, dep_pkg_addr);
     if (pendlst) {
         list_for_each_safe(pos, n, &pendlst->list)
         {
@@ -481,7 +487,8 @@ int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
         }
         kfree(pendlst);
     }
-
+    HK_END_TIMING(process_claim_req_t, time);
+    
     return 0;
 }
 
@@ -546,7 +553,7 @@ out:
 int reclaim_dram_unlink(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    obj_ref_attr_t *ref_attr = sih->latest_fop.latest_attr;
+    obj_ref_attr_t *ref_attr = sih->pack_spec.latest_fop.latest_attr;
     struct hk_pkg_hdr *pkg_hdr;
     claim_req_t *req;
     u64 cur_ofs, dep_ofs;
@@ -575,7 +582,7 @@ int reclaim_dram_unlink(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 int reclaim_dram_create(obj_mgr_t *mgr, struct hk_inode_info_header *sih, obj_ref_dentry_t *ref)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    u64 pkg_addr = get_pm_addr(sbi, sih->latest_fop.latest_inode->hdr.addr);
+    u64 pkg_addr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr);
     int ret = 0;
 
     /* reclaim in-DRAM structures */
@@ -597,7 +604,7 @@ int reclaim_dram_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 {
     struct hk_sb_info *sbi = mgr->sbi;
     struct hk_layout_info *layout;
-    obj_ref_attr_t *ref = sih->latest_fop.latest_attr;
+    obj_ref_attr_t *ref = sih->pack_spec.latest_fop.latest_attr;
     int ret = 0;
 
     if (ref == NULL) {
@@ -624,7 +631,9 @@ int reclaim_dram_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     }
     /* since we use kmem cache, allocation and free are very fast */
     ref_attr_destroy(ref);
-    sih->latest_fop.latest_attr = NULL;
+    sih->pack_spec.latest_fop.latest_attr = NULL;
+    sih->pack_spec.latest_fop.latest_inode = NULL;
+    sih->pack_spec.latest_fop.latest_inline_attr = 0;
     return 0;
 }
 
@@ -679,7 +688,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
             u64 new_ofs = ref->ofs + length;
             u64 addr;
 
-            ret = reserve_pkg_space(mgr, &addr, TL_MTA_PKG_DATA);
+            ret = reserve_pkg_space(mgr, &addr, TL_MTA_PKG_DATA, MTA_PKG_DATA_BLK);
             if (ret) {
                 return ret;
             }
@@ -710,7 +719,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
         tl_build_free_param(&param, old_blk + before_remained_blks, reclaimed_blks, TL_BLK);
         tlfree(&layout->allocator, &param);
 
-        /* note that update->num, before_remained_blks, update->num and est_num */ 
+        /* note that update->num, before_remained_blks, update->num and est_num */
         /* are all unsigned numbers. Thus we cannot directly subtract them. */
         update->num = before_remained_blks + update->num > est_num ? before_remained_blks + update->num - est_num
                                                                    : 0;
@@ -731,10 +740,10 @@ int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode
     u64 pm_inode = update->addr;
     struct hk_sb_info *sbi = mgr->sbi;
 
-    if (!sih->latest_fop.latest_inode) {
-        sih->latest_fop.latest_inode = ref_inode_create(pm_inode, sih->ino);
+    if (!sih->pack_spec.latest_fop.latest_inode) {
+        sih->pack_spec.latest_fop.latest_inode = ref_inode_create(pm_inode, sih->ino);
     } else {
-        sih->latest_fop.latest_inode->hdr.addr = pm_inode;
+        sih->pack_spec.latest_fop.latest_inode->hdr.addr = pm_inode;
     }
     sih->ino = ino;
     hk_dbgv("create inode %lu, blk %llu (%u)\n", ino, get_pm_blk(sbi, get_pm_addr(sbi, pm_inode)), get_pm_addr(sbi, pm_inode) & ~PAGE_MASK);
@@ -745,17 +754,20 @@ int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode
 int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_update_t *update)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    reclaim_dram_attr(mgr, sih);
-    if (!sih->latest_fop.latest_attr) {
-        sih->latest_fop.latest_attr = ref_attr_create(update->addr, sih->ino, update->from_pkg, update->dep_ofs);
+    if (!update->inline_update) {
+        reclaim_dram_attr(mgr, sih);
+        if (!sih->pack_spec.latest_fop.latest_attr) {
+            sih->pack_spec.latest_fop.latest_attr = ref_attr_create(update->addr, sih->ino, update->from_pkg, update->dep_ofs);
+        } else {
+            sih->pack_spec.latest_fop.latest_attr->hdr.addr = update->addr;
+            sih->pack_spec.latest_fop.latest_attr->from_pkg = update->from_pkg;
+            sih->pack_spec.latest_fop.latest_attr->dep_ofs = update->dep_ofs;
+        }
+        hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), ino=%d\n", get_pm_blk(sbi, get_pm_addr(sbi, update->addr)), get_pm_addr(sbi, update->addr) & ~PAGE_MASK, get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)), get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK, sih->ino);
     } else {
-        sih->latest_fop.latest_attr->hdr.addr = update->addr;
-        sih->latest_fop.latest_attr->from_pkg = update->from_pkg;
-        sih->latest_fop.latest_attr->dep_ofs = update->dep_ofs;
+        sih->pack_spec.latest_fop.latest_inline_attr = update->addr;
     }
     __update_dram_meta(sih, update);
-
-    hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), ino=%d\n", get_pm_blk(sbi, get_pm_addr(sbi, update->addr)), get_pm_addr(sbi, update->addr) & ~PAGE_MASK, get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)), get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK, sih->ino);
 
     return 0;
 }
@@ -768,7 +780,9 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     u32 ofs_blk = GET_ALIGNED_BLKNR(update->ofs);
     u32 num = update->num;
     int ret, i;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(data_claim_t, time);
     if (!update->build_from_exist) {
         /* handle data to obj mgr */
         ref = ref_data_create(update->addr, sih->ino, update->ofs, update->num, get_pm_blk_offset(sbi, update->blk));
@@ -791,6 +805,8 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     for (i = 0; i < num; i++) {
         linix_insert(&sih->ix, ofs_blk + i, ref, true);
     }
+    
+    HK_END_TIMING(data_claim_t, time);
     return 0;
 }
 
@@ -822,34 +838,17 @@ out:
     return ret;
 }
 
-static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type)
+static int reserve_pkg_space(obj_mgr_t *mgr, u64 *pm_addr, u16 m_alloc_type, u32 num)
 {
     struct hk_sb_info *sbi = mgr->sbi;
     struct super_block *sb = sbi->sb;
     struct hk_layout_info *layout;
-    u32 num = 0;
     u32 start_cpuid, cpuid, i;
     bool found = false;
     int ret = 0;
     INIT_TIMING(time);
 
     HK_START_TIMING(reserve_pkg_t, time);
-    switch (m_alloc_type) {
-    case TL_MTA_PKG_ATTR: /* fop: truncate operations */
-        num = MTA_PKG_ATTR_BLK;
-        break;
-    case TL_MTA_PKG_UNLINK: /* fop: unlink operations */
-        num = MTA_PKG_UNLINK_BLK;
-        break;
-    case TL_MTA_PKG_CREATE: /* fop: create/mkdir operations */
-        num = MTA_PKG_CREATE_BLK;
-        break;
-    case TL_MTA_PKG_DATA: /* I/O: write operations */
-        num = MTA_PKG_DATA_BLK;
-        break;
-    default:
-        break;
-    }
 
     start_cpuid = hk_get_cpuid(sb);
     for (i = 0; i < sbi->num_layout; i++) {
@@ -991,18 +990,8 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
         }
     }
 
-    hk_memunlock_range(sb, attr, sizeof(struct hk_obj_attr), &flags);
-    attr->ino = ino;
-    attr->i_mode = i_mode;
-    attr->i_atime = i_atime;
-    attr->i_ctime = i_ctime;
-    attr->i_mtime = i_mtime;
-    attr->i_size = i_size;
-    attr->i_uid = i_uid;
-    attr->i_gid = i_gid;
-    attr->i_links_count = i_links_count;
-
     if (attr_param->update) {
+        attr_param->update->ino = ino;
         attr_param->update->i_mode = i_mode;
         attr_param->update->i_atime = i_atime;
         attr_param->update->i_ctime = i_ctime;
@@ -1011,13 +1000,29 @@ void __fill_pm_attr(struct hk_sb_info *sbi, struct hk_obj_attr *attr, fill_param
         attr_param->update->i_uid = i_uid;
         attr_param->update->i_gid = i_gid;
         attr_param->update->i_links_count = i_links_count;
-        attr_param->update->addr = get_pm_offset(sbi, attr);
+        if (attr != NULL)
+            attr_param->update->addr = get_pm_offset(sbi, attr);
+        else
+            attr_param->update->addr = 0; /* we need to assign out side */
         attr_param->update->from_pkg = PKG_CREATE;
         attr_param->update->dep_ofs = 0;
+        attr_param->update->inline_update = false;
     }
 
-    __fill_pm_obj_hdr(sbi, &attr->hdr, OBJ_ATTR);
-    hk_memlock_range(sb, attr, sizeof(struct hk_obj_attr), &flags);
+    if (attr != NULL) {
+        hk_memunlock_range(sb, attr, sizeof(struct hk_obj_attr), &flags);
+        attr->ino = ino;
+        attr->i_mode = i_mode;
+        attr->i_atime = i_atime;
+        attr->i_ctime = i_ctime;
+        attr->i_mtime = i_mtime;
+        attr->i_size = i_size;
+        attr->i_uid = i_uid;
+        attr->i_gid = i_gid;
+        attr->i_links_count = i_links_count;
+        __fill_pm_obj_hdr(sbi, &attr->hdr, OBJ_ATTR);
+        hk_memlock_range(sb, attr, sizeof(struct hk_obj_attr), &flags);
+    }
 }
 
 typedef struct fill_dentry {
@@ -1045,16 +1050,72 @@ void __fill_pm_dentry(struct hk_sb_info *sbi, struct hk_obj_dentry *dentry, fill
 typedef struct fill_pkg_hdr {
     u16 type; /* this package type */
     union {
+        struct {
+            struct {
+                u64 i_size;
+                u16 i_links_count;
+                u32 i_cmtime;
+            } parent_attr;
+            struct {
+                u32 ino;    /* inode number */
+                u16 i_mode; /* File mode */
+                u32 i_uid;  /* Owner Uid */
+                u32 i_gid;  /* Group Id */
+            } attr;
+            u32 link; /* guarantee atomicity for partial package, point to another pkg */
+        } fill_create_hdr;
         /* for unlink operations */
         struct {
+            struct {
+                u64 i_size;
+                u16 i_links_count;
+                u32 i_cmtime;
+            } parent_attr;
             u32 unlinked_ino;
-        };
-        /* for rename */
-        struct {
-            u32 link;
-        };
+        } fill_unlink_hdr;
     };
 } fill_pkg_hdr_t;
+
+void __build_create_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_hdr_param,
+                                  attr_update_t *attr_update, attr_update_t *pattr_update)
+{
+    pkg_hdr_param->fill_create_hdr.attr.ino = attr_update->ino;
+    pkg_hdr_param->fill_create_hdr.attr.i_mode = attr_update->i_mode;
+    pkg_hdr_param->fill_create_hdr.attr.i_uid = attr_update->i_uid;
+    pkg_hdr_param->fill_create_hdr.attr.i_gid = attr_update->i_gid;
+
+    pkg_hdr_param->fill_create_hdr.parent_attr.i_size = pattr_update->i_size;
+    pkg_hdr_param->fill_create_hdr.parent_attr.i_links_count = pattr_update->i_links_count;
+    pkg_hdr_param->fill_create_hdr.parent_attr.i_cmtime = pattr_update->i_ctime;
+}
+
+void __assign_create_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_hdr_param, struct hk_pkg_hdr *pkg_hdr)
+{
+    pkg_hdr->create_hdr.parent_attr.i_size = pkg_hdr_param->fill_create_hdr.parent_attr.i_size;
+    pkg_hdr->create_hdr.parent_attr.i_links_count = pkg_hdr_param->fill_create_hdr.parent_attr.i_links_count;
+    pkg_hdr->create_hdr.parent_attr.i_cmtime = pkg_hdr_param->fill_create_hdr.parent_attr.i_cmtime;
+
+    pkg_hdr->create_hdr.attr.ino = pkg_hdr_param->fill_create_hdr.attr.ino;
+    pkg_hdr->create_hdr.attr.i_mode = pkg_hdr_param->fill_create_hdr.attr.i_mode;
+    pkg_hdr->create_hdr.attr.i_uid = pkg_hdr_param->fill_create_hdr.attr.i_uid;
+    pkg_hdr->create_hdr.attr.i_gid = pkg_hdr_param->fill_create_hdr.attr.i_gid;
+}
+
+void __build_unlink_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_hdr_param, attr_update_t *pattr_update, u32 unlinked_ino)
+{
+    pkg_hdr_param->fill_unlink_hdr.unlinked_ino = unlinked_ino;
+    pkg_hdr_param->fill_unlink_hdr.parent_attr.i_size = pattr_update->i_size;
+    pkg_hdr_param->fill_unlink_hdr.parent_attr.i_links_count = pattr_update->i_links_count;
+    pkg_hdr_param->fill_unlink_hdr.parent_attr.i_cmtime = pattr_update->i_ctime;
+}
+
+void __assign_unlink_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_hdr_param, struct hk_pkg_hdr *pkg_hdr)
+{
+    pkg_hdr->unlink_hdr.unlinked_ino = pkg_hdr_param->fill_unlink_hdr.unlinked_ino;
+    pkg_hdr->unlink_hdr.parent_attr.i_size = pkg_hdr_param->fill_unlink_hdr.parent_attr.i_size;
+    pkg_hdr->unlink_hdr.parent_attr.i_links_count = pkg_hdr_param->fill_unlink_hdr.parent_attr.i_links_count;
+    pkg_hdr->unlink_hdr.parent_attr.i_cmtime = pkg_hdr_param->fill_unlink_hdr.parent_attr.i_cmtime;
+}
 
 void __fill_pm_pkg_hdr(struct hk_sb_info *sbi, struct hk_pkg_hdr *pkg_hdr, fill_param_t *param)
 {
@@ -1067,13 +1128,15 @@ void __fill_pm_pkg_hdr(struct hk_sb_info *sbi, struct hk_pkg_hdr *pkg_hdr, fill_
     switch (pkg_hdr_param->type) {
     case PKG_DATA:
     case PKG_ATTR:
+        break;
     case PKG_CREATE:
+        __assign_create_pkg_hdr_param(sbi, pkg_hdr_param, pkg_hdr);
         break;
     case PKG_UNLINK:
-        pkg_hdr->unlink_hdr.unlinked_ino = pkg_hdr_param->unlinked_ino;
+        __assign_unlink_pkg_hdr_param(sbi, pkg_hdr_param, pkg_hdr);
         break;
     case PKG_RENAME:
-        pkg_hdr->rename_hdr.next = pkg_hdr_param->link;
+        pkg_hdr->rename_hdr.next = pkg_hdr_param->fill_create_hdr.link;
         break;
     default:
         break;
@@ -1121,7 +1184,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
 {
     u64 cur_addr;
     inode_mgr_t *inode_mgr = sbi->inode_mgr;
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     struct hk_obj_attr *attr, *pattr;
     struct hk_obj_dentry *obj_dentry;
     struct hk_obj_inode *obj_inode;
@@ -1134,6 +1197,9 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     u32 rdev = ((in_create_pkg_param_t *)(in_param->private))->rdev;
     u32 ino, parent_ino, orig_ino;
     int ret = 0;
+    INIT_TIMING(time);
+
+    HK_START_TIMING(new_inode_trans_t, time);
 
     if (strlen(name) > HK_NAME_LEN) {
         return -ENAMETOOLONG;
@@ -1154,7 +1220,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         break;
     }
 
-    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_CREATE);
+    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_CREATE, MTA_PKG_CREATE_BLK);
     if (ret) {
         goto out;
     }
@@ -1170,17 +1236,18 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         __fill_pm_inode_from_exist(sbi, obj_inode, &inode_update);
         cur_addr += OBJ_INODE_SIZE;
 
-        /* fill attr */
+        /* fill pseudo attr in DRAM for further update, but do not allocate in PM */
         attr_param.mode = mode;
+        attr_param.time = sih->i_ctime;
+        attr_param.gid = sih->i_gid;
+        attr_param.uid = sih->i_uid;
         attr_param.options = FILL_ATTR_EXIST | FILL_ATTR_INHERIT;
         attr_param.inherit = sih;
         attr_param.update = &attr_update;
 
         fill_param.ino = ino;
         fill_param.data = &attr_param;
-        attr = (struct hk_obj_attr *)cur_addr;
-        __fill_pm_attr(sbi, attr, &fill_param);
-        cur_addr += OBJ_ATTR_SIZE;
+        __fill_pm_attr(sbi, NULL, &fill_param);
     } else {
         if (create_type == CREATE_FOR_LINK)
             hk_dbgv("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
@@ -1194,8 +1261,11 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         __fill_pm_inode(sbi, obj_inode, ino, rdev, &inode_update);
         cur_addr += OBJ_INODE_SIZE;
 
-        /* fill attr */
+        /* fill pseudo attr in DRAM for further update, but do not allocate in PM */
         attr_param.mode = mode;
+        attr_param.time = sih->i_ctime;
+        attr_param.gid = sih->i_gid;
+        attr_param.uid = sih->i_uid;
         attr_param.options = FILL_ATTR_INIT;
         attr_param.inherit = NULL;
         attr_param.update = &attr_update;
@@ -1206,14 +1276,11 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
             fill_param.ino = ino;
 
         fill_param.data = &attr_param;
-        attr = (struct hk_obj_attr *)cur_addr;
-        __fill_pm_attr(sbi, attr, &fill_param);
-        cur_addr += OBJ_ATTR_SIZE;
+        __fill_pm_attr(sbi, NULL, &fill_param);
     }
 
-    /* fill parent attr */
+    /* fill pseudo parent attr in DRAM for further update, but do not allocate in PM */
     /* if it is root inode, there is no parent inode */
-    pattr = (struct hk_obj_attr *)cur_addr;
     if (psih) {
         attr_param.options = FILL_ATTR_EXIST | (FILL_ATTR_LINK_CHANGE | FILL_ATTR_SIZE_CHANGE);
         attr_param.link_change = 1;
@@ -1221,11 +1288,8 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         attr_param.inherit = psih;
         attr_param.update = &pattr_update;
         fill_param.data = &attr_param;
-        __fill_pm_attr(sbi, pattr, &fill_param);
-    } else {
-        memset_nt(pattr, 0, OBJ_ATTR_SIZE);
+        __fill_pm_attr(sbi, NULL, &fill_param);
     }
-    cur_addr += OBJ_ATTR_SIZE;
 
     /* fill dentry */
     parent_ino = psih ? psih->ino : 0;
@@ -1243,12 +1307,20 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     pkg_hdr = (struct hk_pkg_hdr *)cur_addr;
     if (in_param->partial) {
         pkg_hdr_param.type = in_param->wrapper_pkg_type;
-        pkg_hdr_param.link = in_param->next;
+        pkg_hdr_param.fill_create_hdr.link = in_param->next;
     } else {
         pkg_hdr_param.type = PKG_CREATE;
     }
+    __build_create_pkg_hdr_param(sbi, &pkg_hdr_param, &attr_update, &pattr_update);
     fill_param.data = &pkg_hdr_param;
     __fill_pm_pkg_hdr(sbi, pkg_hdr, &fill_param);
+
+    /* update attr_update/pattr_update addr */
+    attr_update.addr = get_pm_offset(sbi, pkg_hdr);
+    attr_update.inline_update = true;
+    pattr_update.addr = get_pm_offset(sbi, pkg_hdr);
+    pattr_update.inline_update = true;
+
     cur_addr += OBJ_PKGHDR_SIZE;
 
     /* flush + fence-once to commit the package */
@@ -1279,6 +1351,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     ret = obj_mgr_process_claim_request(obj_mgr, out_param->addr);
 
 out:
+    HK_END_TIMING(new_inode_trans_t, time);
     return ret;
 }
 
@@ -1288,22 +1361,24 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                       struct hk_inode_info_header *psih, obj_ref_dentry_t *ref,
                       in_pkg_param_t *in_param, out_pkg_param_t *out_param)
 {
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     inode_mgr_t *inode_mgr = sbi->inode_mgr;
     struct hk_obj_attr *pattr;
     attr_update_t pattr_update;
     fill_param_t fill_param;
     u64 cur_addr;
     int ret;
+    INIT_TIMING(time);
 
-    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_UNLINK);
+    HK_START_TIMING(new_unlink_trans_t, time);
+    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_UNLINK, MTA_PKG_UNLINK_BLK);
     if (ret) {
         goto out;
     }
 
     cur_addr = out_param->addr;
 
-    /* fill parent attr */
+    /* fill pseudo parent attr to prevent in-PM allocation */
     fill_attr_t attr_param = {
         .options = FILL_ATTR_EXIST | (FILL_ATTR_SIZE_CHANGE | FILL_ATTR_LINK_CHANGE),
         .inherit = psih,
@@ -1313,20 +1388,17 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     attr_param.size_change = -OBJ_DENTRY_SIZE;
     fill_param.ino = psih->ino;
     fill_param.data = &attr_param;
-    pattr = (struct hk_obj_attr *)cur_addr;
-    __fill_pm_attr(sbi, pattr, &fill_param);
-    cur_addr += OBJ_ATTR_SIZE;
+    __fill_pm_attr(sbi, NULL, &fill_param);
 
     /* fill pkg hdr */
     fill_pkg_hdr_t pkg_hdr_param;
     struct hk_pkg_hdr *pkg_hdr = (struct hk_pkg_hdr *)cur_addr;
     if (in_param->partial) {
         pkg_hdr_param.type = in_param->wrapper_pkg_type;
-        pkg_hdr_param.link = in_param->next;
     } else {
         pkg_hdr_param.type = PKG_UNLINK;
     }
-    pkg_hdr_param.unlinked_ino = sih->ino;
+    __build_unlink_pkg_hdr_param(sbi, &pkg_hdr_param, &pattr_update, sih->ino);
     fill_param.data = &pkg_hdr_param;
     __fill_pm_pkg_hdr(sbi, pkg_hdr, &fill_param);
     cur_addr += OBJ_PKGHDR_SIZE;
@@ -1336,7 +1408,8 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 
     /* handle dram updates */
     pattr_update.from_pkg = PKG_UNLINK;
-    pattr_update.dep_ofs = psih->latest_fop.latest_inode->hdr.addr;
+    pattr_update.dep_ofs = psih->pack_spec.latest_fop.latest_inode->hdr.addr;
+    pattr_update.inline_update = true;
     ur_dram_latest_attr(obj_mgr, psih, &pattr_update);
 
     /* remove existing create pkg */
@@ -1344,6 +1417,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 
     /* unload inode from imap when evict inode */
 out:
+    HK_END_TIMING(new_unlink_trans_t, time);
     return ret;
 }
 
@@ -1351,7 +1425,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     u64 data_addr, off_t offset, size_t size,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param)
 {
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     struct hk_obj_data *data;
     struct hk_inode_info *si;
     data_update_t data_update;
@@ -1362,7 +1436,10 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     INIT_TIMING(time);
 
     HK_START_TIMING(new_data_trans_t, time);
-    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA);
+    blk = get_pm_blk(sbi, data_addr);
+    num = (aligned_size >> HUNTER_BLK_SHIFT);
+
+    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, MTA_PKG_DATA_BLK);
     if (ret) {
         goto out;
     }
@@ -1370,9 +1447,9 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data = (struct hk_obj_data *)(out_param->addr);
 
     data->ino = sih->ino;
-    data->blk = blk = get_pm_blk(sbi, data_addr);
+    data->blk = blk;
     data->ofs = offset;
-    data->num = num = (aligned_size >> HUNTER_BLK_SHIFT);
+    data->num = num;
     data->i_cmtime = sih->i_ctime;
     data->i_size = size_after_write;
     if (in_param->partial) {
@@ -1406,14 +1483,14 @@ int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     int link_change, int size_change,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param)
 {
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     struct hk_obj_attr *attr;
     fill_attr_t attr_param;
     fill_param_t fill_param;
     attr_update_t attr_update;
     int ret = 0;
 
-    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_ATTR);
+    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_ATTR, MTA_PKG_ATTR_BLK);
     if (ret) {
         goto out;
     }
@@ -1443,7 +1520,7 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
 {
     in_pkg_param_t in_param;
     in_create_pkg_param_t in_create_param;
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
 
     in_create_param.create_type = CREATE_FOR_RENAME;
     in_create_param.new_ino = (u32)-1;
@@ -1466,7 +1543,7 @@ int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const
 {
     in_pkg_param_t in_param;
     in_create_pkg_param_t in_create_param;
-    obj_mgr_t *obj_mgr = sbi->obj_mgr;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     int ret = 0;
 
     in_create_param.new_ino = ino;

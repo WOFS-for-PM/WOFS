@@ -52,6 +52,7 @@ static_assert(sizeof(struct hk_inode) != PM_ACCESS_GRANU, "hk_inode size mismatc
 struct latest_fop_objs {
     obj_ref_inode_t *latest_inode;
     obj_ref_attr_t *latest_attr;
+    u64 latest_inline_attr;
 };
 
 /*
@@ -83,33 +84,16 @@ struct hk_inode_info_header {
         /* for lfs or local */
         struct {
             u64 pi_addr;          /* Exact hk_inode addr */
-            u64 last_setattr;     /* Last setattr entry */
             u64 last_link_change; /* Last link change entry */
             u64 last_dentry;      /* Last updated dentry */
             u64 tstamp;           /* Time stamp for Version Control */
             u64 h_addr;           /* First blk logic offset */
-        };
+        } norm_spec;
         /* for pack (write-once) */
         struct {
             struct latest_fop_objs latest_fop;
-        };
+        } pack_spec;
     };
-};
-
-/* For rebuild purpose, temporarily store pi infomation */
-struct hk_inode_rebuild {
-    u64 i_size;
-    u32 i_flags;       /* Inode flags */
-    u32 i_ctime;       /* Inode modification time */
-    u32 i_mtime;       /* Inode b-tree Modification time */
-    u32 i_atime;       /* Access time */
-    u32 i_uid;         /* Owner Uid */
-    u32 i_gid;         /* Group Id */
-    u32 i_generation;  /* File version (for NFS) */
-    u16 i_links_count; /* Links count */
-    u16 i_mode;        /* File mode */
-    u64 i_num_entrys;  /* Number of entries in this inode */
-    u64 tstamp;
 };
 
 /*
@@ -142,7 +126,7 @@ static inline struct hk_inode *hk_get_inode_by_ino(struct super_block *sb, u64 i
     if (ino >= HK_NUM_INO)
         return NULL;
 
-    return (struct hk_inode *)(sbi->ino_tab_addr + ino * sizeof(struct hk_inode));
+    return (struct hk_inode *)(sbi->norm_layout.ino_tab_addr + ino * sizeof(struct hk_inode));
 }
 
 static inline struct hk_inode *hk_get_inode(struct super_block *sb,
@@ -154,7 +138,7 @@ static inline struct hk_inode *hk_get_inode(struct super_block *sb,
     void *addr;
     int rc;
 
-    addr = sih->pi_addr;
+    addr = sih->norm_spec.pi_addr;
     rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct hk_inode));
     if (rc)
         return NULL;

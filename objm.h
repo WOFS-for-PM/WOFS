@@ -5,7 +5,7 @@
  *
  * This file is part of hunter-userspace.
  *
- * hunter-userspace is free software: you can redistribute it and/or modify
+ * hunter-kernel is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
@@ -24,8 +24,8 @@
  *
  * typedef enum
  * {
- *   PKG_CREATE,  |Inode(64B)|AttrChange(64B)|AttrChangeParent(64B)|Dentry(128B)|PKG(64B)| (6 MetaEntry)
- *   PKG_UNLINK,  |AttrChangeParent(64B)|PKG(64B with unlink_spec)| (2 MetaEntry)
+ *   PKG_CREATE,  |Inode(64B)|Dentry(128B)|PKG(64B with pattr/attr Changing)| (4 MetaEntry)
+ *   PKG_UNLINK,  |PKG(64B with unlink_spec)| (1 MetaEntry)
  *   PKG_RENAME,  |PKG_CREATE|->|PKG_UNLINK|
  *   PKG_SYMLINK, |PKG_CREATE|->|PKG_DATA|
  *   PKG_TYPE_NUM
@@ -66,6 +66,24 @@ typedef enum {
     PKG_TYPE_NUM
 } HUNT_PKG_TYPE;
 
+struct create_spec_hdr {
+    /* parent attr */
+    struct {
+        u64 i_size;
+        u16 i_links_count;
+        u32 i_cmtime;
+    } parent_attr;
+    /* attr */
+    struct {
+        u32 ino;    /* inode number */
+        u16 i_mode; /* File mode */
+        u32 i_uid;  /* Owner Uid */
+        u32 i_gid;  /* Group Id */
+    } attr;
+} __attribute__((__packed__));
+
+static_assert(sizeof(struct create_spec_hdr) <= 56);
+
 struct rename_spec_hdr {
     u64 next;  /* next package's offset. From CREATE to UNLINK */
     u32 valid; /* valid flag, one of the pair should hold this */
@@ -74,6 +92,12 @@ struct rename_spec_hdr {
 static_assert(sizeof(struct rename_spec_hdr) <= 56);
 
 struct unlink_spec_hdr {
+    /* parent attr */
+    struct {
+        u64 i_size;
+        u16 i_links_count;
+        u32 i_cmtime;
+    } parent_attr;
     u32 unlinked_ino;
 } __attribute__((__packed__));
 
@@ -100,6 +124,7 @@ struct hk_pkg_hdr {
     struct hk_obj_hdr hdr;
     u16 pkg_type;
     union {
+        struct create_spec_hdr create_hdr;
         struct unlink_spec_hdr unlink_hdr;
         struct rename_spec_hdr rename_hdr;
         u8 reserved[34];
@@ -262,16 +287,19 @@ typedef struct obj_mgr {
 
 typedef struct attr_update {
     u64 addr;          /* In-PM attr offset */
-    u16 from_pkg;      /* From which pkg */
     u64 dep_ofs;       /* If from_pkg is UNLINK, then dep_ofs points the CREATE pkg */
-    u16 i_mode;        /* File mode */
     u32 i_uid;         /* Owner Uid */
     u32 i_gid;         /* Group Id */
     u32 i_ctime;       /* Inode modification time */
     u32 i_mtime;       /* Inode Modification time */
     u32 i_atime;       /* Access time */
+    u32 ino;
     u64 i_size;        /* File size after truncation */
+    u16 i_mode;        /* File mode */
+    u16 from_pkg;      /* From which pkg */
     u16 i_links_count; /* Links count if i_links_count == 0, it is a removed entry */
+    /* We might do not need this. */
+    u8 inline_update;  /* is this an inline attr? */
 } attr_update_t;
 
 typedef struct data_update {
@@ -326,8 +354,8 @@ typedef struct out_create_pkg_param {
 
 #define MTA_PKG_DATA_BLK   (OBJ_DATA_SIZE >> HUNTER_MTA_SHIFT)
 #define MTA_PKG_ATTR_BLK   (OBJ_ATTR_SIZE >> HUNTER_MTA_SHIFT)
-#define MTA_PKG_CREATE_BLK ((OBJ_INODE_SIZE + 2 * OBJ_ATTR_SIZE + OBJ_DENTRY_SIZE + OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
-#define MTA_PKG_UNLINK_BLK ((OBJ_ATTR_SIZE + OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
+#define MTA_PKG_CREATE_BLK ((OBJ_INODE_SIZE + OBJ_DENTRY_SIZE + OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
+#define MTA_PKG_UNLINK_BLK ((OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
 
 #define MTA_PKG_DATA_SIZE   (MTA_PKG_DATA_BLK << HUNTER_MTA_SHIFT)
 #define MTA_PKG_ATTR_SIZE   (MTA_PKG_ATTR_BLK << HUNTER_MTA_SHIFT)
@@ -351,10 +379,10 @@ static inline int get_pkg_hdr(u64 pkg_start, u16 pkg_type, u64 *pkg_hdr)
     case PKG_RENAME:
         break;
     case PKG_CREATE:
-        *pkg_hdr = pkg_start + OBJ_INODE_SIZE + 2 * OBJ_ATTR_SIZE + OBJ_DENTRY_SIZE;
+        *pkg_hdr = pkg_start + OBJ_INODE_SIZE + OBJ_DENTRY_SIZE;
         break;
     case PKG_UNLINK:
-        *pkg_hdr = pkg_start + OBJ_ATTR_SIZE;
+        *pkg_hdr = pkg_start;
         break;
     default:
         break;

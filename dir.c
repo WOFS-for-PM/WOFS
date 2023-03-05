@@ -34,7 +34,7 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
         hash_for_each(psih->dirs, bkt, ref_dentry, hnode)
         {
             obj_dentry = (struct hk_obj_dentry *)get_pm_addr(sbi, ref_dentry->hdr.addr);
-            sih = obj_mgr_get_imap_inode(sbi->obj_mgr, ref_dentry->target_ino);
+            sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ref_dentry->target_ino);
             if (!dir_emit(ctx, obj_dentry->name, strlen(obj_dentry->name),
                           sih->ino,
                           IF2DT(sih->i_mode))) {

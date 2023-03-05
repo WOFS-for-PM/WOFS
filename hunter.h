@@ -573,7 +573,7 @@ static u64 inline get_pm_blk(struct hk_sb_info *sbi, u64 addr)
 
 static u64 inline get_layout_idx(struct hk_sb_info *sbi, u64 offset)
 {
-	u64 idx = (offset - get_pm_offset(sbi, sbi->fs_start)) / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
+	u64 idx = (offset - get_pm_offset(sbi, sbi->pack_layout.fs_start)) / (sbi->per_layout_blks << HUNTER_BLK_SHIFT);
     return idx >= sbi->num_layout ? sbi->num_layout - 1 : idx;
 }
 
@@ -661,25 +661,25 @@ static inline void unuse_layout_for_hdr(struct super_block *sb, u64 hdr)
 static inline void use_journal(struct super_block *sb, int txid)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_lock(&sbi->j_locks[txid]);
+	mutex_lock(&sbi->norm_layout.j_locks[txid]);
 }
 
 static inline void unuse_journal(struct super_block *sb, int txid)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_unlock(&sbi->j_locks[txid]);
+	mutex_unlock(&sbi->norm_layout.j_locks[txid]);
 }
 
 static inline void use_nvm_inode(struct super_block *sb, u64 ino)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_lock(&sbi->irange_locks[ino % sbi->cpus]);
+	mutex_lock(&sbi->norm_layout.irange_locks[ino % sbi->cpus]);
 }
 
 static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_unlock(&sbi->irange_locks[ino % sbi->cpus]);
+	mutex_unlock(&sbi->norm_layout.irange_locks[ino % sbi->cpus]);
 }
 
 static inline void hk_sync_super(struct super_block *sb)

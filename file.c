@@ -169,7 +169,6 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
 
     HK_START_TIMING(partial_block_t, partial_time);
     is_overlay = hk_check_overlay(si, index);
-    HK_END_TIMING(partial_block_t, partial_time);
 
     if (ENABLE_META_PACK(sb)) {
         if (is_overlay) {
@@ -261,6 +260,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
         }
     }
 
+    HK_END_TIMING(partial_block_t, partial_time);
     return is_overlay;
 }
 

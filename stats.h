@@ -108,6 +108,8 @@ enum timing_category {
 	perf_t,
 	wprotect_t,
 	bm_search_t,
+	process_claim_req_t,
+	data_claim_t,
 
 	/* Mmap */
 	mmap_title_t,

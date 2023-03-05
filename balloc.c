@@ -3,17 +3,17 @@
 u64 get_version(struct hk_sb_info *sbi)
 {
     u64 tstamp;
-    spin_lock(&sbi->ts_lock);
-    tstamp = sbi->tstamp;
-    spin_unlock(&sbi->ts_lock);
+    spin_lock(&sbi->norm_layout.ts_lock);
+    tstamp = sbi->norm_layout.tstamp;
+    spin_unlock(&sbi->norm_layout.ts_lock);
     return tstamp;
 }
 
 int up_version(struct hk_sb_info *sbi)
 {
-    spin_lock(&sbi->ts_lock);
-    sbi->tstamp++;
-    spin_unlock(&sbi->ts_lock);
+    spin_lock(&sbi->norm_layout.ts_lock);
+    sbi->norm_layout.tstamp++;
+    spin_unlock(&sbi->norm_layout.ts_lock);
     return 0;
 }
 
@@ -30,7 +30,7 @@ int hk_find_gaps(struct super_block *sb, int cpuid)
         return -1;
     }
 
-    hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+    hk_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
     traverse_layout_blks_reverse(addr, layout)
     {
         hdr = sm_get_hdr_by_addr(sb, addr);
@@ -45,7 +45,7 @@ int hk_find_gaps(struct super_block *sb, int cpuid)
             break;
         }
     }
-    hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+    hk_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
     PERSISTENT_BARRIER();
     return 0;
 }

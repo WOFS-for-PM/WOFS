@@ -84,6 +84,8 @@ const char *Timingstring[TIMING_NUM] = {
 	"test_perf",
 	"wprotect",
 	"bitmap_find_free",
+	"process_reclaim_request",
+	"data_claim",
 
 	/* Mmap */
 	"=============== MMap operations ================",

@@ -449,7 +449,7 @@ static inline void hk_umount_over(struct super_block *sb)
     } else {
         struct hk_normal_data *nd;
         nd = (struct hk_normal_data *)(sbi->hk_sb + sizeof(struct hk_super_block));
-        nd->s_tstamp = sbi->tstamp;
+        nd->s_tstamp = sbi->norm_layout.tstamp;
     }
     sbi->hk_sb->s_valid_umount = cpu_to_le32(HK_VALID_UMOUNT);
     hk_update_super_crc(sb);
@@ -533,7 +533,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
         create_param.private = &in_create_param;
         out_param.private = &out_create_param;
         create_param.partial = false;
-        ret = create_new_inode_pkg(sbi, cpu_to_le16(sbi->mode | S_IFDIR), "/", sbi->rih, NULL, &create_param, &out_param);
+        ret = create_new_inode_pkg(sbi, cpu_to_le16(sbi->mode | S_IFDIR), "/", sbi->pack_layout.rih, NULL, &create_param, &out_param);
 
         if (ret) {
             hk_err(sb, "Create root inode failed\n");
@@ -630,10 +630,10 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     sbi->lblk_sz = PAGE_SIZE;
     if (ENABLE_META_PACK(sb)) {
         sbi->pblk_sz = PAGE_SIZE;
-        sbi->m_addr = sbi->bm_start = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
-        sbi->tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
-        sbi->m_size = sbi->bm_size = hk_get_bm_size(sb);
-        sbi->fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
+        sbi->m_addr = sbi->pack_layout.bm_start = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
+        sbi->pack_layout.tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
+        sbi->m_size = sbi->pack_layout.bm_size = hk_get_bm_size(sb);
+        sbi->pack_layout.fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
     } else {
         sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
 
@@ -641,35 +641,35 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
         sbi->m_addr = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
 
         /* Build Inode Table */
-        sbi->ino_tab_addr = sbi->m_addr;
-        sbi->ino_tab_slots = HK_NUM_INO;
-        sbi->ino_tab_size = _round_up(sbi->ino_tab_slots * sizeof(struct hk_inode), PAGE_SIZE);
+        sbi->norm_layout.ino_tab_addr = sbi->m_addr;
+        sbi->norm_layout.ino_tab_slots = HK_NUM_INO;
+        sbi->norm_layout.ino_tab_size = _round_up(sbi->norm_layout.ino_tab_slots * sizeof(struct hk_inode), PAGE_SIZE);
 
         /* Build Summary Header */
-        sbi->sm_addr = sbi->ino_tab_addr + sbi->ino_tab_size;
+        sbi->norm_layout.sm_addr = sbi->norm_layout.ino_tab_addr + sbi->norm_layout.ino_tab_size;
         if (ENABLE_META_LOCAL(sb)) {
-            sbi->sm_slots = sbi->initsize / HK_PBLK_SZ(sbi);
-            sbi->sm_size = _round_up(sbi->sm_slots * sizeof(struct hk_header), PAGE_SIZE);
+            sbi->norm_layout.sm_slots = sbi->initsize / HK_PBLK_SZ(sbi);
+            sbi->norm_layout.sm_size = _round_up(sbi->norm_layout.sm_slots * sizeof(struct hk_header), PAGE_SIZE);
         } else {
-            sbi->sm_slots = 0;
-            sbi->sm_size = 0;
+            sbi->norm_layout.sm_slots = 0;
+            sbi->norm_layout.sm_size = 0;
         }
 
         /* Build Journal */
-        sbi->j_addr = sbi->sm_addr + sbi->sm_size;
-        sbi->j_slots = sbi->cpus * HK_PERCORE_JSLOTS;
-        sbi->j_size = _round_up(sbi->j_slots * HK_JOURNAL_SIZE, PAGE_SIZE);
-        sbi->j_locks = kcalloc(sbi->j_slots, sizeof(struct mutex), GFP_KERNEL);
-        for (i = 0; i < sbi->j_slots; i++)
-            mutex_init(&sbi->j_locks[i]);
+        sbi->norm_layout.j_addr = sbi->norm_layout.sm_addr + sbi->norm_layout.sm_size;
+        sbi->norm_layout.j_slots = sbi->cpus * HK_PERCORE_JSLOTS;
+        sbi->norm_layout.j_size = _round_up(sbi->norm_layout.j_slots * HK_JOURNAL_SIZE, PAGE_SIZE);
+        sbi->norm_layout.j_locks = kcalloc(sbi->norm_layout.j_slots, sizeof(struct mutex), GFP_KERNEL);
+        for (i = 0; i < sbi->norm_layout.j_slots; i++)
+            mutex_init(&sbi->norm_layout.j_locks[i]);
 
         /* Build Meta Region */
-        sbi->rg_addr = sbi->j_addr + sbi->j_size;
-        sbi->rg_slots = HK_RG_SLOTS > HK_NUM_INO ? HK_NUM_INO : HK_RG_SLOTS;
-        sbi->rg_size = _round_up(sbi->rg_slots * sizeof(struct hk_mregion), PAGE_SIZE);
+        sbi->norm_layout.rg_addr = sbi->norm_layout.j_addr + sbi->norm_layout.j_size;
+        sbi->norm_layout.rg_slots = HK_RG_SLOTS > HK_NUM_INO ? HK_NUM_INO : HK_RG_SLOTS;
+        sbi->pack_layout.obj_mgr = _round_up(sbi->norm_layout.rg_slots * sizeof(struct hk_mregion), PAGE_SIZE);
 
         /* Calc Meta Size and Data Size */
-        sbi->m_size = _round_up(sbi->rg_addr - sbi->m_addr + sbi->rg_size, PAGE_SIZE);
+        sbi->m_size = _round_up(sbi->norm_layout.rg_addr - sbi->m_addr + sbi->pack_layout.obj_mgr, PAGE_SIZE);
     }
 
     sbi->d_addr = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
@@ -683,7 +683,7 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
 static int hk_super_constants_init_exit(struct hk_sb_info *sbi)
 {
     if (ENABLE_META_LOCAL(sbi->sb))
-        kfree(sbi->j_locks);
+        kfree(sbi->norm_layout.j_locks);
     return 0;
 }
 
@@ -703,25 +703,25 @@ static int hk_features_init(struct hk_sb_info *sbi)
     
     if (ENABLE_META_PACK(sb)) {
         /* zero out vtail */
-        atomic64_and(0, &sbi->vtail);
-        sbi->obj_mgr = (struct obj_mgr *)kmalloc(sizeof(struct obj_mgr), GFP_KERNEL);
-        if (!sbi->obj_mgr) {
+        atomic64_and(0, &sbi->pack_layout.vtail);
+        sbi->pack_layout.obj_mgr = (struct obj_mgr *)kmalloc(sizeof(struct obj_mgr), GFP_KERNEL);
+        if (!sbi->pack_layout.obj_mgr) {
             inode_mgr_destroy(sbi->inode_mgr);
             return -ENOMEM;
         }
-        ret = obj_mgr_init(sbi, sbi->cpus, sbi->obj_mgr);
+        ret = obj_mgr_init(sbi, sbi->cpus, sbi->pack_layout.obj_mgr);
         if (ret) {
             inode_mgr_destroy(sbi->inode_mgr);
             return ret;
         }
     } else
     {    
-        sbi->irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
+        sbi->norm_layout.irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
         for (i = 0; i < sbi->cpus; i++)
-            mutex_init(&sbi->irange_locks[i]);
+            mutex_init(&sbi->norm_layout.irange_locks[i]);
         /* Version Related */
-        sbi->tstamp = 0;
-        spin_lock_init(&sbi->ts_lock);
+        sbi->norm_layout.tstamp = 0;
+        spin_lock_init(&sbi->norm_layout.ts_lock);
     }
 
     /* Background Commit Related */
@@ -744,9 +744,9 @@ static int hk_features_exit(struct hk_sb_info *sbi)
     struct super_block *sb = sbi->sb;
 
     if (ENABLE_META_PACK(sb)) {
-        obj_mgr_destroy(sbi->obj_mgr);
+        obj_mgr_destroy(sbi->pack_layout.obj_mgr);
     } else {
-        kfree(sbi->irange_locks);
+        kfree(sbi->norm_layout.irange_locks);
     }
 
     inode_mgr_destroy(sbi->inode_mgr);
@@ -762,13 +762,13 @@ static int hk_misc_init(struct hk_sb_info *sbi)
     void *hk_sb;
 
     sbi->hk_sb->s_private_data = sizeof(struct hk_super_block);
-    sbi->rih = NULL;
+    sbi->pack_layout.rih = NULL;
     if (ENABLE_META_PACK(sb)) {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_pack_data);
-        sbi->rih = hk_alloc_hk_inode_info_header();
-        if (!sbi->rih)
+        sbi->pack_layout.rih = hk_alloc_hk_inode_info_header();
+        if (!sbi->pack_layout.rih)
             return -ENOMEM;
-        hk_init_header(sb, sbi->rih, S_IFPSEUDO);
+        hk_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
     } else {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_normal_data);
     }

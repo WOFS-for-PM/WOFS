@@ -354,7 +354,7 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pi = NULL;
     unsigned long irq_flags = 0;
-    int ret;
+    int ret = 0;
 
     if (ENABLE_META_PACK(sb)) {
 		BUG_ON(sih);

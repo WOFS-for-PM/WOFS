@@ -727,7 +727,6 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         goto fail2;
     }
     
-
     inode_init_owner(inode, dir, mode);
     inode->i_blocks = inode->i_size = 0;
     inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
@@ -772,7 +771,6 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
     i_flags = hk_mask_flags(mode, dir->i_flags);
     si = HK_I(inode);
     sih = si->header;
-
     if (!sih) {
         sih = hk_alloc_hk_inode_info_header();
         if (!sih) {

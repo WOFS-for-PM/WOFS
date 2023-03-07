@@ -49,12 +49,13 @@ const char *Timingstring[TIMING_NUM] = {
 	"============== Memory management ===============",
 	"alloc_blocks",
 	"new_data_blocks",
-	"new_log_blocks",
 	"free_blocks",
 	"free_data_blocks",
 	"free_log_blocks",
 	"reserve_pkg",
 	"reserve_pkg_in_layout",
+	"tl_alloc_meta",
+	"tl_alloc_blk",
 
 	/* Transaction */
 	"================= Transaction ==================",

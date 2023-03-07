@@ -27,7 +27,7 @@
 #define UINT64_BITS 64
 
 /* max supply for consecutive 8 bits */
-const u64 bm64_consecutive_masks[8][64] = {
+static const u64 bm64_consecutive_masks[8][64] = {
     /* 1 */
     {
         0x0000000000000001, 0x0000000000000002, 0x0000000000000004, 0x0000000000000008,
@@ -283,13 +283,14 @@ static inline int tl_node_compare(void *a, void *b)
     return key_a - key_b;
 }
 
-int tl_tree_insert_node(struct rb_root *tree, tl_node_t *new_node)
+static int tl_tree_insert_node(struct rb_root_cached *tree, tl_node_t *new_node)
 {
     tl_node_t *curr;
     struct rb_node **temp, *parent;
     int compVal;
+    bool left_most = true;
 
-    temp = &(tree->rb_node);
+    temp = &(tree->rb_root.rb_node);
     parent = NULL;
 
     while (*temp) {
@@ -301,6 +302,7 @@ int tl_tree_insert_node(struct rb_root *tree, tl_node_t *new_node)
             temp = &((*temp)->rb_left);
         } else if (compVal > 0) {
             temp = &((*temp)->rb_right);
+            left_most = false;
         } else {
             hk_dbg("%s: node %lu - %lu already exists: "
                    "%lu - %lu\n",
@@ -311,7 +313,7 @@ int tl_tree_insert_node(struct rb_root *tree, tl_node_t *new_node)
     }
 
     rb_link_node(&new_node->node, parent, temp);
-    rb_insert_color(&new_node->node, tree);
+    rb_insert_color_cached(&new_node->node, tree, left_most);
 
     return 0;
 }
@@ -323,7 +325,7 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
     tl_node_t *node;
     u64 blk = alloc->rng.high - alloc->rng.low + 1, i;
 
-    data_mgr->free_tree = RB_ROOT;
+    data_mgr->free_tree = RB_ROOT_CACHED;
     spin_lock_init(&data_mgr->spin);
     node = tl_create_node();
     node->blk = alloc->rng.low;
@@ -357,7 +359,7 @@ int tl_alloc_init(tl_allocator_t *alloc, int cpuid, u64 blk, u64 num, u32 blk_si
     return 0;
 }
 
-bool __tl_try_find_avail_data_blks(void *key, void *value, void *data)
+static bool __tl_try_find_avail_data_blks(void *key, void *value, void *data)
 {
     tlalloc_param_t *param = data;
     tl_node_t *node = value;
@@ -376,7 +378,7 @@ bool __tl_try_find_avail_data_blks(void *key, void *value, void *data)
 }
 
 #define tl_traverse_tree(tree, temp, node) \
-    for (temp = rb_first(tree), node = rb_entry(temp, tl_node_t, node); temp; temp = rb_next(temp))
+    for (temp = rb_first_cached(tree), node = rb_entry(temp, tl_node_t, node); temp; temp = rb_next(temp))
 
 /* alloc as many as possible */
 s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
@@ -390,6 +392,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
     s32 entrynr = -1;
     s32 ret = 0;
     u8 i;
+    INIT_TIMING(time);
 
     if (TL_ALLOC_TYPE(flags) == TL_BLK) {
         spin_lock(&data_mgr->spin);
@@ -401,7 +404,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
         }
         if (param->_ret_node) {
             if (param->_ret_node->dnode.num == 0) {
-                rb_erase(&param->_ret_node->node, &data_mgr->free_tree);
+                rb_erase_cached(&param->_ret_node->node, &data_mgr->free_tree);
                 tl_free_node(param->_ret_node);
             }
             spin_unlock(&data_mgr->spin);
@@ -411,6 +414,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
             goto out;
         }
     } else if (TL_ALLOC_TYPE(flags) == TL_MTA) {
+        HK_START_TIMING(tl_alloc_meta_t, time);
         typed_meta_mgr_t *tmeta_mgr;
         u8 idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
@@ -433,6 +437,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
                     list_del(&node->list);
                 }
                 spin_unlock(&tmeta_mgr->spin);
+                HK_END_TIMING(tl_alloc_meta_t, time);
                 return 0;
             }
         }
@@ -464,7 +469,7 @@ out:
     return ret;
 }
 
-bool __tl_try_insert_data_blks(void *key, void *value, void *data)
+static bool __tl_try_insert_data_blks(void *key, void *value, void *data)
 {
     tlfree_param_t *param = data;
     tl_node_t *node = value;
@@ -576,7 +581,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
     }
 }
 
-bool __tl_try_restore_data_blks(void *key, void *value, void *data)
+static bool __tl_try_restore_data_blks(void *key, void *value, void *data)
 {
     tlrestore_param_t *param = data;
     tl_node_t *node = value;
@@ -622,7 +627,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
         {
             node = list_entry(pos, tl_node_t, list);
             if (blk <= node->blk && blk + num >= node->blk + node->dnode.num) {
-                rb_erase(&node->node, &data_mgr->free_tree);
+                rb_erase_cached(&node->node, &data_mgr->free_tree);
                 tl_free_node(node);
             } else if (blk <= node->blk && blk + num < node->blk + node->dnode.num) {
                 node->blk = blk + num;
@@ -695,11 +700,11 @@ void tl_destory(tl_allocator_t *alloc)
     int bkt, i;
 
     /* destroy data node */
-    temp = rb_first(&data_mgr->free_tree);
+    temp = rb_first_cached(&data_mgr->free_tree);
     while (temp) {
         cur = container_of(temp, tl_node_t, node);
         temp = rb_next(temp);
-        rb_erase(&cur->node, &data_mgr->free_tree);
+        rb_erase_cached(&cur->node, &data_mgr->free_tree);
         tl_free_node(cur);
     }
 
@@ -722,14 +727,14 @@ void tl_destory(tl_allocator_t *alloc)
     }
 }
 
-bool __tl_dump_dnode(void *key, void *value, void *data)
+static bool __tl_dump_dnode(void *key, void *value, void *data)
 {
     tl_node_t *node = value;
     hk_info("[dnode]: start at %lu, end at %lu, len %lu\n", node->blk, node->blk + node->dnode.num - 1, node->dnode.num);
     return false;
 }
 
-bool __tl_dump_mnode(void *key, void *value, void *data)
+static bool __tl_dump_mnode(void *key, void *value, void *data)
 {
     tl_node_t *node = value;
     hk_info("[mnode]: block %lu, alloc bitmap: 0x%lx\n", node->blk, node->mnode.bm);

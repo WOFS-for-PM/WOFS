@@ -1,13 +1,18 @@
 # TODO List
-- [ ] Detect Memory Consumption
-- [ ] *Pass fill_param to __fill_in_pm_inode
+- [ ] Pass fill_param to __fill_in_pm_inode
 - [ ] *Pass out in-DRAM object
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
-- [ ] Reduce NEW_INODE_PKG Size
-- [ ] Optimize Unlink Operation
+- [ ] Using memcpy to dump packages.
 
-# 2023/3/4 ~ :
+# 2023/3/6 ~ 2023/3/7: Some Optimizations
+- [x] Simplify create operation.
+- [x] Replace rbtree with rbtree_cached to prevent overheads of `rbfirst()`.
+
+# 2023/3/4 ~ 2023/3/5: Optimizing Metadata Size
 - [x] Add param name for anonymous struct
+- [x] Reduce NEW_INODE_PKG Size
+- [x] Optimize Unlink Operation
+- [x] Detect Memory Consumption
 
 # 2023/2/26 ~ 2023/2/28: FIO/Filebench Test
 - [x] Measure the Performance of FIO & Filebench. 

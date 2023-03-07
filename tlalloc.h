@@ -112,7 +112,7 @@ typedef struct tl_node {
 } tl_node_t;
 
 typedef struct data_mgr {
-    struct rb_root free_tree;
+    struct rb_root_cached free_tree;
     spinlock_t spin;
 } data_mgr_t;
 

@@ -73,12 +73,13 @@ enum timing_category {
 	mm_title_t,
 	new_blocks_t,
 	new_data_blocks_t,
-	new_log_blocks_t,
 	free_blocks_t,
 	free_data_t,
 	free_log_t,
 	reserve_pkg_t,
 	reserve_pkg_in_layout_t,
+	tl_alloc_meta_t,
+	tl_alloc_blk_t,
 
 	/* Transaction */
 	trans_title_t,
@@ -198,8 +199,8 @@ typedef struct timespec timing_t;
 		__this_cpu_add(Timingstats_percpu[name], \
 			(end.tv_sec - start.tv_sec) * 1000000000 + \
 			(end.tv_nsec - start.tv_nsec)); \
+		__this_cpu_add(Countstats_percpu[name], 1); \
 	} \
-	__this_cpu_add(Countstats_percpu[name], 1); \
 	}
 
 #define HK_STATS_ADD(name, value) \

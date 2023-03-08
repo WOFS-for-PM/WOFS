@@ -63,7 +63,7 @@ struct hk_inode_info_header {
     struct hk_inode_info *si;
     u32 ino;
     struct linix ix;                        /* Linear Index for blks in use */
-    DECLARE_HASHTABLE(dirs, HK_HASH_BITS3); /* Hash table for dirs */
+    DECLARE_HASHTABLE(dirs, HK_HASH_BITS7); /* Hash table for dirs */
     u64 i_num_dentrys;                      /* Dentrys tail */
     struct rb_root vma_tree;                /* Write vmas */
     struct list_head list;                  /* SB list of mmap sih */

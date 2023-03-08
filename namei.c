@@ -108,7 +108,9 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
     struct hlist_node *tmp;
     unsigned long hash;
     int is_find = 0;
-    
+    int searches = 0;
+    INIT_TIMING(time);
+
     hash = BKDRHash(name, namelen);
 
     if (ENABLE_META_PACK(sb)) {
@@ -118,6 +120,7 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
 
         hash_for_each_possible_safe(sih->dirs, ref_dentry, tmp, hnode, hash)
         {
+            searches++;
             if (ref_dentry->hash != hash)
                 continue;
             dentry = get_pm_addr(sbi, ref_dentry->hdr.addr);
@@ -149,7 +152,9 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
             }
         }
     }
-
+    if (searches > 500) {
+        hk_warn("%s: Too many entry under the same entries %d\n", __func__, searches);
+    }
     return is_find ? 0 : -ENOENT;
 }
 

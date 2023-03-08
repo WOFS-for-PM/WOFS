@@ -67,7 +67,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
     end_index = (isize - 1) >> PAGE_SHIFT;
 
     do {
-        unsigned long nr, left;
+        unsigned long nr, left, i;
         unsigned long blk_addr;
         void *dax_mem = NULL;
         bool zero = false;
@@ -110,6 +110,10 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         hk_dbgv("%s: index: %d, blk_addr: 0x%llx, dax_mem: 0x%llx, zero: %d, nr: 0x%lx\n", __func__, index, blk_addr, dax_mem, zero, nr);
 
         if (!zero) {
+            /* prefetch per 256 */
+            for (i = 0; i < nr; i += 256) {
+                prefetcht2(dax_mem + offset + i);
+            }
             left = __copy_to_user(buf + copied,
                                   dax_mem + offset, nr);
         } else {

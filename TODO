@@ -4,9 +4,12 @@
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
 - [ ] Using memcpy to dump packages.
 
-# 2023/3/6 ~ 2023/3/7: Some Optimizations
+# 2023/3/6 ~ 2023/3/8: Some Optimizations
 - [x] Simplify create operation.
 - [x] Replace rbtree with rbtree_cached to prevent overheads of `rbfirst()`.
+- [x] Using memcpy to dump CREATE_PACKAGE.
+- [x] Reduce ref_data size
+- [x] Adaptive I/O in the write Path.
 
 # 2023/3/4 ~ 2023/3/5: Optimizing Metadata Size
 - [x] Add param name for anonymous struct

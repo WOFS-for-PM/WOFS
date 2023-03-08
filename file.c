@@ -67,7 +67,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
     end_index = (isize - 1) >> PAGE_SHIFT;
 
     do {
-        unsigned long nr, left, i;
+        unsigned long nr, left, i, j, iter, remain;
         unsigned long blk_addr;
         void *dax_mem = NULL;
         bool zero = false;
@@ -110,12 +110,29 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         hk_dbgv("%s: index: %d, blk_addr: 0x%llx, dax_mem: 0x%llx, zero: %d, nr: 0x%lx\n", __func__, index, blk_addr, dax_mem, zero, nr);
 
         if (!zero) {
-            /* prefetch per 256 */
-            for (i = 0; i < nr; i += 256) {
-                prefetcht2(dax_mem + offset + i);
+            iter = nr & ~0x3fff;
+            remain = nr & 0x3fff;
+            for (i = 0; i < iter; i += 16384) {
+                for (j = i; j < (i + 16384); j += 256) {
+                    prefetcht2(dax_mem + offset + j);
+                }
+                left = __copy_to_user(buf + copied + i,
+                                      dax_mem + offset + i, 16384);
             }
-            left = __copy_to_user(buf + copied,
-                                  dax_mem + offset, nr);
+            if (remain) {
+                for (i = iter; i < nr; i += 256) {
+                    prefetcht2(dax_mem + offset + i);
+                }
+                left = __copy_to_user(buf + copied + iter,
+                                      dax_mem + offset + iter, remain);
+            }
+
+            /* prefetch per 256 */
+            // for (i = 0; i < nr; i += 256) {
+            //     prefetcht2(dax_mem + offset + i);
+            // }
+            // left = __copy_to_user(buf + copied,
+            //                       dax_mem + offset, nr);
         } else {
             left = __clear_user(buf + copied, nr);
         }

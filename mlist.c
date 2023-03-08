@@ -79,6 +79,7 @@ int hk_range_insert_value(struct super_block *sb, struct list_head *head, unsign
     unsigned long range_low;
     unsigned long range_high;
     bool is_insert = false;
+    int retries = 0;
 
     list_for_each(pos, head)
     {
@@ -95,6 +96,11 @@ int hk_range_insert_value(struct super_block *sb, struct list_head *head, unsign
             break;
         } else if (value >= range_low && value <= range_high) {
             return -1;
+        }
+        retries++;
+        /* We prevent too many times retries. */
+        if (retries > HK_MLIST_INST_MAXRETRIES) {
+            break;
         }
     }
 

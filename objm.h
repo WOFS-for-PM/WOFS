@@ -226,7 +226,7 @@ typedef struct obj_ref_dentry {
     unsigned long hash;
 } obj_ref_dentry_t;
 
-static_assert(sizeof(obj_ref_dentry_t) <= 64);
+static_assert(sizeof(obj_ref_dentry_t) <= 72);
 
 /* File operations related reference */
 typedef struct obj_ref_inode { /* __INODE_MANAGE_THIS */

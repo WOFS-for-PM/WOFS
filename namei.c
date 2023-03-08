@@ -35,6 +35,8 @@ void *hk_search_dir_table(struct super_block *sb, struct hk_inode_info_header *s
         struct hk_obj_dentry *dentry;
         hash_for_each_possible(sih->dirs, ref_dentry, hnode, hash)
         {
+            if (ref_dentry->hash != hash)
+                continue;
             dentry = get_pm_addr(sbi, ref_dentry->hdr.addr);
             if (strcmp(dentry->name, name) == 0) {
                 cur = ref_dentry;
@@ -45,6 +47,8 @@ void *hk_search_dir_table(struct super_block *sb, struct hk_inode_info_header *s
         struct hk_dentry_info *cur_di = NULL;
         hash_for_each_possible(sih->dirs, cur_di, node, hash)
         {
+            if (cur_di->hash != hash)
+                continue;
             if (strcmp(cur_di->direntry->name, name) == 0) {
                 cur = cur_di;
                 break;
@@ -104,7 +108,7 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
     struct hlist_node *tmp;
     unsigned long hash;
     int is_find = 0;
-
+    
     hash = BKDRHash(name, namelen);
 
     if (ENABLE_META_PACK(sb)) {
@@ -114,6 +118,8 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
 
         hash_for_each_possible_safe(sih->dirs, ref_dentry, tmp, hnode, hash)
         {
+            if (ref_dentry->hash != hash)
+                continue;
             dentry = get_pm_addr(sbi, ref_dentry->hdr.addr);
             if (strcmp(dentry->name, name) == 0) {
                 hash_del(&ref_dentry->hnode);
@@ -130,6 +136,8 @@ int hk_remove_dir_table(struct super_block *sb, struct hk_inode_info_header *sih
 
         hash_for_each_possible_safe(sih->dirs, di, tmp, node, hash)
         {
+            if (di->hash != hash)
+                continue;
             if (strcmp(di->direntry->name, name) == 0) {
                 hash_del(&di->node);
                 if (ret_entry)

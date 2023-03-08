@@ -1428,6 +1428,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     if (ret) {
         goto out;
     }
+
     data = (struct hk_obj_data *)(out_param->addr);
 
     data->ino = sih->ino;

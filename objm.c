@@ -56,7 +56,7 @@ inline void ref_dentry_destroy(obj_ref_dentry_t *ref)
     }
 }
 
-inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 num, u64 data_offset)
+inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset)
 {
     obj_ref_data_t *ref = hk_alloc_obj_ref_data();
     ref->hdr.ref = 1;
@@ -1166,6 +1166,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     u32 rdev = ((in_create_pkg_param_t *)(in_param->private))->rdev;
     u32 ino, parent_ino, orig_ino;
     int ret = 0;
+    unsigned char pkg_buf[MTA_PKG_CREATE_SIZE];
     INIT_TIMING(time);
 
     HK_START_TIMING(new_inode_trans_t, time);
@@ -1195,13 +1196,15 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     }
 
     fill_attr_t attr_param;
-    cur_addr = out_param->addr;
+    // cur_addr = out_param->addr;
+    cur_addr = pkg_buf; 
     if (create_type == CREATE_FOR_RENAME) {
         hk_dbgv("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
         /* fill inode from existing inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
         inode_update.sih = sih;
         __fill_pm_inode_from_exist(sbi, obj_inode, &inode_update);
+        inode_update.addr = get_pm_offset(sbi, out_param->addr);
         cur_addr += OBJ_INODE_SIZE;
     } else {
         if (create_type == CREATE_FOR_LINK)
@@ -1213,6 +1216,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         /* fill inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
         __fill_pm_inode(sbi, obj_inode, ino, rdev, &inode_update);
+        inode_update.addr = get_pm_offset(sbi, out_param->addr);
         cur_addr += OBJ_INODE_SIZE;
     }
 
@@ -1244,8 +1248,18 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     cur_addr += OBJ_PKGHDR_SIZE;
 
     /* flush + fence-once to commit the package */
-    commit_pkg(sbi, (void *)(out_param->addr), cur_addr - out_param->addr, &pkg_hdr->hdr);
+    // commit_pkg(sbi, (void *)(out_param->addr), cur_addr - out_param->addr, &pkg_hdr->hdr);
+    unsigned long flags = 0;
+    pkg_hdr->hdr.crc32 = hk_crc32c(~0, (const char *)pkg_buf, MTA_PKG_CREATE_SIZE);
+    hk_memunlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
+    /* fence-once */
+    memcpy_to_pmem_nocache((void *)out_param->addr, pkg_buf, MTA_PKG_CREATE_SIZE);
+    hk_memlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
 
+    /* address re-assignment */
+    obj_dentry = (struct hk_obj_dentry *)(out_param->addr + OBJ_INODE_SIZE);
+    pkg_hdr = (struct hk_pkg_hdr *)(out_param->addr + OBJ_INODE_SIZE + OBJ_DENTRY_SIZE);
+    
     /* Now, we can update DRAM structures  */
     if (create_type == CREATE_FOR_RENAME) {
         /* fill pseudo attr in DRAM for further update, but do not allocate in PM */
@@ -1406,6 +1420,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     int ret = 0;
     INIT_TIMING(time);
 
+    HK_START_TIMING(new_data_trans_t, time);
     blk = get_pm_blk(sbi, data_addr);
     num = (aligned_size >> HUNTER_BLK_SHIFT);
 
@@ -1413,8 +1428,6 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     if (ret) {
         goto out;
     }
-
-    HK_START_TIMING(new_data_trans_t, time);
     data = (struct hk_obj_data *)(out_param->addr);
 
     data->ino = sih->ino;
@@ -1429,6 +1442,9 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         __fill_pm_obj_hdr(sbi, &data->hdr, OBJ_DATA);
     }
 
+    if (unlikely(size < HK_LBLK_SZ(sbi))) {
+        PERSISTENT_BARRIER();
+    }
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_DATA_SIZE, &data->hdr);
 

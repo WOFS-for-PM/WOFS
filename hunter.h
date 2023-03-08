@@ -37,6 +37,7 @@
 #include <linux/compat.h>
 #include <linux/hashtable.h>
 #include <linux/sched/signal.h>
+#include <linux/libnvdimm.h>
 
 #define TRANS_ADDR_TO_OFS(sbi, addr)  (addr == 0 ? 0 : ((u64)(addr) - (u64)(sbi)->virt_addr))   
 #define TRANS_OFS_TO_ADDR(sbi, ofs)   (ofs == 0 ? 0 : ((u64)(ofs) + (sbi)->virt_addr))
@@ -443,7 +444,7 @@ obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u64 dep_ofs);
 void ref_attr_destroy(obj_ref_attr_t *ref);
 obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino);
 void ref_dentry_destroy(obj_ref_dentry_t *ref);
-obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u64 num, u64 data_offset);
+obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset);
 void ref_data_destroy(obj_ref_data_t *ref);
 int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr);
 void obj_mgr_destroy(obj_mgr_t *mgr);

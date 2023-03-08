@@ -209,13 +209,14 @@ typedef struct obj_ref_hdr {
 typedef struct obj_ref_data {
     obj_ref_hdr_t hdr; /* in-pm entry hdr */
     struct list_head node;
-    u64 next;        /* next in-pm addr, might be used for cacheable design */
-    u64 prev;        /* prev in-pm addr, might be used for cacheable design */
     u64 data_offset; /* in-pm data offset */
     u64 ofs;         /* In-File offset */
-    u64 num;         /* Number of blocks */
+    u32 num;         /* Number of blocks */
     u8 type;
+    u32 reserved; /* reserved for future usage  */
 } obj_ref_data_t;
+
+static_assert(sizeof(obj_ref_data_t) <= 64);
 
 typedef struct obj_ref_dentry {
     obj_ref_hdr_t hdr;
@@ -224,6 +225,8 @@ typedef struct obj_ref_dentry {
     u32 target_ino;
     unsigned long hash;
 } obj_ref_dentry_t;
+
+static_assert(sizeof(obj_ref_dentry_t) <= 64);
 
 /* File operations related reference */
 typedef struct obj_ref_inode { /* __INODE_MANAGE_THIS */
@@ -286,20 +289,20 @@ typedef struct obj_mgr {
 } obj_mgr_t;
 
 typedef struct attr_update {
-    u64 addr;          /* In-PM attr offset */
-    u64 dep_ofs;       /* If from_pkg is UNLINK, then dep_ofs points the CREATE pkg */
-    u32 i_uid;         /* Owner Uid */
-    u32 i_gid;         /* Group Id */
-    u32 i_ctime;       /* Inode modification time */
-    u32 i_mtime;       /* Inode Modification time */
-    u32 i_atime;       /* Access time */
+    u64 addr;    /* In-PM attr offset */
+    u64 dep_ofs; /* If from_pkg is UNLINK, then dep_ofs points the CREATE pkg */
+    u32 i_uid;   /* Owner Uid */
+    u32 i_gid;   /* Group Id */
+    u32 i_ctime; /* Inode modification time */
+    u32 i_mtime; /* Inode Modification time */
+    u32 i_atime; /* Access time */
     u32 ino;
     u64 i_size;        /* File size after truncation */
     u16 i_mode;        /* File mode */
     u16 from_pkg;      /* From which pkg */
     u16 i_links_count; /* Links count if i_links_count == 0, it is a removed entry */
     /* We might do not need this. */
-    u8 inline_update;  /* is this an inline attr? */
+    u8 inline_update; /* is this an inline attr? */
 } attr_update_t;
 
 typedef struct data_update {

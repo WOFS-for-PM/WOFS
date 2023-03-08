@@ -122,9 +122,8 @@ __hk_memlock_range(void *p, unsigned long len, unsigned long *flags)
 static inline void hk_memunlock_range(struct super_block *sb, void *p,
 					 				  unsigned long len, unsigned long *flags)
 {
-	if (hk_range_check(sb, p, len))
-		return;
-
+	// if (hk_range_check(sb, p, len))
+	// 	return;
 	if (hk_is_protected(sb))
 		__hk_memunlock_range(p, len, flags);
 }

@@ -90,7 +90,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
             } else {
                 dax_mem = blk_addr;
             }
-            nr = (ref->num - (index - (ref->ofs << PAGE_SHIFT))) * HK_LBLK_SZ(sbi);
+            nr = (((u64)ref->num) - (index - (ref->ofs >> PAGE_SHIFT))) * HK_LBLK_SZ(sbi);
         } else {
             blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
             if (blk_addr == 0) { /* It's a file hole */
@@ -112,8 +112,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         if (!zero) {
             left = __copy_to_user(buf + copied,
                                   dax_mem + offset, nr);
-        }
-        else {
+        } else {
             left = __clear_user(buf + copied, nr);
         }
 
@@ -155,10 +154,10 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
     return is_overlay;
 }
 
-bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
-                        u64 start_index, u64 end_index,
-                        loff_t each_ofs, size_t *each_size,
-                        loff_t offset, size_t len)
+static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
+                               u64 start_index, u64 end_index,
+                               loff_t each_ofs, size_t *each_size,
+                               loff_t offset, size_t len)
 {
     struct super_block *sb = si->vfs_inode.i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -180,7 +179,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                     ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_flushcache(cur_addr, blk_addr, each_ofs);
+                    memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                     *each_size -= each_ofs;
                 }
@@ -197,7 +196,7 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                     if (ref) {
                         blk_addr = get_pm_addr_by_data_ref(sbi, ref, offset + len);
                         hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                        memcpy_flushcache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
+                        memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
                         hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     } else {
                         hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
@@ -235,14 +234,14 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
                     blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_flushcache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                    memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                 }
                 if (index == end_index && len < HK_LBLK_SZ(sbi)) {
                     blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     *each_size = len;
                     hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                    memcpy_flushcache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
+                    memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
                     hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
                 }
             }
@@ -268,10 +267,10 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
 
 extern struct hk_mregion *hk_get_region_by_ino(struct super_block *sb, u64 ino);
 
-int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
-                     loff_t ofs, size_t size, unsigned char *content,
-                     u64 index_cur, u64 start_index, u64 end_index,
-                     size_t *out_size)
+static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
+                            loff_t ofs, size_t size, unsigned char *content,
+                            u64 index_cur, u64 start_index, u64 end_index,
+                            size_t *out_size)
 {
     u64 i;
     int ret = 0;
@@ -290,6 +289,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     in_pkg_param_t in_param;
     out_pkg_param_t out_param;
     unsigned long irq_flags = 0;
+    char *buf;
 
     INIT_TIMING(memcpy_time);
 
@@ -306,7 +306,12 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                                         ofs, size);
         HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
         hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-        memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+        if (likely(each_size >= HK_LBLK_SZ(sbi))) {
+            memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+        } else {
+            copy_from_user(addr + each_ofs, content, each_size);
+            hk_flush_buffer(addr + each_ofs, each_size, false);
+        }
         hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
@@ -751,9 +756,9 @@ const struct file_operations hk_dax_file_operations = {
     .llseek = hk_llseek,
     .read = hk_dax_file_read,
     .write = hk_dax_file_write,
-    .read_iter = hk_rw_iter, 
-    .write_iter = hk_rw_iter, 
-    .mmap = NULL,       /* TODO: Not support mmap yet */
+    .read_iter = hk_rw_iter,
+    .write_iter = hk_rw_iter,
+    .mmap = NULL, /* TODO: Not support mmap yet */
     .mmap_supported_flags = MAP_SYNC,
     .open = hk_open,
     .fsync = hk_fsync,

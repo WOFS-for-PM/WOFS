@@ -1146,11 +1146,11 @@ void *hk_inode_get_slot(struct hk_inode_info_header *sih, u64 offset)
         }
 
         /* check if offset is in ref */
-        if (offset >= ref->ofs && offset < ref->ofs + (ref->num << HUNTER_BLK_SHIFT)) {
+        if (offset >= ref->ofs && offset < ref->ofs + ((u64)ref->num << HUNTER_BLK_SHIFT)) {
             return ref;
         }
 
-        hk_dbg("offset %lu (%lu) is not in ref [%lu, %lu] ([%lu, %lu]), inconsistency happened\n", offset, ofs_blk, ref->ofs, ref->ofs + (ref->num << HUNTER_BLK_SHIFT), GET_ALIGNED_BLKNR(ref->ofs), GET_ALIGNED_BLKNR(ref->ofs + (ref->num << HUNTER_BLK_SHIFT)));
+        hk_dbg("offset %lu (%lu) is not in ref [%lu, %lu] ([%lu, %lu]), inconsistency happened\n", offset, ofs_blk, ref->ofs, ref->ofs + ((u64)ref->num << HUNTER_BLK_SHIFT), GET_ALIGNED_BLKNR(ref->ofs), GET_ALIGNED_BLKNR(ref->ofs + ((u64)ref->num << HUNTER_BLK_SHIFT)));
         BUG_ON(1);
     } else {
         return (void *)linix_get(&sih->ix, ofs_blk);

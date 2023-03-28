@@ -676,6 +676,10 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     sbi->d_size = sbi->initsize - (sbi->d_addr - (u64)sbi->virt_addr);
     sbi->d_blks = sbi->d_size / HK_PBLK_SZ(sbi);
 
+    /* read ahead mechanisms */
+    sbi->ra_win = HK_READAHEAD_WINDOW;
+    atomic64_set(&sbi->num_readers, 0);
+
     hk_dbgv("%s: meta addr: %llx, meta_size: %llx; data addr: %llx\n", __func__, sbi->m_addr, sbi->m_size, sbi->d_addr);
     return 0;
 }

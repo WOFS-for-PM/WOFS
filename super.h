@@ -160,6 +160,10 @@ struct hk_sb_info {
         } pack_layout;
     };
 
+    /* for read-ahead */
+    size_t ra_win;
+    atomic64_t num_readers;
+
     /* per cpu structure */
     struct hk_layout_info *layouts;
     u32 num_layout;

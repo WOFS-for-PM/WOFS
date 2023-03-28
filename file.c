@@ -39,13 +39,15 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
     loff_t isize, pos;
     size_t copied = 0;
     size_t error = 0;
+    size_t ra_win = sbi->ra_win;
+    int num_readers;
 
     INIT_TIMING(memcpy_time);
 
     pos = *ppos;
     index = pos >> PAGE_SHIFT; /* Start from which blk */
     offset = pos & ~PAGE_MASK; /* Start from ofs to the blk */
-
+    
     if (!access_ok(buf, len)) {
         error = -EFAULT;
         goto out;
@@ -63,6 +65,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
     if (len <= 0)
         goto out;
+    
 
     end_index = (isize - 1) >> PAGE_SHIFT;
 
@@ -71,6 +74,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         unsigned long blk_addr;
         void *dax_mem = NULL;
         bool zero = false;
+        size_t win;
 
         /* nr is the maximum number of bytes to copy from this page */
         if (index >= end_index) {
@@ -109,22 +113,30 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
         hk_dbgv("%s: index: %d, blk_addr: 0x%llx, dax_mem: 0x%llx, zero: %d, nr: 0x%lx\n", __func__, index, blk_addr, dax_mem, zero, nr);
 
+        num_readers = atomic64_add_return_relaxed(1, &sbi->num_readers);
         if (!zero) {
-            iter = nr & ~0x3fff;
-            remain = nr & 0x3fff;
-            for (i = 0; i < iter; i += 16384) {
-                for (j = i; j < (i + 16384); j += 256) {
-                    prefetcht2(dax_mem + offset + j);
+            win = rounddown_pow_of_two(ra_win / num_readers);
+            hk_dbgv("win_size: %lu, num_readers: %d\n", win, num_readers);
+            if (win != 0) {
+                iter = nr & ~(win - 1);
+                remain = nr & (win - 1);
+                for (i = 0; i < iter; i += win) {
+                    for (j = i; j < (i + win); j += 256) {
+                        prefetcht2(dax_mem + offset + j);
+                    }
+                    left = __copy_to_user(buf + copied + i,
+                                        dax_mem + offset + i, win);
                 }
-                left = __copy_to_user(buf + copied + i,
-                                      dax_mem + offset + i, 16384);
-            }
-            if (remain) {
-                for (i = iter; i < nr; i += 256) {
-                    prefetcht2(dax_mem + offset + i);
+                if (remain) {
+                    for (i = iter; i < nr; i += 256) {
+                        prefetcht2(dax_mem + offset + i);
+                    }
+                    left = __copy_to_user(buf + copied + iter,
+                                        dax_mem + offset + iter, remain);
                 }
-                left = __copy_to_user(buf + copied + iter,
-                                      dax_mem + offset + iter, remain);
+            } else {
+                left = __copy_to_user(buf + copied,
+                                      dax_mem + offset, nr);
             }
 
             /* prefetch per 256 */
@@ -136,6 +148,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         } else {
             left = __clear_user(buf + copied, nr);
         }
+        atomic64_fetch_sub_relaxed(1, &sbi->num_readers);
 
         HK_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
 
@@ -158,7 +171,6 @@ out:
         file_accessed(filp);
 
     // hk_STATS_ADD(read_bytes, copied);
-
     hk_dbgv("%s returned %zu\n", __func__, copied);
     return copied ? copied : error;
 }

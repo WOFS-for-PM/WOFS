@@ -65,6 +65,7 @@
 #define HK_CMT_WORKER_NUM        4 /* for commit worker */
 #define HK_JOURNAL_SIZE          (4 * 1024)
 #define HK_PERCORE_JSLOTS        (1) /* per core journal slots */
+#define HK_READAHEAD_WINDOW      (16 * 1024)
 
 /* ======================= Enhanced Configurations ========================= */
 #define CONFIG_CMT_BACKGROUND     /* enable background commit system */

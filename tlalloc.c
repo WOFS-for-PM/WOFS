@@ -229,6 +229,8 @@ tl_node_t *tl_create_node(void)
 {
     tl_node_t *node = hk_alloc_tl_node();
     node->blk = 0;
+    node->node.rb_left = NULL;
+    node->node.rb_right = NULL;
     return node;
 }
 
@@ -298,9 +300,9 @@ static int tl_tree_insert_node(struct rb_root_cached *tree, tl_node_t *new_node)
         compVal = tl_node_compare(curr->blk, new_node->blk);
         parent = *temp;
 
-        if (compVal < 0) {
+        if (compVal > 0) {
             temp = &((*temp)->rb_left);
-        } else if (compVal > 0) {
+        } else if (compVal < 0) {
             temp = &((*temp)->rb_right);
             left_most = false;
         } else {
@@ -378,7 +380,7 @@ static bool __tl_try_find_avail_data_blks(void *key, void *value, void *data)
 }
 
 #define tl_traverse_tree(tree, temp, node) \
-    for (temp = rb_first_cached(tree), node = rb_entry(temp, tl_node_t, node); temp; temp = rb_next(temp))
+    for (temp = rb_first_cached(tree), node = rb_entry(temp, tl_node_t, node); temp; temp = rb_next(temp), node = rb_entry(temp, tl_node_t, node))
 
 /* alloc as many as possible */
 s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
@@ -581,15 +583,23 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
     }
 }
 
+struct affect_node {
+    struct list_head list;
+    tl_node_t *node;
+};
+
 static bool __tl_try_restore_data_blks(void *key, void *value, void *data)
 {
     tlrestore_param_t *param = data;
     tl_node_t *node = value;
     u64 blk = node->blk;
     u64 num = node->dnode.num;
+    struct affect_node *anode;
 
     if (!(blk + num < param->blk || param->blk + param->num < blk)) {
-        list_add_tail(&node->list, &param->affected_nodes);
+        anode = kmalloc(sizeof(struct affect_node), GFP_ATOMIC);
+        anode->node = node;
+        list_add_tail(&anode->list, &param->affected_nodes);
     }
 
     if (param->blk > blk + num) {
@@ -612,6 +622,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
     if (TL_ALLOC_TYPE(flags) == TL_BLK) {
         u64 blk = param->blk;
         u64 num = param->num;
+        struct affect_node *anode;
 
         spin_lock(&data_mgr->spin);
         tl_traverse_tree(&data_mgr->free_tree, temp, node)
@@ -625,13 +636,14 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
         /* traverse affected_nodes */
         list_for_each_safe(pos, n, &param->affected_nodes)
         {
-            node = list_entry(pos, tl_node_t, list);
+            anode = list_entry(pos, struct affect_node, list);
+            node = anode->node;
             if (blk <= node->blk && blk + num >= node->blk + node->dnode.num) {
                 rb_erase_cached(&node->node, &data_mgr->free_tree);
                 tl_free_node(node);
             } else if (blk <= node->blk && blk + num < node->blk + node->dnode.num) {
-                node->blk = blk + num;
                 node->dnode.num = node->blk + node->dnode.num - blk - num;
+                node->blk = blk + num;
             } else if (blk > node->blk && blk + num >= node->blk + node->dnode.num) {
                 node->dnode.num = blk - node->blk;
             } else if (blk > node->blk && blk + num < node->blk + node->dnode.num) {
@@ -643,7 +655,8 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
                 spin_unlock(&data_mgr->spin);
                 node->dnode.num = blk - node->blk;
             }
-            list_del(&node->list);
+            list_del(&anode->list);
+            kfree(anode);
         }
         BUG_ON(!list_empty((const struct list_head *)&param->affected_nodes));
     } else if (TL_ALLOC_TYPE(flags) == TL_MTA) {

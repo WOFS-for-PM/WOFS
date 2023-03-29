@@ -75,7 +75,7 @@ struct create_spec_hdr {
     } parent_attr;
     /* attr */
     struct {
-        u32 ino;    /* inode number */
+        u32 ino;    /* parent inode number */
         u16 i_mode; /* File mode */
         u32 i_uid;  /* Owner Uid */
         u32 i_gid;  /* Group Id */

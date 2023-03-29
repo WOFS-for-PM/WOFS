@@ -1069,9 +1069,10 @@ void __assign_create_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_h
         pkg_hdr->create_hdr.parent_attr.i_size = pkg_hdr_param->fill_create_hdr.psih->i_size + OBJ_DENTRY;
         pkg_hdr->create_hdr.parent_attr.i_links_count = pkg_hdr_param->fill_create_hdr.psih->i_links_count + 1;
         pkg_hdr->create_hdr.parent_attr.i_cmtime = pkg_hdr_param->fill_create_hdr.psih->i_ctime;
+        
+        pkg_hdr->create_hdr.attr.ino = pkg_hdr_param->fill_create_hdr.psih->ino;
     }
     BUG_ON(!pkg_hdr_param->fill_create_hdr.sih);
-    pkg_hdr->create_hdr.attr.ino = pkg_hdr_param->fill_create_hdr.sih->ino;
     pkg_hdr->create_hdr.attr.i_mode = pkg_hdr_param->fill_create_hdr.sih->i_mode;
     pkg_hdr->create_hdr.attr.i_uid = pkg_hdr_param->fill_create_hdr.sih->i_uid;
     pkg_hdr->create_hdr.attr.i_gid = pkg_hdr_param->fill_create_hdr.sih->i_gid;
@@ -1136,7 +1137,7 @@ int check_pkg_valid(void *obj_start, u32 len, struct hk_obj_hdr *last_obj_hdr)
     last_obj_hdr->crc32 = 0;
     int valid = 1;
 
-    if (!hk_crc32c(~0, (const char *)obj_start, len) == crc32) {
+    if (!(hk_crc32c(~0, (const char *)obj_start, len) == crc32)) {
         valid = 0;
     }
     last_obj_hdr->crc32 = crc32;

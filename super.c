@@ -407,10 +407,13 @@ static inline int hk_check_super_checksum(struct super_block *sb)
     crc = hk_crc32c(~0, (__u8 *)sbi->hk_sb + sizeof(__le32),
                     sizeof(struct hk_super_block) - sizeof(__le32) + sbi->hk_sb->s_private_data_len);
 
-    if (sbi->hk_sb->s_sum == cpu_to_le32(crc))
+    if (sbi->hk_sb->s_sum == cpu_to_le32(crc)) {
         return 0;
-    else
+    }
+    else {
+        hk_err(sb, "hk: Checksum failed for super block, crc=%u, expected=%u\n", crc, le32_to_cpu(sbi->hk_sb->s_sum));
         return 1;
+    }
 }
 
 static inline void hk_update_mount_time(struct super_block *sb)
@@ -600,6 +603,12 @@ static int hk_check_super(struct super_block *sb,
     if (le32_to_cpu(sbi->hk_sb->s_magic) != HUNTER_SUPER_MAGIC)
         return -EIO;
 
+    rc = memcpy_mcsafe((char *)sbi->hk_sb + sizeof(struct hk_super_block), 
+                       (char *)ps + sizeof(struct hk_super_block),
+                       HK_SB_SIZE(sbi) - sizeof(struct hk_super_block));
+    if (rc < 0)
+        return rc;
+
     if (hk_check_super_checksum(sb))
         return -EIO;
 
@@ -772,7 +781,12 @@ static int hk_misc_init(struct hk_sb_info *sbi)
         sbi->pack_layout.rih = hk_alloc_hk_inode_info_header();
         if (!sbi->pack_layout.rih)
             return -ENOMEM;
+        /* do not init dyn array */
         hk_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
+        /* reinit modes */
+        sbi->pack_layout.rih->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
+        sbi->pack_layout.rih->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
+	    sbi->pack_layout.rih->i_gid= cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
     } else {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_normal_data);
     }

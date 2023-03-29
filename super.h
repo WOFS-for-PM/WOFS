@@ -183,7 +183,7 @@ struct hk_sb_info {
 
 static u64 inline hk_inc_and_get_vtail(struct hk_sb_info *sbi)
 {
-    return (u64)atomic64_fetch_add(1, &sbi->pack_layout.vtail);
+    return (u64)atomic64_add_return(1, &sbi->pack_layout.vtail);
 }
 
 static inline struct hk_sb_info *HK_SB(struct super_block *sb)

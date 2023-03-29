@@ -63,7 +63,6 @@ static inline void hk_dump_mregion(struct super_block *sb, struct hk_mregion *rg
     }
 }
 
-
 static void hk_dump_jentry(struct super_block *sb, struct hk_jentry *je)
 {
 #ifndef CONFIG_FINEGRAIN_JOURNAL
@@ -130,7 +129,6 @@ static void hk_dump_journal(struct super_block *sb, struct hk_journal *jnl)
     }
 }
 
-
 static inline void hk_dump_super(struct super_block *sb)
 {
     struct hk_sb_info *sbi = sb->s_fs_info;
@@ -160,6 +158,58 @@ static inline void hk_dump_ref_data(obj_ref_data_t *ref_data)
 {
     hk_info("logical: %lu - %lu\n", ref_data->ofs >> PAGE_SHIFT, (ref_data->ofs >> PAGE_SHIFT) + ref_data->num - 1);
     hk_info("physical: %lu - %lu\n", ref_data->data_offset >> PAGE_SHIFT, (ref_data->data_offset >> PAGE_SHIFT) + ref_data->num - 1);
+}
+
+static inline char *__hk_get_file_type(unsigned short i_mode)
+{
+    switch (i_mode & S_IFMT) {
+    case S_IFSOCK:
+        return "s";
+    case S_IFLNK:
+        return "l";
+    case S_IFREG:
+        return "-";
+    case S_IFBLK:
+        return "b";
+    case S_IFDIR:
+        return "d";
+    case S_IFCHR:
+        return "c";
+    case S_IFIFO:
+        return "p";
+    default:
+        return "?";
+    }
+}
+
+static inline void hk_dump_sih(struct hk_inode_info_header *sih)
+{
+    hk_info("sih->ino: %llu\n", sih->ino);
+    printk("\tsih->ino: %llu, sih->i_flags: 0x%x, sih->i_size: %llu, \n\
+\tsih->i_ctime: %u, sih->i_mtime: %u, sih->i_atime: %u, \n\
+\tsih->i_mode: 0x%x (%s), sih->i_links_count: %u, sih->i_uid: %u, \n\
+\tsih->i_gid: %u\n",
+            sih->ino,
+            sih->i_flags,
+            sih->i_size,
+            sih->i_ctime,
+            sih->i_mtime,
+            sih->i_atime,
+            sih->i_mode,
+            __hk_get_file_type(sih->i_mode),
+            sih->i_links_count,
+            sih->i_uid,
+            sih->i_gid);
+}
+
+static inline void hk_dump_inode_map(struct hk_sb_info *sbi) {
+    imap_t *imap = &sbi->pack_layout.obj_mgr->prealloc_imap;
+    struct hk_inode_info_header *sih;
+    int bkt;
+    
+    hash_for_each(imap->map, bkt, sih, hnode) {
+        hk_dump_sih(sih);
+    }
 }
 
 #endif /* _HK_DBG_H_ */

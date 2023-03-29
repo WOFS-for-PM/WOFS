@@ -61,7 +61,8 @@ u8 *in_dram_bm_buf = NULL;
 u8 *in_dram_blk_buf = NULL;
 
 #define hk_traverse_bm(sbi, bm, pointed_blk) \
-    for (pointed_blk = 0; pointed_blk < ((sbi->pack_layout.tl_per_type_bm_reserved_blks << HUNTER_BLK_SHIFT) << 3); pointed_blk++)
+    for (pointed_blk = 0; pointed_blk < ((sbi->pack_layout.tl_per_type_bm_reserved_blks << HUNTER_BLK_SHIFT) << 3); pointed_blk++) \
+        if (hk_test_bit(pointed_blk, bm))
 
 struct basic_list_node {
     struct list_head node;
@@ -88,16 +89,18 @@ static void free_basic_list_node(struct basic_list_node *node)
 static int hk_create_dram_bufs(struct hk_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
-    in_dram_bm_buf = kzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
+    hk_info("%s: Try to create bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi));
+    in_dram_bm_buf = kvzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
     if (!in_dram_bm_buf) {
         hk_err(sb, "failed to allocate in_dram_bm_buf");
         return -ENOMEM;
     }
 
-    in_dram_blk_buf = kzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
+    hk_info("%s: Try to create blk buffer: %d bytes\n", __func__, HK_PBLK_SZ(sbi));
+    in_dram_blk_buf = kvzalloc(HK_PBLK_SZ(sbi), GFP_KERNEL);
     if (!in_dram_blk_buf) {
         hk_err(sb, "failed to allocate in_dram_blk_buf");
-        kfree(in_dram_bm_buf);
+        kvfree(in_dram_bm_buf);
         return -ENOMEM;
     }
 
@@ -107,9 +110,9 @@ static int hk_create_dram_bufs(struct hk_sb_info *sbi)
 static void hk_destroy_dram_bufs(void)
 {
     if (in_dram_bm_buf)
-        kfree(in_dram_bm_buf);
+        kvfree(in_dram_bm_buf);
     if (in_dram_blk_buf)
-        kfree(in_dram_blk_buf);
+        kvfree(in_dram_blk_buf);
 }
 
 /* Recovery Routines for Pack Layout */
@@ -139,6 +142,7 @@ static inline u8 *__hk_get_blk_addr(struct hk_sb_info *sbi, void *buf, u32 blk)
 
 int hk_recovery_data_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *max_vtail)
 {
+    u8 *cur_addr;
     u8 *data_bm;
     u8 *cur_data;
     u8 *start_addr;
@@ -146,9 +150,12 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *
     struct hk_obj_data *data;
     obj_ref_data_t *ref_data;
     u64 in_pm_addr;
+    u64 pm_data_addr;
     tlrestore_param_t param;
-    u32 blk;
     struct hk_obj_hdr *hdr = NULL;
+    u64 entrynr;
+    u32 blk;
+    u32 num;
 
     data_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_DATA);
     hk_traverse_bm(sbi, data_bm, blk)
@@ -158,11 +165,21 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *
         start_addr = cur_data;
         while (cur_data < start_addr + HK_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_data, PKG_DATA, (u64 *)&hdr);
-            if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr) == 0) {
+            if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr)) {
                 data = (struct hk_obj_data *)cur_data;
-                tl_build_restore_param(&param, blk, 1, TL_BLK);
+                
+                /* restore data entry */
+                cur_addr = cur_data;
+                entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_addr));
+                num = MTA_PKG_DATA_BLK;
+                tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_DATA);
                 tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_addr)), &param);
-                ref_data = ref_data_create(get_pm_offset(sbi, in_pm_addr), data->ino, data->ofs, data->num, get_pm_blk_addr(sbi, data->blk));
+                
+                /* restore data corresponding to the entry */
+                pm_data_addr = get_pm_blk_addr(sbi, data->blk);
+                tl_build_restore_param(&param, data->blk, data->num, TL_BLK);
+                tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, pm_data_addr)), &param);
+                ref_data = ref_data_create(get_pm_offset(sbi, in_pm_addr), data->ino, data->ofs, data->num, get_pm_offset(sbi, pm_data_addr));
                 obj_mgr_load_dobj_control(sbi->pack_layout.obj_mgr, ref_data, OBJ_DATA);
                 if (data->hdr.vtail > *max_vtail)
                     *max_vtail = data->hdr.vtail;
@@ -175,10 +192,19 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *
     return 0;
 }
 
-int __check_should_update_attr(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, struct hk_obj_attr *attr)
+/* FIXME: vtail for inline update, we can record it when we perform recovery */
+/* for now, we just return true. */
+int __check_should_update_attr(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u64 vtail)
 {
-    struct hk_obj_attr *orig_attr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr);
-    if (orig_attr->hdr.vtail < attr->hdr.vtail) {
+    struct hk_obj_attr *orig_attr;
+    
+    if (!sih->pack_spec.latest_fop.latest_attr) {
+        return 1;
+    }
+
+    orig_attr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr);
+    
+    if (orig_attr->hdr.vtail < vtail) {
         return 1;
     }
     return 0;
@@ -205,6 +231,68 @@ void __hk_build_inode_update_from_pm(struct hk_sb_info *sbi, struct hk_obj_inode
     inode_update->ino = inode->ino;
 }
 
+int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *cur_create, bool parent) {
+    struct super_block *sb = sbi->sb;
+    struct hk_inode_info_header *sih, *psih;
+    attr_update_t attr_update;
+    struct hk_obj_inode *obj_inode;
+    struct hk_pkg_hdr *pkg_hdr;
+    u64 vtail;
+    u32 ino;
+    
+    obj_inode = (struct hk_obj_inode *)cur_create;
+    get_pkg_hdr(cur_create, PKG_CREATE, (u64 *)&pkg_hdr);
+    vtail = pkg_hdr->hdr.vtail;
+
+    if (!parent) {
+        ino = obj_inode->ino;
+        hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
+        sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
+        if (!sih) {
+            hk_warn("Can't find inode %lu in imap\n", ino);
+            return -ENOENT;
+        } else {
+            attr_update.addr = pkg_hdr;
+            attr_update.from_pkg = PKG_CREATE;
+            attr_update.dep_ofs = 0;
+            attr_update.i_atime = attr_update.i_ctime = attr_update.i_mtime = obj_inode->i_create_time;
+            attr_update.i_gid = pkg_hdr->create_hdr.attr.i_gid;
+            attr_update.i_uid = pkg_hdr->create_hdr.attr.i_uid;
+            attr_update.i_mode = pkg_hdr->create_hdr.attr.i_mode;
+            attr_update.i_size = 0;
+            attr_update.i_links_count = 1;
+            attr_update.inline_update = true;
+            ur_dram_latest_attr(sbi->pack_layout.obj_mgr, sih, &attr_update);
+        }
+    } else {    /* parent */
+        if (obj_inode->ino == HK_ROOT_INO) {
+            return 0;
+        }
+        ino = pkg_hdr->create_hdr.attr.ino;
+        hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
+        psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
+        if (!psih) {
+            hk_warn("Can't find inode %lu in imap\n", ino);
+            return -ENOENT;
+        } else {
+            if (__check_should_update_attr(sbi, psih, vtail)) {
+                attr_update.addr = pkg_hdr;
+                attr_update.from_pkg = PKG_CREATE;
+                attr_update.dep_ofs = 0;
+                attr_update.i_atime = attr_update.i_ctime = attr_update.i_mtime = pkg_hdr->create_hdr.parent_attr.i_cmtime; 
+                attr_update.i_gid = psih->i_gid;
+                attr_update.i_uid = psih->i_uid;
+                attr_update.i_mode = psih->i_mode;
+                attr_update.i_size = pkg_hdr->create_hdr.parent_attr.i_size;
+                attr_update.i_links_count = pkg_hdr->create_hdr.parent_attr.i_links_count;
+                attr_update.inline_update = 1;
+                ur_dram_latest_attr(sbi->pack_layout.obj_mgr, psih, &attr_update);
+            }
+        }
+    }
+    return 0;
+}
+
 int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *max_vtail)
 {
     int ret = 0;
@@ -218,18 +306,16 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
     struct basic_list_node *lnode;
     struct hk_obj_inode *obj_inode;
     struct hk_obj_dentry *obj_dentry;
-    struct hk_obj_attr *attr, *pattr;
     obj_ref_dentry_t *ref_dentry;
     tlrestore_param_t param;
     struct hk_pkg_hdr *pkg_hdr;
-    attr_update_t attr_update;
     inode_update_t inode_update;
-    struct list_head attr_list, *pos, *n;
+    struct list_head create_list, *pos, *n;
     u64 entrynr;
     u32 num;
     u32 blk;
 
-    INIT_LIST_HEAD(&attr_list);
+    INIT_LIST_HEAD(&create_list);
 
     create_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_CREATE);
     hk_traverse_bm(sbi, create_bm, blk)
@@ -239,7 +325,7 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
         start_addr = cur_create;
         while (cur_create < start_addr + HK_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_create, PKG_CREATE, (u64 *)&pkg_hdr);
-            if (check_pkg_valid(cur_create, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr) == 0) {
+            if (check_pkg_valid(cur_create, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr)) {
                 cur_addr = cur_create;
                 entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_addr));
                 num = MTA_PKG_CREATE_BLK;
@@ -247,7 +333,7 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
                 tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_addr)), &param);
 
                 /* control inode */
-                obj_inode = (struct hk_obj_inode *)cur_create;
+                obj_inode = (struct hk_obj_inode *)cur_addr;
                 sih = hk_alloc_hk_inode_info_header();
                 if (!sih) {
                     ret = -ENOMEM;
@@ -259,22 +345,22 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
                 obj_mgr_load_imap_control(sbi->pack_layout.obj_mgr, sih);
                 cur_addr += OBJ_INODE_SIZE;
 
-                /* pend addr */
-                attr = (struct hk_obj_attr *)cur_create;
-                lnode = create_basic_list_node(attr);
-                list_add_tail(&lnode->node, &attr_list);
-                cur_addr += OBJ_ATTR_SIZE;
-
-                /* pend pattr */
-                pattr = (struct hk_obj_attr *)cur_create;
-                lnode = create_basic_list_node(pattr);
-                list_add_tail(&lnode->node, &attr_list);
-                cur_addr += OBJ_ATTR_SIZE;
-
                 /* control dentry */
-                obj_dentry = (struct hk_obj_dentry *)cur_create;
-                ref_dentry = ref_dentry_create(get_pm_offset(sbi, in_pm_addr + OBJ_INODE_SIZE + 2 * OBJ_ATTR_SIZE), obj_dentry->name, strlen(obj_dentry->name), obj_inode->ino, obj_dentry->parent_ino);
+                obj_dentry = (struct hk_obj_dentry *)cur_addr;
+                ref_dentry = ref_dentry_create(get_pm_offset(sbi, in_pm_addr + OBJ_INODE_SIZE), obj_dentry->name, strlen(obj_dentry->name), obj_inode->ino, obj_dentry->parent_ino);
                 obj_mgr_load_dobj_control(sbi->pack_layout.obj_mgr, ref_dentry, OBJ_DENTRY);
+                
+                /* apply myself attr based on current create */
+                __hk_recovery_attr_from_create_pkg(sbi, cur_create, false);
+
+                /* pend create pkg for processing parent create package */
+                lnode = create_basic_list_node(cur_create);
+                if (!lnode) {
+                    ret = -ENOMEM;
+                    hk_err(sb, "Create list node failed\n");
+                    goto out;
+                }
+                list_add_tail(&lnode->node, &create_list);
 
                 if (pkg_hdr->hdr.vtail > *max_vtail)
                     *max_vtail = pkg_hdr->hdr.vtail;
@@ -286,18 +372,10 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
     }
 
     /* control attr */
-    list_for_each_safe(pos, n, &attr_list) {
+    list_for_each_safe(pos, n, &create_list) {
         lnode = list_entry(pos, struct basic_list_node, node);
-        attr = (struct hk_obj_attr *)lnode->value;
-        sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
-        if (!sih) {
-            hk_warn("Can't find inode %lu in imap\n", attr->ino);
-        } else {
-            if (__check_should_update_attr(sbi, sih, attr)) {
-                __hk_build_attr_update_from_pm(sbi, attr, &attr_update);
-                ur_dram_latest_attr(sbi->pack_layout.obj_mgr, obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino), &attr_update);
-            }
-        }
+        cur_create = (u8 *)lnode->value;
+        __hk_recovery_attr_from_create_pkg(sbi, cur_create, true);
         list_del(pos);
         free_basic_list_node(lnode);
     }
@@ -336,7 +414,7 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
         start_addr = cur_unlink;
         while (cur_unlink < start_addr + HK_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_unlink, PKG_UNLINK, (u64 *)&pkg_hdr);
-            if (check_pkg_valid(cur_unlink, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr) == 0) {
+            if (check_pkg_valid(cur_unlink, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr)) {
                 cur_addr = cur_unlink;
                 /* parse parent attr */
                 pattr = (struct hk_obj_attr *)cur_addr;
@@ -350,7 +428,7 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64
                 pkg_hdr = (struct hk_pkg_hdr *)cur_addr;
                 sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, pkg_hdr->unlink_hdr.unlinked_ino);
 
-                if (!__check_should_update_attr(sbi, psih, pattr)) {
+                if (!__check_should_update_attr(sbi, psih, pattr->hdr.vtail)) {
                     hk_warn("Parent inode %lu should be updated since UNLINK is always after CREATE\n", pattr->ino);
                     continue;
                 }
@@ -415,7 +493,7 @@ int hk_recovery_attr_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *
         start_addr = cur_attr;
         while (cur_attr < start_addr + HK_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_attr, PKG_ATTR, (u64 *)&hdr);
-            if (check_pkg_valid(cur_attr, MTA_PKG_ATTR_SIZE, hdr) == 0) {
+            if (check_pkg_valid(cur_attr, MTA_PKG_ATTR_SIZE, hdr)) {
                 /* parse attr */
                 attr = (struct hk_obj_attr *)cur_attr;
                 sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
@@ -425,7 +503,7 @@ int hk_recovery_attr_pkgs(struct hk_sb_info *sbi, u8 *bm_buf, u8 *blk_buf, u64 *
                     continue;
                 }
 
-                if (__check_should_update_attr(sbi, sih, attr)) {
+                if (__check_should_update_attr(sbi, sih, attr->hdr.vtail)) {
                     entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_addr));
                     num = MTA_PKG_ATTR_BLK;
                     tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_ATTR);
@@ -766,7 +844,7 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
         return false;
 
     if (le32_to_cpu(super->s_valid_umount) == HK_VALID_UMOUNT) {
-        hk_dbgv("normal recovery\n");
+        hk_dbg("Start normal recovery\n");
         goto out;
     } else {
         is_failure = true;
@@ -775,7 +853,7 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
 out:
     if (recovery_flags == NEED_FORCE_NORMAL_RECOVERY || !is_failure) {
         if (ENABLE_META_PACK(sb)) {
-            pd = (struct hk_pack_data *)(sbi->hk_sb + sizeof(struct hk_super_block));
+            pd = (struct hk_pack_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
             hk_create_dram_bufs(sbi);
             /* Traverse create pkg */
             hk_recovery_create_pkgs(sbi, in_dram_bm_buf, in_dram_blk_buf, &cur_vtail);
@@ -796,7 +874,7 @@ out:
                 atomic64_add(le64_to_cpu(pd->s_vtail), &sbi->pack_layout.vtail);
             }
         } else {
-            nd = (struct hk_normal_data *)(sbi->hk_sb + sizeof(struct hk_super_block));
+            nd = (struct hk_normal_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
             sbi->norm_layout.tstamp = le64_to_cpu(nd->s_tstamp);
             for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
                 layout = &sbi->layouts[cpuid];
@@ -858,7 +936,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
     start_addr = cur_blk;
     while (cur_blk < start_addr + HUNTER_BLK_SIZE) {
         get_pkg_hdr(cur_blk, OBJ_ATTR, (u64 *)&hdr);
-        if (check_pkg_valid(cur_blk, MTA_PKG_ATTR_SIZE, hdr) == 0) {
+        if (check_pkg_valid(cur_blk, MTA_PKG_ATTR_SIZE, hdr)) {
             if (hdr->magic == HUNTER_OBJ_MAGIC) {
                 if (hdr->type == OBJ_ATTR) {
                     probe_type = PKG_ATTR;
@@ -867,7 +945,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
             }
         }
         get_pkg_hdr(cur_blk, OBJ_DATA, (u64 *)&hdr);
-        if (check_pkg_valid(cur_blk, MTA_PKG_DATA_SIZE, hdr) == 0) {
+        if (check_pkg_valid(cur_blk, MTA_PKG_DATA_SIZE, hdr)) {
             if (hdr->magic == HUNTER_OBJ_MAGIC) {
                 if (hdr->type == OBJ_DATA) {
                     probe_type = PKG_ATTR;
@@ -876,7 +954,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
             }
         }
         get_pkg_hdr(cur_blk, PKG_CREATE, (u64 *)&pkg_hdr);
-        if (check_pkg_valid(cur_blk, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr) == 0) {
+        if (check_pkg_valid(cur_blk, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr)) {
             if (pkg_hdr->hdr.magic == HUNTER_OBJ_MAGIC) {
                 if (pkg_hdr->hdr.type == PKG_CREATE) {
                     probe_type = PKG_CREATE;
@@ -885,7 +963,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
             }
         }
         get_pkg_hdr(cur_blk, PKG_UNLINK, (u64 *)&pkg_hdr);
-        if (check_pkg_valid(cur_blk, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr) == 0) {
+        if (check_pkg_valid(cur_blk, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr)) {
             if (pkg_hdr->hdr.magic == HUNTER_OBJ_MAGIC) {
                 if (pkg_hdr->hdr.type == PKG_UNLINK) {
                     probe_type = PKG_UNLINK;

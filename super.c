@@ -535,7 +535,8 @@ static struct hk_inode *hk_init(struct super_block *sb,
         in_create_param.new_ino = HK_ROOT_INO;
         create_param.private = &in_create_param;
         out_param.private = &out_create_param;
-        create_param.partial = false;
+        create_param.cur_pkg_addr = 0;
+        create_param.bin = false;
         ret = create_new_inode_pkg(sbi, cpu_to_le16(sbi->mode | S_IFDIR), "/", sbi->pack_layout.rih, NULL, &create_param, &out_param);
 
         if (ret) {

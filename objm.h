@@ -66,6 +66,15 @@ typedef enum {
     PKG_TYPE_NUM
 } HUNT_PKG_TYPE;
 
+typedef enum 
+{
+    BIN_RENAME = PKG_RENAME,
+    BIN_SYMLINK = PKG_SYMLINK
+} HUNT_BIN_TYPE;
+
+#define HK_BIN_TO_PKG_TYPE(bin_type) (bin_type)
+#define HK_PKG_TO_BIN_TYPE(pkg_type) (pkg_type)
+
 struct create_spec_hdr {
     /* parent attr */
     struct {
@@ -85,20 +94,22 @@ struct create_spec_hdr {
 static_assert(sizeof(struct create_spec_hdr) <= 56);
 
 struct rename_spec_hdr {
-    u64 next;  /* next package's offset. From CREATE to UNLINK */
-    u32 valid; /* valid flag, one of the pair should hold this */
+    u64 next;  /* next package's offset. CREATE <-> UNLINK */
+    u64 vtail; /* next package's vtail. */
 } __attribute__((__packed__));
 
 static_assert(sizeof(struct rename_spec_hdr) <= 56);
 
 struct unlink_spec_hdr {
     /* parent attr */
-    struct {
+    struct __attribute__((__packed__)) {
         u64 i_size;
-        u16 i_links_count;
         u32 i_cmtime;
+        u32 ino;        /* parent inode number */
+        u16 i_links_count;
     } parent_attr;
     u32 unlinked_ino;
+    u64 dep_ofs;
 } __attribute__((__packed__));
 
 static_assert(sizeof(struct unlink_spec_hdr) <= 56);
@@ -325,11 +336,12 @@ typedef struct inode_update {
 } inode_update_t;
 
 typedef struct in_pkg_param {
-    /* does this package belong to an larger package */
-    bool partial;
+    /* does this package belong to a bin? */
+    bool bin;
     /* if the package belongs to an larger package, then pass these arguments */
-    u16 wrapper_pkg_type;
-    u64 next;
+    u16 bin_type;
+    u64 next_pkg_addr;
+    u64 cur_pkg_addr;   /* in-pm addr (not offset) */
     void *private;
 } in_pkg_param_t;
 

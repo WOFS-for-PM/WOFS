@@ -703,8 +703,9 @@ static int __hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
             in_create_param.rdev = 0;
         }
         in_create_param.new_ino = ino;
-        param.partial = false;
+        param.bin = false;
         param.private = &in_create_param;
+        param.cur_pkg_addr = 0;
         out_param.private = &out_create_param;
 
         err = create_new_inode_pkg(sbi, mode, dentry->d_name.name, HK_IH(inode), HK_IH(dir), &param, &out_param);
@@ -984,7 +985,8 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         private.new_ino = sih->ino;
         private.old_ino = inode->i_ino;
         param.private = &private;
-        param.partial = false;
+        param.bin = false;
+        param.cur_pkg_addr = 0;
         out_param.private = &out_create_param;
 
         err = create_new_inode_pkg(sbi, inode->i_mode, dest_dentry->d_name.name, sih, HK_IH(dir), &param, &out_param);
@@ -1077,8 +1079,8 @@ static int __hk_remove(struct inode *dir, struct dentry *dentry)
         if (inode->i_nlink)
             drop_nlink(inode);
 
-        /* FIXME: create_unlink_pkg in evict inode, and we just create an attr change pkg here */
-        in_param.partial = false;
+        in_param.bin = false;
+        in_param.cur_pkg_addr = 0;
         create_unlink_pkg(sbi, sih, psih, ref, &in_param, &out_param);
 
         hk_free_obj_ref_dentry(ref);

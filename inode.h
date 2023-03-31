@@ -78,7 +78,6 @@ struct hk_inode_info_header {
     u32 i_uid;    /* Owner Uid */
     u32 i_gid;    /* Group Id */
     u16 i_links_count;
-    int ref;
 
     union {
         /* for lfs or local */

@@ -619,6 +619,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
     u64 est_vtail, dep_vtail, cur_vtail;
     u32 dep_ino;
     int cpuid;
+    bool need_free_sih = false;
 
     get_pkg_hdr(in_buf_unlink, PKG_UNLINK, (u64 *)&pkg_hdr);
     cur_vtail = pkg_hdr->hdr.vtail;
@@ -645,9 +646,12 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
-                            hk_free_hk_inode_info_header(sih);
+                            need_free_sih = true;
                             break;
                         }
+                    }
+                    if (need_free_sih) {
+                        break;
                     }
                 }
             }
@@ -688,6 +692,10 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
         tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_unlink)), &param);
 
         __hk_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
+        
+        if (need_free_sih) {
+            hk_free_hk_inode_info_header(sih);
+        }
     }
 
 out:

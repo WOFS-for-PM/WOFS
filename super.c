@@ -779,15 +779,17 @@ static int hk_misc_init(struct hk_sb_info *sbi)
     sbi->pack_layout.rih = NULL;
     if (ENABLE_META_PACK(sb)) {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_pack_data);
-        sbi->pack_layout.rih = hk_alloc_hk_inode_info_header();
-        if (!sbi->pack_layout.rih)
-            return -ENOMEM;
-        /* do not init dyn array */
-        hk_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
-        /* reinit modes */
-        sbi->pack_layout.rih->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
-        sbi->pack_layout.rih->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
-	    sbi->pack_layout.rih->i_gid= cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
+        if (sbi->s_mount_opt & HUNTER_MOUNT_FORMAT) {
+            sbi->pack_layout.rih = hk_alloc_hk_inode_info_header();
+            if (!sbi->pack_layout.rih)
+                return -ENOMEM;
+            /* do not init dyn array */
+            hk_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
+            /* reinit modes */
+            sbi->pack_layout.rih->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
+            sbi->pack_layout.rih->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
+            sbi->pack_layout.rih->i_gid= cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
+        }
     } else {
         sbi->hk_sb->s_private_data_len = sizeof(struct hk_normal_data);
     }

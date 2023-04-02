@@ -495,6 +495,7 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
+                            hk_free_hk_inode_info_header(sih);
                             break;
                         }
                     }
@@ -644,6 +645,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
+                            hk_free_hk_inode_info_header(sih);
                             break;
                         }
                     }

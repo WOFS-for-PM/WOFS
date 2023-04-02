@@ -450,7 +450,7 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr);
 void obj_mgr_destroy(obj_mgr_t *mgr);
 int obj_mgr_load_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
 int obj_mgr_unload_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type);
-int obj_mgr_get_dobjs(obj_mgr_t *mgr, u32 ino, u8 type, void **obj_refs);
+int obj_mgr_get_dobjs(obj_mgr_t *mgr, int cpuid, u32 ino, u8 type, void **obj_refs);
 int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
 int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih);
 struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino);

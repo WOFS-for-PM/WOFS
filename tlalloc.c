@@ -544,7 +544,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         tl_node_t *cur;
         int idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
         
-        hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s)", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)));
+        hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
 
@@ -667,6 +667,8 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
         typed_meta_mgr_t *tmeta_mgr;
         tl_node_t *cur;
 
+        hk_dbgv("restore meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
+
         tmeta_mgr = &meta_mgr->tmeta_mgrs[meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags))];
         spin_lock(&tmeta_mgr->spin);
         node = NULL;
@@ -696,7 +698,6 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
         /* too full to alloc */
         if ((node->mnode.bm & tmeta_mgr->entries_mask) == tmeta_mgr->entries_mask) {
             list_del(&node->list);
-            tl_free_node(node);
         }
         spin_unlock(&tmeta_mgr->spin);
     }

@@ -307,16 +307,15 @@ int obj_mgr_unload_dobj_control(obj_mgr_t *mgr, void *obj_ref, u8 type)
     return 0;
 }
 
-int obj_mgr_get_dobjs(obj_mgr_t *mgr, u32 ino, u8 type, void **obj_refs)
+int obj_mgr_get_dobjs(obj_mgr_t *mgr, int cpuid, u32 ino, u8 type, void **obj_refs)
 {
-    struct hk_layout_info *layout;
     struct hk_sb_info *sbi = mgr->sbi;
     d_obj_ref_list_t *data_list = NULL, *dentry_list = NULL;
     d_root_t *root;
 
-    layout = &sbi->layouts[get_layout_idx(sbi, ino)];
-    root = &mgr->d_roots[layout->cpuid];
+    root = &mgr->d_roots[cpuid];
 
+    *obj_refs = NULL;
     switch (type) {
     case OBJ_DATA: {
         use_droot(root, data);
@@ -1228,7 +1227,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     // cur_addr = out_param->addr;
     cur_addr = pkg_buf; 
     if (create_type == CREATE_FOR_RENAME) {
-        hk_dbgv("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
+        hk_dbgv("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, out_param->addr, get_pm_offset(sbi, out_param->addr));
         /* fill inode from existing inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
         inode_update.sih = sih;
@@ -1237,11 +1236,11 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         cur_addr += OBJ_INODE_SIZE;
     } else {
         if (create_type == CREATE_FOR_LINK)
-            hk_dbgv("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u (-> %u), addr: 0x%llx, offset: 0x%llx\n", ino, orig_ino, out_param->addr, get_pm_offset(sbi, out_param->addr));
         else if (create_type == CREATE_FOR_SYMLINK)
-            hk_dbgv("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next_pkg_addr, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u (symdata @ 0x%llx), addr: 0x%llx, offset: 0x%llx\n", ino, in_param->next_pkg_addr, out_param->addr, get_pm_offset(sbi, out_param->addr));
         else
-            hk_dbgv("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, cur_addr, get_pm_offset(sbi, cur_addr));
+            hk_dbgv("create new inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, out_param->addr, get_pm_offset(sbi, out_param->addr));
         /* fill inode */
         obj_inode = (struct hk_obj_inode *)cur_addr;
         __fill_pm_inode(sbi, obj_inode, ino, rdev, &inode_update);
@@ -1410,6 +1409,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     }
     pkg_hdr_param.fill_unlink_hdr.psih = psih;
     pkg_hdr_param.fill_unlink_hdr.dep_ofs = dep_ofs;
+    pkg_hdr_param.fill_unlink_hdr.unlinked_ino = sih->ino;
     fill_param.data = &pkg_hdr_param;
     __fill_pm_pkg_hdr(sbi, pkg_hdr, &fill_param);
     cur_addr += OBJ_PKGHDR_SIZE;

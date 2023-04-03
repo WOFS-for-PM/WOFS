@@ -1494,6 +1494,8 @@ static int hk_rescue_bm(struct super_block *sb)
     int i, ret = 0;
     u32 rescuer_num = HK_RESCUE_WORKERS;
 
+    hk_info("Rescue bitmap with %d rescuers\n", rescuer_num);
+
     init_waitqueue_head(&finish_wq);
     rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * rescuer_num, GFP_KERNEL);
     if (!rescuer_threads) {

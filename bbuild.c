@@ -1492,24 +1492,25 @@ static int hk_rescue_bm(struct super_block *sb)
     struct hk_sb_info *sbi = HK_SB(sb);
     struct task_struct **rescuer_threads;
     int i, ret = 0;
+    u32 rescuer_num = HK_RESCUE_WORKERS;
 
     init_waitqueue_head(&finish_wq);
-    rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * sbi->cpus, GFP_KERNEL);
+    rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * rescuer_num, GFP_KERNEL);
     if (!rescuer_threads) {
         hk_err(sb, "Allocate rescuer threads failed\n");
         ret = -ENOMEM;
         goto out;
     }
 
-    finished = kcalloc(sbi->cpus, sizeof(int), GFP_KERNEL);
+    finished = kcalloc(rescuer_num, sizeof(int), GFP_KERNEL);
     if (!finished) {
         hk_err(sb, "Allocate finished array failed\n");
         ret = -ENOMEM;
         goto out;
     }
-    memset(finished, 0, sizeof(int) * sbi->cpus);
+    memset(finished, 0, sizeof(int) * rescuer_num);
 
-    for (i = 0; i < sbi->cpus; i++) {
+    for (i = 0; i < rescuer_num; i++) {
         rescuer_param_t *param = (rescuer_param_t *)kzalloc(sizeof(rescuer_param_t), GFP_KERNEL);
         if (!param) {
             hk_err(sb, "Allocate rescuer param failed\n");
@@ -1518,7 +1519,7 @@ static int hk_rescue_bm(struct super_block *sb)
         }
         param->sbi = sbi;
         param->rescuer_id = i;
-        param->rescuer_num = sbi->cpus;
+        param->rescuer_num = rescuer_num;
 
         rescuer_threads[i] = kthread_create((void *)hk_bmblk_rescuer, (void *)param, "hk_bmblk_rescuer%d", i);
         if (IS_ERR(rescuer_threads[i])) {
@@ -1535,7 +1536,7 @@ static int hk_rescue_bm(struct super_block *sb)
         }
     }
 
-    wait_to_finish(sbi->cpus);
+    wait_to_finish(rescuer_num);
     kfree(finished);
     kfree(rescuer_threads);
 

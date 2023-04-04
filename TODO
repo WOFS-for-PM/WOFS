@@ -2,7 +2,16 @@
 - [ ] Pass fill_param to __fill_in_pm_inode
 - [ ] *Pass out in-DRAM object
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
-- [ ] Using memcpy to dump packages.
+
+# 2023/3/8 ~ 2023/4/3: Evaluation and Debugging  
+- [x] Using memcpy to dump packages
+- [x] Pass Normal/Failure Recovery
+- [x] Fix many minor bugs
+- [x] Measuring FIO/Filebench/Recovery Performance
+- [x] Optimize Failure Recovery: 
+    - [x] Apply Hint to Empty Block, avoiding scanning times.
+    - [x] Using Thread-Local Buffer to scan the empty block.
+    - [x] Using Bitmap Buffer to prevent frequent bitmap I/O.
 
 # 2023/3/6 ~ 2023/3/8: Some Optimizations
 - [x] Simplify create operation.

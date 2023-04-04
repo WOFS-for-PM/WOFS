@@ -56,8 +56,14 @@ void hk_clear_bit(u32 bit, u8 *bm)
 #define HK_BM_ADDR(sbi, bmblk_type) \
     (u8 *)((u64)sbi->pack_layout.bm_start + (bmblk_type * (sbi->pack_layout.tl_per_type_bm_reserved_blks << HUNTER_BLK_SHIFT)))
 
+/* normal recovery */
 u8 *in_dram_bm_buf = NULL;
 u8 *in_dram_blk_buf = NULL;
+/* failure recovery */
+u8 *in_dram_attr_bm = NULL;
+u8 *in_dram_data_bm = NULL;
+u8 *in_dram_create_bm = NULL;
+u8 *in_dram_unlink_bm = NULL;
 
 typedef struct recovery_pkgs_param {
     u8 *in_dram_bm_buf;
@@ -175,33 +181,107 @@ static void free_basic_list_node(struct basic_list_node *node)
         kfree(node);
 }
 
-static int hk_create_dram_bufs(struct hk_sb_info *sbi)
+static u8 *hk_create_dram_blk_buf(struct hk_sb_info *sbi)
+{
+    u8 *blk_buf = kvzalloc(HK_PBLK_SZ(sbi), GFP_KERNEL);
+    if (!blk_buf)
+        hk_err(sbi->sb, "failed to allocate blk_buf");
+
+    return blk_buf;
+}
+
+static void hk_free_dram_blk_buf(u8 *blk_buf)
+{
+    if (blk_buf)
+        kvfree(blk_buf);
+}
+
+static u8 *hk_create_dram_bm_buf(struct hk_sb_info *sbi)
+{
+    u8 *bm_buf = kvzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
+    if (!bm_buf)
+        hk_err(sbi->sb, "failed to allocate bm_buf");
+
+    return bm_buf;
+}
+
+static void hk_free_dram_bm_buf(u8 *bm_buf)
+{
+    if (bm_buf)
+        kvfree(bm_buf);
+}
+
+static int hk_create_dram_bufs_normal(struct hk_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
     hk_info("%s: Try to create bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi));
-    in_dram_bm_buf = kvzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
+    in_dram_bm_buf = hk_create_dram_bm_buf(sbi);
     if (!in_dram_bm_buf) {
-        hk_err(sb, "failed to allocate in_dram_bm_buf");
         return -ENOMEM;
     }
 
     hk_info("%s: Try to create blk buffer: %d bytes\n", __func__, HK_PBLK_SZ(sbi));
-    in_dram_blk_buf = kvzalloc(HK_PBLK_SZ(sbi), GFP_KERNEL);
+    in_dram_blk_buf = hk_create_dram_blk_buf(sbi);
     if (!in_dram_blk_buf) {
-        hk_err(sb, "failed to allocate in_dram_blk_buf");
-        kvfree(in_dram_bm_buf);
+        hk_free_dram_bm_buf(in_dram_bm_buf);
         return -ENOMEM;
     }
 
     return 0;
 }
 
-static void hk_destroy_dram_bufs(void)
+static void hk_destroy_dram_bufs_normal(void)
 {
     if (in_dram_bm_buf)
         kvfree(in_dram_bm_buf);
     if (in_dram_blk_buf)
         kvfree(in_dram_blk_buf);
+}
+
+static int hk_create_dram_bufs_failure(struct hk_sb_info *sbi)
+{
+    struct super_block *sb = sbi->sb;
+    hk_info("%s: Try to create 4 bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi) * 4);
+    
+    in_dram_attr_bm = hk_create_dram_bm_buf(sbi);
+    if (!in_dram_attr_bm) {
+        return -ENOMEM;
+    }
+    
+    in_dram_data_bm = hk_create_dram_bm_buf(sbi);
+    if (!in_dram_data_bm) {
+        hk_free_dram_bm_buf(in_dram_attr_bm);
+        return -ENOMEM;
+    }
+    
+    in_dram_create_bm = hk_create_dram_bm_buf(sbi);
+    if (!in_dram_create_bm) {
+        hk_free_dram_bm_buf(in_dram_attr_bm);
+        hk_free_dram_bm_buf(in_dram_data_bm);
+        return -ENOMEM;
+    }
+    
+    in_dram_unlink_bm = hk_create_dram_bm_buf(sbi);
+    if (!in_dram_unlink_bm) {
+        hk_free_dram_bm_buf(in_dram_attr_bm);
+        hk_free_dram_bm_buf(in_dram_data_bm);
+        hk_free_dram_bm_buf(in_dram_create_bm);
+        return -ENOMEM;
+    }
+
+    return 0;
+}
+
+static void hk_destroy_dram_bufs_failure(void)
+{
+    if (in_dram_attr_bm)
+        kvfree(in_dram_attr_bm);
+    if (in_dram_data_bm)
+        kvfree(in_dram_data_bm);
+    if (in_dram_create_bm)
+        kvfree(in_dram_create_bm);
+    if (in_dram_unlink_bm)
+        kvfree(in_dram_unlink_bm);
 }
 
 /* Recovery Routines for Pack Layout */
@@ -221,7 +301,17 @@ static inline u8 *__hk_get_blk_addr(struct hk_sb_info *sbi, void *buf, u32 blk)
 {
     u8 *addr;
     if (buf) {
-        memcpy(buf, get_pm_blk_addr(sbi, blk), HK_PBLK_SZ(sbi));
+        /* apply empirical read model */
+        int i, j;
+        size_t ra_win = sbi->ra_win;
+        size_t win = rounddown_pow_of_two(ra_win / HK_RESCUE_WORKERS);
+        
+        for (i = 0; i < HK_PBLK_SZ(sbi); i += win) {
+            for (j = i; j < (i + win); j += 256) {
+                prefetcht2(get_pm_blk_addr(sbi, blk) + j);
+            }
+            memcpy(buf + i, get_pm_blk_addr(sbi, blk) + i, win);
+        }
         addr = buf;
     } else {
         addr = get_pm_blk_addr(sbi, blk);
@@ -1269,7 +1359,7 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
     if (recovery_flags == NEED_FORCE_NORMAL_RECOVERY || !is_failure) {
         if (ENABLE_META_PACK(sb)) {
             pd = (struct hk_pack_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
-            hk_create_dram_bufs(sbi);
+            hk_create_dram_bufs_normal(sbi);
             /* Traverse create pkg */
             hk_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse unlink pkg */
@@ -1280,7 +1370,7 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
             hk_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
 
             destroy_min_data_vtail_table(&recovery_param);
-            hk_destroy_dram_bufs();
+            hk_destroy_dram_bufs_normal();
 
             atomic64_and(0, &sbi->pack_layout.vtail);
             if (is_failure) {
@@ -1346,15 +1436,51 @@ void __assign_rescuer_work(struct hk_sb_info *sbi, u32 rescuer_id, u32 rescuer_n
         probe_blks = end_blk - start_blk;
     }
 
-    work->create_bm = __hk_get_bm_addr(sbi, NULL, BMBLK_CREATE);
-    work->unlink_bm = __hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK);
-    work->attr_bm = __hk_get_bm_addr(sbi, NULL, BMBLK_ATTR);
-    work->data_bm = __hk_get_bm_addr(sbi, NULL, BMBLK_DATA);
+    work->create_bm = in_dram_create_bm; // __hk_get_bm_addr(sbi, in_dram_create_bm, BMBLK_CREATE);
+    work->unlink_bm = in_dram_unlink_bm; // __hk_get_bm_addr(sbi, in_dram_unlink_bm, BMBLK_UNLINK);
+    work->attr_bm = in_dram_attr_bm; // __hk_get_bm_addr(sbi, in_dram_attr_bm, BMBLK_ATTR);
+    work->data_bm = in_dram_data_bm; // __hk_get_bm_addr(sbi, in_dram_data_bm, BMBLK_DATA);
     work->probe_start_blk = probe_start_blk;
     work->probe_blks = probe_blks;
 }
 
-u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
+u32 hk_probe_hint(struct hk_sb_info *sbi, u8 *cur_blk)
+{
+    struct killer_bhint_hdr *bhint_hdr;
+    u32 orig_hcrc32, orig_bcrc32;
+    u32 calc_hcrc32, calc_bcrc32;
+    u32 hint = KILLER_HINT_OCCPY_BLK;
+
+    bhint_hdr = (struct killer_bhint_hdr *)cur_blk;
+    orig_hcrc32 = bhint_hdr->hcrc32;
+    orig_bcrc32 = bhint_hdr->bcrc32;
+
+    /* check hdr valid */
+    bhint_hdr->hcrc32 = 0;
+    calc_hcrc32 = hk_crc32c(~0, (u8 *)bhint_hdr, sizeof(struct killer_bhint_hdr));
+    
+    if (calc_hcrc32 != orig_hcrc32) {
+        goto out;
+    }
+
+    /* check hint */
+    hint = bhint_hdr->hint;
+    if (bhint_hdr->hint == KILLER_HINT_EMPTY_BLK) {
+        bhint_hdr->bcrc32 = 0;
+        calc_bcrc32 = hk_crc32c(~0, cur_blk, HK_PBLK_SZ(sbi));
+        if (calc_bcrc32 != orig_bcrc32) {
+            hint = KILLER_HINT_OCCPY_BLK;
+            goto out;
+        }
+    }
+
+out:
+    bhint_hdr->hcrc32 = orig_hcrc32;
+    bhint_hdr->bcrc32 = orig_bcrc32;
+    return hint;
+}
+
+u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
 {
     u8 *cur_blk;
     u8 *start_addr;
@@ -1363,11 +1489,17 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
     struct hk_obj_hdr *hdr;
     struct hk_pkg_hdr *pkg_hdr;
     u8 probe_type = PKG_TYPE_NUM;
+    u32 hint;
 
-    cur_blk = __hk_get_blk_addr(sbi, NULL, blk);
+    cur_blk = __hk_get_blk_addr(sbi, local_blk_buf, blk);
     in_pm_addr = get_pm_blk_addr(sbi, blk);
     remained_size = HK_PBLK_SZ(sbi);
     start_addr = cur_blk;
+
+    hint = hk_probe_hint(sbi, cur_blk);
+    if (hint == KILLER_HINT_EMPTY_BLK) {
+        goto out;
+    }
 
     while (cur_blk < start_addr + HK_PBLK_SZ(sbi)) {
         if (remained_size >= MTA_PKG_ATTR_SIZE) {
@@ -1423,6 +1555,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u32 blk)
         remained_size -= HUNTER_MTA_SIZE;
     }
 
+out:
     return probe_type;
 }
 
@@ -1430,6 +1563,7 @@ typedef struct rescuer_param {
     struct hk_sb_info *sbi;
     u32 rescuer_id;
     u32 rescuer_num;
+    u8 *local_blk_buf;
 } rescuer_param_t;
 
 void *hk_bmblk_rescuer(void *args)
@@ -1449,7 +1583,7 @@ void *hk_bmblk_rescuer(void *args)
     /* start probe */
     for (cur_blk = work.probe_start_blk; cur_blk < work.probe_start_blk + work.probe_blks; cur_blk++) {
         addr = get_pm_blk_addr(sbi, cur_blk);
-        probe_type = hk_probe_blk(sbi, cur_blk);
+        probe_type = hk_probe_blk(sbi, param->local_blk_buf, cur_blk);
         switch (probe_type) {
         case PKG_ATTR:
             hk_set_bit(cur_blk, work.attr_bm);
@@ -1497,6 +1631,9 @@ static int hk_rescue_bm(struct super_block *sb)
     hk_info("Rescue bitmap with %d rescuers\n", rescuer_num);
 
     init_waitqueue_head(&finish_wq);
+    
+    hk_create_dram_bufs_failure(sbi);
+    
     rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * rescuer_num, GFP_KERNEL);
     if (!rescuer_threads) {
         hk_err(sb, "Allocate rescuer threads failed\n");
@@ -1522,6 +1659,7 @@ static int hk_rescue_bm(struct super_block *sb)
         param->sbi = sbi;
         param->rescuer_id = i;
         param->rescuer_num = rescuer_num;
+        param->local_blk_buf = hk_create_dram_blk_buf(sbi);
 
         rescuer_threads[i] = kthread_create((void *)hk_bmblk_rescuer, (void *)param, "hk_bmblk_rescuer%d", i);
         if (IS_ERR(rescuer_threads[i])) {
@@ -1539,10 +1677,17 @@ static int hk_rescue_bm(struct super_block *sb)
     }
 
     wait_to_finish(rescuer_num);
-    kfree(finished);
-    kfree(rescuer_threads);
+
+    /* aggregate bm buffers to pm */
+    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
 
 out:
+    kfree(finished);
+    kfree(rescuer_threads);
+    hk_destroy_dram_bufs_failure();
     return 0;
 }
 

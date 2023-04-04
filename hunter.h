@@ -158,6 +158,7 @@ struct hk_range_node {
 #include "cmt.h"
 #include "generic_cachep.h"
 #include "dbg.h"
+#include "formater.h"
 
 static inline void prefetcht0(const void *x) {
 	asm volatile("prefetcht0 %0" : : "m" (*(const char* )x));

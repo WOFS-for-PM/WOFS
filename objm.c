@@ -637,7 +637,6 @@ int reclaim_dram_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
     /* since we use kmem cache, allocation and free are very fast */
     ref_attr_destroy(ref);
     sih->pack_spec.latest_fop.latest_attr = NULL;
-    sih->pack_spec.latest_fop.latest_inode = NULL;
     sih->pack_spec.latest_fop.latest_inline_attr = 0;
     return 0;
 }
@@ -1568,6 +1567,8 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
     in_param.cur_pkg_addr = pkg_unlink_addr;
     in_param.next_pkg_addr = pkg_create_addr;
     create_unlink_pkg(sbi, sih, psih, ref, &in_param, unlink_out_param);
+
+    obj_mgr_unload_imap_control(obj_mgr, sih);
 
     in_create_param.create_type = CREATE_FOR_RENAME;
     in_create_param.new_ino = (u32)-1;

@@ -727,15 +727,15 @@ void tl_destory(tl_allocator_t *alloc)
         typed_meta_mgr_t *tmeta_mgr;
         tmeta_mgr = &meta_mgr->tmeta_mgrs[i];
 
-        hash_for_each_safe(tmeta_mgr->used_blks, bkt, htemp, cur, hnode)
-        {
-            hash_del(&cur->hnode);
-        }
-
         list_for_each_safe(pos, n, &tmeta_mgr->free_list)
         {
             cur = list_entry(pos, tl_node_t, list);
             list_del(&cur->list);
+        }
+
+        hash_for_each_safe(tmeta_mgr->used_blks, bkt, htemp, cur, hnode)
+        {
+            hash_del(&cur->hnode);
             tl_free_node(cur);
         }
     }

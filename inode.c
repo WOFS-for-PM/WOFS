@@ -206,7 +206,16 @@ static int hk_free_inode(struct super_block *sb, struct hk_inode_info_header *si
     HK_START_TIMING(free_inode_t, free_time);
 
     sih->i_mode = 0;
-    sih->norm_spec.pi_addr = 0;
+    if (ENABLE_META_PACK(sb)) {
+        if (sih->pack_spec.latest_fop.latest_attr)
+            ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
+        if (sih->pack_spec.latest_fop.latest_inode)
+            ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
+        sih->pack_spec.latest_fop.latest_attr = NULL;
+        sih->pack_spec.latest_fop.latest_inode = NULL;
+    } else {
+        sih->norm_spec.pi_addr = 0;
+    }
     sih->i_size = 0;
     sih->i_blocks = 0;
 

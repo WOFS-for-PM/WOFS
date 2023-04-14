@@ -261,11 +261,15 @@ unsigned long hk_count_free_blocks(struct super_block *sb)
     unsigned long num_free_blocks = 0;
     int i;
 
-    for (i = 0; i < sbi->cpus; i++) {
-        layout = &sbi->layouts[i];
-        use_layout(layout);
-        num_free_blocks += (layout->ind.free_blks + layout->ind.invalid_blks);
-        unuse_layout(layout);
+    if (ENABLE_META_PACK(sb)) {
+        /* Do Nothing */
+    } else {
+        for (i = 0; i < sbi->cpus; i++) {
+            layout = &sbi->layouts[i];
+            use_layout(layout);
+            num_free_blocks += (layout->ind.free_blks + layout->ind.invalid_blks);
+            unuse_layout(layout);
+        }
     }
 
     return num_free_blocks;

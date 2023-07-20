@@ -47,7 +47,7 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
     pos = *ppos;
     index = pos >> PAGE_SHIFT; /* Start from which blk */
     offset = pos & ~PAGE_MASK; /* Start from ofs to the blk */
-    
+
     if (!access_ok(buf, len)) {
         error = -EFAULT;
         goto out;
@@ -65,7 +65,6 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
     if (len <= 0)
         goto out;
-    
 
     end_index = (isize - 1) >> PAGE_SHIFT;
 
@@ -125,14 +124,14 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
                         prefetcht2(dax_mem + offset + j);
                     }
                     left = __copy_to_user(buf + copied + i,
-                                        dax_mem + offset + i, win);
+                                          dax_mem + offset + i, win);
                 }
                 if (remain) {
                     for (i = iter; i < nr; i += 256) {
                         prefetcht2(dax_mem + offset + i);
                     }
                     left = __copy_to_user(buf + copied + iter,
-                                        dax_mem + offset + iter, remain);
+                                          dax_mem + offset + iter, remain);
                 }
             } else {
                 left = __copy_to_user(buf + copied,
@@ -180,11 +179,65 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
     bool is_overlay = false;
     struct hk_inode_info_header *sih = si->header;
 
-    if (index < sih->ix.num_slots && (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT)) != 0) {
+    if (index < sih->ix.num_slots && (u64)hk_inode_get_slot(sih, (index << HUNTER_BLK_SHIFT)) != 0) {
         is_overlay = true;
     }
 
     return is_overlay;
+}
+
+/* check whether partial content can be written in the allocated block */
+static __always_inline bool hk_check_inplace(loff_t pos, size_t len, size_t *relative_pos, size_t *written)
+{
+    bool is_inplace = false;
+    loff_t end_pos = pos + len - 1;
+    loff_t blk_start = _round_down(pos, HUNTER_BLK_SIZE);
+
+    if (blk_start == pos) {
+        *relative_pos = 0;
+        *written = 0;
+        return false;
+    }
+
+    *written = min(blk_start + HUNTER_BLK_SIZE - pos, len);
+    *relative_pos = pos - blk_start;
+
+    return true;
+}
+
+static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t len, unsigned char *content)
+{
+    bool in_place = false;
+    struct hk_inode_info_header *sih = si->header;
+    struct super_block *sb = si->vfs_inode.i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long irq_flags = 0;
+    void *ref;
+    size_t written = 0, relative_pos;
+
+    in_place = hk_check_inplace(pos, len, &relative_pos, &written);
+    if (in_place) {
+        ref = hk_inode_get_slot(sih, pos);
+        if (!ref) {
+            BUG_ON(1);
+        }
+
+        if (ENABLE_META_PACK(sb)) {
+            obj_ref_data_t *ref_data = (obj_ref_data_t *)ref;
+            void *target = get_pm_addr(sbi, ref_data->data_offset) + relative_pos;
+
+            hk_memunlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
+            memcpy_to_pmem_nocache(target, content, written);
+            hk_memlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
+
+            update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE, pos + written);
+        } else {
+            /* Not support now */
+            BUG_ON(1);
+        }
+    }
+
+    return written;
 }
 
 static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
@@ -535,7 +588,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_inode_info_header *sih = si->header;
     pgoff_t index, start_index, end_index, i;
     unsigned long blks;
-    loff_t isize, pos;
+    loff_t pos;
     size_t copied = 0;
     ssize_t written = 0;
     size_t error = 0;
@@ -566,6 +619,18 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     if (filp->f_flags & O_APPEND)
         pos = i_size_read(inode);
 
+    /* if append write, i.e., pos == file size, try to perform in-place write */
+    if (pos == inode->i_size) {
+        out_size = hk_try_inplace_write(si, pos, len, pbuf);
+
+        pos += out_size;
+        len -= out_size;
+        pbuf += out_size;
+        written += out_size;
+    }
+
+    out_size = 0;
+
     start_index = index = pos >> PAGE_SHIFT;   /* Start from which blk */
     end_index = (pos + len - 1) >> PAGE_SHIFT; /* End till which blk */
     blks = (end_index - index + 1);            /* Total blks to be written */
@@ -579,23 +644,25 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     hk_dbgv("%s: inode %lu, offset %lld, size %lu, blks %lu\n",
             __func__, inode->i_ino, pos, len, blks);
 
-    while (index <= end_index) {
-        ret = hk_alloc_blocks(sb, &blks, false, &prep);
-        if (ret) {
-            hk_dbg("%s alloc blocks failed %d\n", __func__, ret);
-            goto out;
+    if (len != 0) {
+        while (index <= end_index) {
+            ret = hk_alloc_blocks(sb, &blks, false, &prep);
+            if (ret) {
+                hk_dbg("%s alloc blocks failed %d\n", __func__, ret);
+                goto out;
+            }
+
+            do_perform_write(inode, &prep, pos, len, pbuf,
+                             index, start_index, end_index,
+                             &out_size);
+
+            pos += out_size;
+            len -= out_size;
+            pbuf += out_size;
+            written += out_size;
+
+            index += prep.blks_prepared;
         }
-
-        do_perform_write(inode, &prep, pos, len, pbuf,
-                         index, start_index, end_index,
-                         &out_size);
-
-        pos += out_size;
-        len -= out_size;
-        pbuf += out_size;
-        written += out_size;
-
-        index += prep.blks_prepared;
     }
 
     sih->i_blocks = end_index + 1;

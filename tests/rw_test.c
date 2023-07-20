@@ -9,8 +9,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define TEST_RAW 0
-#define TEST_RW  1
+#define TEST_RAW            0
+#define TEST_RW             1
+#define TEST_PARTIAL_APPEND 2
 
 #define REGISTER_TEST(NAME) \
     int test_##NAME(int fd, int argc, char const *argv[])
@@ -184,7 +185,7 @@ out_err:
     }
 
     printf("\n");
-    
+
     for (ri_byte = PAGE_SIZE * 3 + PAGE_SIZE / 2; ri_byte < PAGE_SIZE * 4 + PAGE_SIZE / 2; ri_byte++) {
         printf("%d", rbuf[ri_byte]);
         if ((ri_byte - (PAGE_SIZE * 3 + PAGE_SIZE / 2)) % 80 == 0 && (ri_byte - (PAGE_SIZE * 3 + PAGE_SIZE / 2)) != 0) {
@@ -194,6 +195,41 @@ out_err:
 
     printf("\n");
 
+    free(wbuf);
+    free(rbuf);
+    return ret;
+}
+
+REGISTER_TEST(PARTIAL_APPEND)
+{
+    const int append_size = 35;
+    char *wbuf = (char *)malloc(DEFAULT_IO_SIZE);
+    char *rbuf = (char *)malloc(DEFAULT_IO_SIZE);
+    int append_times = DEFAULT_IO_SIZE / append_size;
+    int remain_size = DEFAULT_IO_SIZE % append_size;
+    int ret = 0;
+
+    for (int i = 0; i < DEFAULT_IO_SIZE; i++) {
+        wbuf[i] = i % 256;
+    }
+
+    for (int i = 0; i < append_times; i++) {
+        write(fd, wbuf + i * append_size, append_size);
+    }
+
+    if (remain_size != 0) {
+        write(fd, wbuf + append_times * append_size, remain_size);
+    }
+
+    lseek(fd, 0, SEEK_SET);
+    read(fd, rbuf, DEFAULT_IO_SIZE);
+
+    if (memcmp(wbuf, rbuf, DEFAULT_IO_SIZE) != 0) {
+        ret = -1;
+        goto out;
+    }
+
+out:
     free(wbuf);
     free(rbuf);
     return ret;
@@ -209,6 +245,7 @@ void usage()
     printf("-o options  <num>\n");
     printf("            - 0 for read after write\n");
     printf("            - 1 for random write\n");
+    printf("            - 2 for partial small append\n");
     printf("Example: ./rw_test -f /mnt/pmem0 -o 1\n");
 }
 
@@ -263,6 +300,14 @@ int main(int argc, char const *argv[])
             printf("Random Read/write failed, %d\n", ret);
         } else {
             printf("Random Read/Write ok!\n");
+        }
+        break;
+    case TEST_PARTIAL_APPEND:
+        ret = test_PARTIAL_APPEND(fd, argc, argv);
+        if (ret) {
+            printf("Partial append failed\n");
+        } else {
+            printf("Partial append ok!\n");
         }
         break;
     default:

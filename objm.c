@@ -487,7 +487,7 @@ int obj_mgr_process_claim_request(obj_mgr_t *mgr, u64 dep_pkg_addr)
         kfree(pendlst);
     }
     HK_END_TIMING(process_claim_req_t, time);
-    
+
     return 0;
 }
 
@@ -758,7 +758,7 @@ int ur_dram_latest_inode(obj_mgr_t *mgr, struct hk_inode_info_header *sih, inode
 int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_update_t *update)
 {
     struct hk_sb_info *sbi = mgr->sbi;
-    
+
     if (!sih->pack_spec.latest_fop.latest_attr) {
         if (update->inline_update) {
             sih->pack_spec.latest_fop.latest_attr = ref_attr_create(0, sih->ino, update->from_pkg, update->dep_ofs);
@@ -776,15 +776,15 @@ int ur_dram_latest_attr(obj_mgr_t *mgr, struct hk_inode_info_header *sih, attr_u
         sih->pack_spec.latest_fop.latest_attr->from_pkg = update->from_pkg;
         sih->pack_spec.latest_fop.latest_attr->dep_ofs = update->dep_ofs;
     }
-    
-    hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), inline_attr=%llu (%u), ino=%d\n", 
-             get_pm_blk(sbi, get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr)), 
-             get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr) & ~PAGE_MASK, 
-             get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)), 
-             get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK, 
-             get_pm_blk(sbi, get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inline_attr)), 
-             get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inline_attr) & ~PAGE_MASK, 
-             sih->ino);
+
+    hk_dbgv("update dram: attr_blk=%llu (%u), dep_blk=%llu (%u), inline_attr=%llu (%u), ino=%d\n",
+            get_pm_blk(sbi, get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr)),
+            get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_attr->hdr.addr) & ~PAGE_MASK,
+            get_pm_blk(sbi, get_pm_addr(sbi, update->dep_ofs)),
+            get_pm_addr(sbi, update->dep_ofs) & ~PAGE_MASK,
+            get_pm_blk(sbi, get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inline_attr)),
+            get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inline_attr) & ~PAGE_MASK,
+            sih->ino);
 
     __update_dram_meta(sih, update);
 
@@ -824,7 +824,7 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     for (i = 0; i < num; i++) {
         linix_insert(&sih->ix, ofs_blk + i, ref, true);
     }
-    
+
     HK_END_TIMING(data_claim_t, time);
     return 0;
 }
@@ -1067,7 +1067,7 @@ void __fill_pm_dentry(struct hk_sb_info *sbi, struct hk_obj_dentry *dentry, fill
 }
 
 typedef struct fill_pkg_hdr {
-    u16 type; /* this package type */
+    u16 type;      /* this package type */
     u64 link_addr; /* guarantee atomicity for bin, point to another pkg */
     union {
         struct {
@@ -1089,7 +1089,7 @@ void __assign_create_pkg_hdr_param(struct hk_sb_info *sbi, fill_pkg_hdr_t *pkg_h
         pkg_hdr->create_hdr.parent_attr.i_size = pkg_hdr_param->fill_create_hdr.psih->i_size + OBJ_DENTRY;
         pkg_hdr->create_hdr.parent_attr.i_links_count = pkg_hdr_param->fill_create_hdr.psih->i_links_count + 1;
         pkg_hdr->create_hdr.parent_attr.i_cmtime = pkg_hdr_param->fill_create_hdr.psih->i_ctime;
-        
+
         pkg_hdr->create_hdr.attr.ino = pkg_hdr_param->fill_create_hdr.psih->ino;
     }
     BUG_ON(!pkg_hdr_param->fill_create_hdr.sih);
@@ -1224,7 +1224,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
 
     fill_attr_t attr_param;
     // cur_addr = out_param->addr;
-    cur_addr = pkg_buf; 
+    cur_addr = pkg_buf;
     if (create_type == CREATE_FOR_RENAME) {
         hk_dbgv("create inode pkg, ino: %u, addr: 0x%llx, offset: 0x%llx\n", ino, out_param->addr, get_pm_offset(sbi, out_param->addr));
         /* fill inode from existing inode */
@@ -1286,7 +1286,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     /* address re-assignment */
     obj_dentry = (struct hk_obj_dentry *)(out_param->addr + OBJ_INODE_SIZE);
     pkg_hdr = (struct hk_pkg_hdr *)(out_param->addr + OBJ_INODE_SIZE + OBJ_DENTRY_SIZE);
-    
+
     /* Now, we can update DRAM structures  */
     if (create_type == CREATE_FOR_RENAME) {
         /* fill pseudo attr in DRAM for further update, but do not allocate in PM */
@@ -1444,6 +1444,46 @@ out:
     return ret;
 }
 
+/* Not, only support update size now */
+int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
+                    u64 hdr_addr, u64 num_kv_pairs, ...)
+{
+    int i, ret = 0;
+    va_list ap;
+    struct hk_obj_data *data = (struct hk_obj_data *)hdr_addr;
+    size_t new_size = sih->i_size;
+
+    va_start(ap, (num_kv_pairs << 1));
+    for (i = 0; i < num_kv_pairs << 1; i += 2) {
+        u64 key = va_arg(ap, u64);
+        u64 value = va_arg(ap, u64);
+        switch (key) {
+        case UPDATE_SIZE:
+            /* ensure atomicity, store the value in the reserved area first */
+            /* NOTE: To recover, first assign `reserved` to 0, and see if the pack */
+            /*       is valid. If valid, fallback to non-changed size. Otherwise, */
+            /*       `i_size` is corrupted or write is not over. Copy value to `i_size` */
+            /*       re-commit. */
+            data->hdr.reserved = value;
+
+            data->i_size = value;
+            new_size = value;
+            /* flush + fence-once to commit the package */
+            commit_pkg(sbi, (void *)data, OBJ_DATA_SIZE, &data->hdr);
+            break;
+        default:
+            ret = -EINVAL;
+            break;
+        }
+    }
+    va_end(ap);
+
+    sih->i_size = new_size;
+
+    return ret;
+}
+
+/* create data pkg for a new inode, `data_addr`: in-pm addr, `offset`: in-file offset, `size`: written data size */
 int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     u64 data_addr, off_t offset, size_t size,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param)

@@ -66,8 +66,7 @@ typedef enum {
     PKG_TYPE_NUM
 } HUNT_PKG_TYPE;
 
-typedef enum 
-{
+typedef enum {
     BIN_RENAME = PKG_RENAME,
     BIN_SYMLINK = PKG_SYMLINK
 } HUNT_BIN_TYPE;
@@ -105,7 +104,7 @@ struct unlink_spec_hdr {
     struct __attribute__((__packed__)) {
         u64 i_size;
         u32 i_cmtime;
-        u32 ino;        /* parent inode number */
+        u32 ino; /* parent inode number */
         u16 i_links_count;
     } parent_attr;
     u32 unlinked_ino;
@@ -128,7 +127,7 @@ struct hk_obj_hdr {
     u32 type;
     u64 vtail;
     u32 crc32; /* fence-once */
-    u8 reserved[8];
+    u64 reserved;
 } __attribute__((__packed__));
 
 struct hk_pkg_hdr {
@@ -341,7 +340,7 @@ typedef struct in_pkg_param {
     /* if the package belongs to an larger package, then pass these arguments */
     u16 bin_type;
     u64 next_pkg_addr;
-    u64 cur_pkg_addr;   /* in-pm addr (not offset) */
+    u64 cur_pkg_addr; /* in-pm addr (not offset) */
     void *private;
 } in_pkg_param_t;
 
@@ -380,6 +379,9 @@ typedef struct out_create_pkg_param {
 #define GET_OFS_INBLK(ofs_addr) ((ofs_addr) & (HUNTER_BLK_SIZE - 1))
 #define GET_ENTRYNR(ofs_addr) \
     (GET_OFS_INBLK(ofs_addr) >> HUNTER_MTA_SHIFT)
+
+/* related to pkg update */
+#define UPDATE_SIZE 0
 
 static inline int get_pkg_hdr(u64 pkg_start, u16 pkg_type, u64 *pkg_hdr)
 {

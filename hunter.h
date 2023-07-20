@@ -469,6 +469,8 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
 int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                       struct hk_inode_info_header *psih, obj_ref_dentry_t *ref,
                       in_pkg_param_t *in_param, out_pkg_param_t *out_param);
+int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
+                    u64 hdr_addr, u64 num_kv_pairs, ...);
 int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     u64 data_addr, off_t offset, size_t size,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param);

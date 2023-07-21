@@ -187,20 +187,18 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
 }
 
 /* check whether partial content can be written in the allocated block */
-static __always_inline bool hk_check_inplace(loff_t pos, size_t len, size_t *relative_pos, size_t *written)
+static __always_inline bool hk_check_inplace(loff_t pos, size_t len, size_t *written)
 {
     bool is_inplace = false;
     loff_t end_pos = pos + len - 1;
     loff_t blk_start = _round_down(pos, HUNTER_BLK_SIZE);
 
     if (blk_start == pos) {
-        *relative_pos = 0;
         *written = 0;
         return false;
     }
 
     *written = min(blk_start + HUNTER_BLK_SIZE - pos, len);
-    *relative_pos = pos - blk_start;
 
     return true;
 }
@@ -213,9 +211,9 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
     struct hk_sb_info *sbi = HK_SB(sb);
     unsigned long irq_flags = 0;
     void *ref;
-    size_t written = 0, relative_pos;
+    size_t written = 0;
 
-    in_place = hk_check_inplace(pos, len, &relative_pos, &written);
+    in_place = hk_check_inplace(pos, len, &written);
     if (in_place) {
         ref = hk_inode_get_slot(sih, pos);
         if (!ref) {
@@ -224,7 +222,7 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
 
         if (ENABLE_META_PACK(sb)) {
             obj_ref_data_t *ref_data = (obj_ref_data_t *)ref;
-            void *target = get_pm_addr(sbi, ref_data->data_offset) + relative_pos;
+            void *target = get_pm_addr_by_data_ref(sbi, ref_data, pos);
 
             hk_memunlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
             memcpy_to_pmem_nocache(target, content, written);
@@ -588,7 +586,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_inode_info_header *sih = si->header;
     pgoff_t index, start_index, end_index, i;
     unsigned long blks;
-    loff_t pos;
+    loff_t pos, fsize;
     size_t copied = 0;
     ssize_t written = 0;
     size_t error = 0;
@@ -599,6 +597,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep prep;
     struct hk_layout_prep *pprep;
     size_t out_size = 0;
+    bool append_like = false;
     int ret = 0;
 
     INIT_TIMING(write_time);
@@ -616,11 +615,21 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
 
     pos = *ppos;
 
-    if (filp->f_flags & O_APPEND)
+    if (filp->f_flags & O_APPEND) {
+        append_like = true;
         pos = i_size_read(inode);
+    }
+
+    if (pos == i_size_read(inode)) {
+        append_like = true;
+    }
+
+    error = file_remove_privs(filp);
+    if (error)
+        goto out;
 
     /* if append write, i.e., pos == file size, try to perform in-place write */
-    if (pos == inode->i_size) {
+    if (append_like) {
         out_size = hk_try_inplace_write(si, pos, len, pbuf);
 
         pos += out_size;
@@ -634,10 +643,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     start_index = index = pos >> PAGE_SHIFT;   /* Start from which blk */
     end_index = (pos + len - 1) >> PAGE_SHIFT; /* End till which blk */
     blks = (end_index - index + 1);            /* Total blks to be written */
-
-    error = file_remove_privs(filp);
-    if (error)
-        goto out;
 
     inode->i_ctime = inode->i_mtime = current_time(inode);
 

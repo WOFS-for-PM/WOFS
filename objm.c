@@ -1465,6 +1465,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
             /*       `i_size` is corrupted or write is not over. Copy value to `i_size` */
             /*       re-commit. */
             data->hdr.reserved = value;
+            hk_flush_buffer(data, CACHELINE_SIZE, true);
 
             data->i_size = value;
             new_size = value;

@@ -895,6 +895,7 @@ static void __always_inline __fill_pm_obj_hdr(struct hk_sb_info *sbi, struct hk_
     hdr->type = type;
     hdr->vtail = hk_inc_and_get_vtail(sbi);
     hdr->crc32 = 0;
+    hdr->reserved = 0;
 }
 
 typedef struct fill_param {
@@ -1458,19 +1459,13 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         u64 key = va_arg(ap, u64);
         u64 value = va_arg(ap, u64);
         switch (key) {
-        case UPDATE_SIZE:
+        case UPDATE_SIZE_FOR_APPEND:
             /* ensure atomicity, store the value in the reserved area first */
             /* NOTE: To recover, first assign `reserved` to 0, and see if the pack */
-            /*       is valid. If valid, fallback to non-changed size. Otherwise, */
-            /*       `i_size` is corrupted or write is not over. Copy value to `i_size` */
-            /*       re-commit. */
+            /*       is valid. If valid, then this is a good package. Otherwise it */
+            /*       can be discarded.*/
             data->hdr.reserved = value;
             hk_flush_buffer(data, CACHELINE_SIZE, true);
-
-            data->i_size = value;
-            new_size = value;
-            /* flush + fence-once to commit the package */
-            commit_pkg(sbi, (void *)data, OBJ_DATA_SIZE, &data->hdr);
             break;
         default:
             ret = -EINVAL;

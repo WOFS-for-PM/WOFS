@@ -381,7 +381,7 @@ typedef struct out_create_pkg_param {
     (GET_OFS_INBLK(ofs_addr) >> HUNTER_MTA_SHIFT)
 
 /* related to pkg update */
-#define UPDATE_SIZE 0
+#define UPDATE_SIZE_FOR_APPEND 0
 
 static inline int get_pkg_hdr(u64 pkg_start, u16 pkg_type, u64 *pkg_hdr)
 {

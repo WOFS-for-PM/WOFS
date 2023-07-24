@@ -87,13 +87,19 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         if (ENABLE_META_PACK(sb)) {
             obj_ref_data_t *ref = NULL;
             ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
-            blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
-            if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
+            if (unlikely(ref == NULL)) {
+                hk_dbgv("%s: index: %d, ref is NULL\n", __func__, index);
+                nr = PAGE_SIZE;
                 zero = true;
             } else {
-                dax_mem = blk_addr;
+                blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
+                if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
+                    zero = true;
+                } else {
+                    dax_mem = blk_addr;
+                }
+                nr = (((u64)ref->num) - (index - (ref->ofs >> PAGE_SHIFT))) * HK_LBLK_SZ(sbi);
             }
-            nr = (((u64)ref->num) - (index - (ref->ofs >> PAGE_SHIFT))) * HK_LBLK_SZ(sbi);
         } else {
             blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
             if (blk_addr == 0) { /* It's a file hole */
@@ -186,16 +192,24 @@ static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index
     return is_overlay;
 }
 
-/* check whether partial content can be written in the allocated block */
-static __always_inline bool hk_check_inplace(loff_t pos, size_t len, size_t *written)
+/* Check whether partial content can be written in the allocated block. */
+/* `overflow` indicates that the [pos, pos + len) can not be written */
+/* in the current block. */
+static __always_inline bool hk_check_inplace(loff_t pos, size_t len, bool *overflow, size_t *written)
 {
     bool is_inplace = false;
     loff_t end_pos = pos + len - 1;
     loff_t blk_start = _round_down(pos, HUNTER_BLK_SIZE);
 
+    *overflow = false;
+
     if (blk_start == pos) {
         *written = 0;
         return false;
+    }
+
+    if (end_pos >= blk_start + HUNTER_BLK_SIZE) {
+        *overflow = true;
     }
 
     *written = min(blk_start + HUNTER_BLK_SIZE - pos, len);
@@ -205,7 +219,7 @@ static __always_inline bool hk_check_inplace(loff_t pos, size_t len, size_t *wri
 
 static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t len, unsigned char *content)
 {
-    bool in_place = false;
+    bool in_place = false, overflow = false;
     struct hk_inode_info_header *sih = si->header;
     struct super_block *sb = si->vfs_inode.i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -213,7 +227,7 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
     void *ref;
     size_t written = 0;
 
-    in_place = hk_check_inplace(pos, len, &written);
+    in_place = hk_check_inplace(pos, len, &overflow, &written);
     if (in_place) {
         ref = hk_inode_get_slot(sih, pos);
         if (!ref) {
@@ -228,7 +242,11 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
             memcpy_to_pmem_nocache(target, content, written);
             hk_memlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
 
-            update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE, pos + written);
+            /* NOTE: we delay cross-block write to newly allocated block. Thus achieving WO */
+            /*       atomicity can be guaranteed since either the append is OK or not. */
+            if (overflow == false) {
+                update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE_FOR_APPEND, pos + written);
+            }
         } else {
             /* Not support now */
             BUG_ON(1);

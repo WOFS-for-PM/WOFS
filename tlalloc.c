@@ -191,16 +191,13 @@ u32 bm64_fast_search_consecutive_bits(u64 bm, u32 bits)
         if (!res1) {
             HK_END_TIMING(bm_search_t, time);
             return i;
-        }
-        else if (!res2) {
+        } else if (!res2) {
             HK_END_TIMING(bm_search_t, time);
             return i + 1;
-        }
-        else if (!res3) {
+        } else if (!res3) {
             HK_END_TIMING(bm_search_t, time);
             return i + 2;
-        }
-        else if (!res4) {
+        } else if (!res4) {
             HK_END_TIMING(bm_search_t, time);
             return i + 3;
         }
@@ -308,14 +305,97 @@ static int tl_tree_insert_node(struct rb_root_cached *tree, tl_node_t *new_node)
         } else {
             hk_dbg("%s: node %lu - %lu already exists: "
                    "%lu - %lu\n",
-                   __func__, new_node->blk, new_node->blk,
-                   curr->blk, curr->blk);
+                   __func__, new_node->blk, new_node->dnode.num + new_node->blk - 1,
+                   curr->blk, curr->blk + curr->dnode.num - 1);
             return -EINVAL;
         }
     }
 
     rb_link_node(&new_node->node, parent, temp);
     rb_insert_color_cached(&new_node->node, tree, left_most);
+
+    return 0;
+}
+
+/* return 1 if found, 0 if not found. Ret node indicates the node that is exact smaller than the blk */
+static int tl_tree_find_node(struct rb_root_cached *tree, u64 blk, tl_node_t **ret_node)
+{
+    tl_node_t *curr = NULL;
+    struct rb_node *temp;
+    int compVal;
+    int ret = 0;
+
+    temp = tree->rb_root.rb_node;
+
+    while (temp) {
+        curr = container_of(temp, tl_node_t, node);
+        compVal = tl_node_compare(curr->blk, blk);
+
+        if (compVal > 0) {
+            temp = temp->rb_left;
+        } else if (compVal < 0) {
+            temp = temp->rb_right;
+        } else {
+            ret = 1;
+            break;
+        }
+    }
+
+    *ret_node = curr;
+
+    return ret;
+}
+
+/* flags indicate whether find data blocks or meta-block */
+static int tl_tree_find_free_slot(struct rb_root_cached *tree, u64 blk, u64 num, u16 flags, tl_node_t **prev, tl_node_t **next)
+{
+    tl_node_t *ret_node = NULL;
+    struct rb_node *tmp;
+    int ret;
+    u64 rng_low = blk;
+    u64 rng_high = blk + num - 1;
+    u64 ret_node_rng_low;
+    u64 ret_node_rng_high;
+
+    if (TL_ALLOC_TYPE(flags) == TL_MTA) {
+        BUG_ON(num != 1);
+    }
+
+    ret = tl_tree_find_node(tree, blk, &ret_node);
+    if (ret) {
+        hk_dbg("%s ERROR: %lu - %lu already in free list\n",
+               __func__, blk, blk + num - 1);
+        return -EINVAL;
+    }
+
+    ret_node_rng_low = ret_node->blk;
+    ret_node_rng_high = TL_ALLOC_TYPE(flags) == TL_BLK ? ret_node->blk + ret_node->dnode.num - 1 : ret_node->blk;
+
+    if (!ret_node) {
+        *prev = *next = NULL;
+    } else if (ret_node_rng_high < rng_low) {
+        *prev = ret_node;
+        tmp = rb_next(&ret_node->node);
+        if (tmp) {
+            *next = container_of(tmp, tl_node_t, node);
+        } else {
+            *next = NULL;
+        }
+    } else if (ret_node_rng_low > rng_high) {
+        *next = ret_node;
+        tmp = rb_prev(&ret_node->node);
+        if (tmp) {
+            *prev = container_of(tmp, tl_node_t, node);
+        } else {
+            *prev = NULL;
+        }
+    } else {
+        hk_dbg("%s ERROR: %lu - %lu overlaps with existing "
+               "node %lu - %lu\n",
+               __func__, rng_low, rng_high, ret_node_rng_low,
+               ret_node_rng_high);
+        return -EINVAL;
+    }
 
     return 0;
 }
@@ -333,9 +413,9 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
     node->blk = alloc->rng.low;
     node->dnode.num = blk;
     tl_tree_insert_node(&data_mgr->free_tree, node);
-    
+
     hk_dbgv("%s: free tree: %lu - %lu for cpu %d\n", __func__, node->blk, node->blk + blk - 1, alloc->cpuid);
-    
+
     /* typed metadata managers */
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
         tmeta_mgr = &alloc->meta_manager.tmeta_mgrs[i];
@@ -471,25 +551,36 @@ out:
     return ret;
 }
 
-static bool __tl_try_insert_data_blks(void *key, void *value, void *data)
+static bool __tl_try_insert_data_blks(struct rb_root_cached *tree, tl_node_t *prev, tl_node_t *next, tlfree_param_t *param)
 {
-    tlfree_param_t *param = data;
-    tl_node_t *node = value;
-    u64 blk = node->blk;
-    u64 num = node->dnode.num;
+    u64 rng_low = param->blk;
+    u64 rng_high = param->blk + param->num - 1;
+    u64 prev_rng_low = prev ? prev->blk : 0;
+    u64 prev_rng_high = prev ? prev->blk + prev->dnode.num - 1 : 0;
+    u64 next_rng_low = next ? next->blk : 0;
+    u64 next_rng_high = next ? next->blk + next->dnode.num - 1 : 0;
 
-    if (blk + num == param->blk) {
-        node->dnode.num = num + param->num;
+    if (prev && next && (rng_low == prev_rng_high + 1) &&
+        (rng_high + 1 == next_rng_low)) {
+        /* fits the hole */
+        rb_erase_cached(&next->node, tree);
+        prev->dnode.num += (param->num + next->dnode.num);
+        tl_free_node(next);
         param->freed = param->num;
         return true;
-    } else if (param->blk + param->num == blk) {
-        node->blk = param->blk;
-        node->dnode.num = param->num + num;
+    } else if (prev && (rng_low == prev_rng_high + 1)) {
+        /* Aligns left */
+        prev->dnode.num += param->num;
         param->freed = param->num;
         return true;
-    } else if (param->blk + param->num < blk) {
+    } else if (next && (rng_high + 1 == next_rng_low)) {
+        /* Aligns right */
+        next->blk = param->blk;
+        next->dnode.num += param->num;
+        param->freed = param->num;
         return true;
     }
+
     return false;
 }
 
@@ -511,7 +602,10 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
     if (TL_ALLOC_TYPE(flags) == TL_BLK) {
         u64 blk = param->blk;
         u64 num = param->num;
-        
+        tl_node_t *prev = NULL;
+        tl_node_t *next = NULL;
+        int ret;
+
         hk_dbgv("free blk %lu, num %lu\n", blk, num);
         if (alloc->rng.low > blk || alloc->rng.high < blk + num - 1) {
             hk_dbg("try free blk %lu, num %lu at %d\n", blk, num, alloc->cpuid);
@@ -519,12 +613,12 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         }
 
         spin_lock(&data_mgr->spin);
-        tl_traverse_tree(&data_mgr->free_tree, temp, node)
-        {
-            if (__tl_try_insert_data_blks((void *)node->blk, node, param)) {
-                break;
-            }
+        ret = tl_tree_find_free_slot(&data_mgr->free_tree, blk, num, flags, &prev, &next);
+        if (ret) {
+            hk_dbg("fail to find free data slot for [%lu, %lu] at layout %d\n", blk, blk + num - 1, alloc->cpuid);
+            BUG_ON(1);
         }
+        __tl_try_insert_data_blks(&data_mgr->free_tree, prev, next, param);
         spin_unlock(&data_mgr->spin);
 
         if (param->freed == 0) {
@@ -543,7 +637,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         typed_meta_mgr_t *tmeta_mgr;
         tl_node_t *cur;
         int idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
-        
+
         hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
@@ -560,7 +654,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
                 if (cur->mnode.bm == 0) {
                     hash_del(&cur->hnode);
                     /* The corner case is that one node is held by only used_blks table, */
-                    /* since it is too full to do further allocation, see `tlalloc()`. */ 
+                    /* since it is too full to do further allocation, see `tlalloc()`. */
                     /* Thus, we shall not del node from list again. */
                     if (__list_check_entry_freed(&cur->list) == false) {
                         list_del(&cur->list);
@@ -578,7 +672,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         if (param->freed == 0) {
             BUG_ON(1);
         }
-        
+
         spin_unlock(&tmeta_mgr->spin);
     }
 }
@@ -757,7 +851,7 @@ static bool __tl_dump_mnode(void *key, void *value, void *data)
 
 void tl_dump_data_mgr(data_mgr_t *data_mgr)
 {
-    struct rb_node *temp; 
+    struct rb_node *temp;
     tl_node_t *node;
 
     spin_lock(&data_mgr->spin);

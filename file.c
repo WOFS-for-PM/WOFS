@@ -226,6 +226,7 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
     unsigned long irq_flags = 0;
     void *ref;
     size_t written = 0;
+    INIT_TIMING(memcpy_time);
 
     in_place = hk_check_inplace(pos, len, &overflow, &written);
     if (in_place) {
@@ -238,11 +239,13 @@ static size_t hk_try_inplace_write(struct hk_inode_info *si, loff_t pos, size_t 
             obj_ref_data_t *ref_data = (obj_ref_data_t *)ref;
             void *target = get_pm_addr_by_data_ref(sbi, ref_data, pos);
 
+            HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
             hk_memunlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
             memcpy_to_pmem_nocache(target, content, written);
             hk_memlock_range(sb, target, HUNTER_BLK_SIZE, &irq_flags);
+            HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
-            /* NOTE: we delay cross-block write to newly allocated block. Thus achieving WO */
+            /* NOTE: we delay cross-block write to newly allocated block. Thus achieving WO. */
             /*       atomicity can be guaranteed since either the append is OK or not. */
             if (overflow == false) {
                 update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE_FOR_APPEND, pos + written);

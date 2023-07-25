@@ -1460,7 +1460,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         u64 value = va_arg(ap, u64);
         switch (key) {
         case UPDATE_SIZE_FOR_APPEND:
-            /* ensure atomicity, store the value in the reserved area first */
+            /* To avoid re-calc CheckSum, we store the value in the reserved area */
             /* NOTE: To recover, first assign `reserved` to 0, and see if the pack */
             /*       is valid. If valid, then this is a good package. Otherwise it */
             /*       can be discarded.*/

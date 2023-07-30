@@ -472,7 +472,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     u64 hdr_addr, u64 num_kv_pairs, ...);
 int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
-                    u64 data_addr, off_t offset, size_t size,
+                    u64 data_addr, off_t offset, size_t size, u64 num,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param);
 int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     int link_change, int size_change,

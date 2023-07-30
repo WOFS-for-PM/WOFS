@@ -33,8 +33,7 @@ struct hk_layout_info {
     u64 layout_start;
     u64 layout_end;
     u64 layout_blks;
-    union 
-    {
+    union {
         struct {
             u64 atomic_counter;
             u64 num_gaps_indram;
@@ -45,13 +44,13 @@ struct hk_layout_info {
             struct tl_allocator allocator;
         };
     };
-    
 };
 
 struct hk_layout_prep {
     int cpuid;
     u64 target_addr;
     u64 blks_prepared;
+    u64 blks_prep_to_use;
 };
 
 struct hk_layout_preps {

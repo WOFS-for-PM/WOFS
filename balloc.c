@@ -134,9 +134,9 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         if (ret) {
             return 0;
         }
-        
+
         hk_dbgv("%s: alloc blk range: %llu - %llu\n", __func__, param._ret_rng.low, param._ret_rng.high);
-            
+
         target_addr = get_pm_blk_addr(sbi, param._ret_rng.low);
         if (blks_prepared != NULL) {
             *blks_prepared = param._ret_allocated;
@@ -305,7 +305,7 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout->layout_end = layout->layout_start + size_per_layout;
         mutex_init(&layout->layout_lock);
         if (ENABLE_META_PACK(sb)) {
-            tl_alloc_init(&layout->allocator, cpuid, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE); 
+            tl_alloc_init(&layout->allocator, cpuid, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE);
         } else {
             layout->atomic_counter = 0;
             layout->num_gaps_indram = 0;

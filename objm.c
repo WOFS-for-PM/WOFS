@@ -1460,6 +1460,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         u64 value = va_arg(ap, u64);
         switch (key) {
         case UPDATE_SIZE_FOR_APPEND:
+            new_size = value;
             /* To avoid re-calc CheckSum, we store the value in the reserved area */
             /* NOTE: To recover, first assign `reserved` to 0, and see if the pack */
             /*       is valid. If valid, then this is a good package. Otherwise it */
@@ -1481,7 +1482,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 
 /* create data pkg for a new inode, `data_addr`: in-pm addr, `offset`: in-file offset, `size`: written data size */
 int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
-                    u64 data_addr, off_t offset, size_t size,
+                    u64 data_addr, off_t offset, size_t size, u64 num,
                     in_pkg_param_t *in_param, out_pkg_param_t *out_param)
 {
     obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
@@ -1490,13 +1491,12 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     data_update_t data_update;
     size_t aligned_size = _round_up(size, HK_LBLK_SZ(sbi));
     size_t size_after_write = offset + size > sih->i_size ? offset + size : sih->i_size;
-    u64 blk = 0, num = 0;
+    u64 blk = 0;
     int ret = 0;
     INIT_TIMING(time);
 
     HK_START_TIMING(new_data_trans_t, time);
     blk = get_pm_blk(sbi, data_addr);
-    num = (aligned_size >> HUNTER_BLK_SHIFT);
 
     ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, MTA_PKG_DATA_BLK);
     if (ret) {
@@ -1634,7 +1634,7 @@ int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const
     in_param.bin = 1;
     in_param.bin_type = PKG_SYMLINK;
     in_param.next_pkg_addr = 0;
-    create_data_pkg(sbi, sih, symaddr, 0, HK_LBLK_SZ(sbi), &in_param, data_out_param);
+    create_data_pkg(sbi, sih, symaddr, 0, HK_LBLK_SZ(sbi), 1, &in_param, data_out_param);
 
     in_param.next_pkg_addr = data_out_param->addr;
     create_new_inode_pkg(sbi, mode, name, sih, psih, &in_param, create_out_param);

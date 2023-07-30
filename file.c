@@ -602,16 +602,18 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     return 0;
 }
 
-static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, unsigned long *blks, unsigned long blks_orig, bool extend)
+static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, unsigned long *blks, unsigned long blks_orig, bool *extend)
 {
     if (prep->blks_prepared > blks_orig) {
         prep->blks_prep_to_use = blks_orig;
     } else {
         prep->blks_prep_to_use = prep->blks_prepared;
-        if (extend) {
+        if (*extend) {
+            hk_warn("%s: blks_prepared %lu, blks_orig %lu\n",
+                    __func__, prep->blks_prepared, blks_orig);
             /* revert to non-extend */
             *blks = blks_orig - prep->blks_prepared;
-            extend = false;
+            *extend = false;
         }
     }
 }
@@ -704,7 +706,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                 hk_dbg("%s alloc blocks failed %d, %d allocated\n", __func__, ret, blks_allocated);
                 goto out;
             }
-            hk_use_prepared_blocks(&prep, &blks, blks_orig, extend);
+            hk_use_prepared_blocks(&prep, &blks, blks_orig, &extend);
 
             do_perform_write(inode, &prep, pos, len, pbuf,
                              index, start_index, end_index,
@@ -720,8 +722,8 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         }
     }
 
-    sih->i_blocks = max(sih->i_blocks, start_index + blks_allocated); 
-    
+    sih->i_blocks = max(sih->i_blocks, start_index + blks_allocated);
+
     inode->i_blocks = sih->i_blocks;
 
     hk_dbgv("%s: len %lu\n",

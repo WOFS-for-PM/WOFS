@@ -46,16 +46,6 @@ void hk_clear_bit(u32 bit, u8 *bm)
     bm[byte] &= ~(1 << bit_in_byte);
 }
 
-#define BMBLK_ATTR      0
-#define BMBLK_UNLINK    1
-#define BMBLK_CREATE    2
-#define BMBLK_DATA      3
-#define BMBLK_NUM       (4)
-#define BMBLK_SIZE(sbi) (sbi->pack_layout.tl_per_type_bm_reserved_blks << PAGE_SHIFT)
-
-#define HK_BM_ADDR(sbi, bmblk_type) \
-    (u8 *)((u64)sbi->pack_layout.bm_start + (bmblk_type * (sbi->pack_layout.tl_per_type_bm_reserved_blks << HUNTER_BLK_SHIFT)))
-
 /* normal recovery */
 u8 *in_dram_bm_buf = NULL;
 u8 *in_dram_blk_buf = NULL;
@@ -1034,6 +1024,27 @@ unsigned long hk_get_bm_size(struct super_block *sb)
         hk_warn("meta pack is disabled, no need to allocate bitmap");
         return 0;
     }
+}
+
+void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
+{
+    u8 *bm;
+    unsigned long flags = 0;
+    struct super_block *sb = sbi->sb;
+    INIT_TIMING(time);
+
+    HK_START_TIMING(imm_set_bm_t, time);
+
+    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
+    
+    hk_memunlock_bm(sb, bmblk, &flags);
+    hk_set_bit(blk, bm);
+    /* NOTE: the bm is then fenced together with the first */ 
+    /* written entry in the corresponding container */
+    hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
+    hk_memlock_bm(sb, bmblk, &flags);
+    
+    HK_END_TIMING(imm_set_bm_t, time);
 }
 
 void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)

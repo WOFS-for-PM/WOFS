@@ -846,6 +846,14 @@ int reserve_pkg_space_in_layout(obj_mgr_t *mgr, struct hk_layout_info *layout, u
         hk_dbgv("%s failed %d\n", __func__, ret);
         goto out;
     }
+    
+    if (param._ret_allocated > 0) {
+        /* ensure meta block be written synchronously, for fast recovery */
+        /* let's see the penalty of this */
+        /* During sequential write, this can be ignored */
+        /* However, random write can suffer severe due to this */
+        hk_set_bm(sbi, meta_type_to_bmblk(TL_ALLOC_MTA_TYPE(m_alloc_type)), param._ret_rng.low);
+    }
 
     addr = param._ret_rng.low;
     entrynr = param._ret_rng.high;

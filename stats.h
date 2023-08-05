@@ -129,6 +129,7 @@ enum timing_category {
 	rebuild_title_t,
 	rebuild_dir_t,
 	rebuild_blks_t,
+	imm_set_bm_t,
 
 	/* Meta Operations */
 	meta_title_t, 

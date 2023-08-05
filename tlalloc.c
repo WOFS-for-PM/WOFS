@@ -510,7 +510,6 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
                 param->_ret_node = node;
                 param->_ret_rng.low = node->blk;
                 param->_ret_rng.high = entrynr;
-                param->_ret_allocated = param->req;
                 for (i = 0; i < param->req; i++) {
                     bm_set((u8 *)&node->mnode.bm, entrynr + i);
                 }
@@ -536,7 +535,9 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
         node = tl_create_node();
         node->blk = alloc_blk_param._ret_rng.low;
         node->mnode.bm = 0;
-
+        
+        param->_ret_allocated = 1;
+        
         spin_lock(&tmeta_mgr->spin);
         hash_add(tmeta_mgr->used_blks, &node->hnode, node->blk);
 

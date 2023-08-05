@@ -145,6 +145,7 @@ struct hk_range_node {
 #include "stats.h"
 #include "config.h"
 #include "dw.h"
+#include "bbuild.h"
 #include "tlalloc.h"
 #include "namei.h"
 #include "linix.h"
@@ -342,6 +343,7 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
 
 /* ======================= ANCHOR: bbuild.c ========================= */
 unsigned long hk_get_bm_size(struct super_block *sb);
+void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk);
 int hk_recovery(struct super_block *sb);
 int hk_save_layouts(struct super_block *sb);
 int hk_save_regions(struct super_block *sb);

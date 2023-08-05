@@ -268,5 +268,26 @@ static inline void hk_memlock_block(struct super_block *sb, void *bp, unsigned l
 		__hk_memlock_range(bp, sb->s_blocksize, flags);
 }
 
+static inline void hk_memunlock_bm(struct super_block *sb, u16 bmblk, unsigned long *flags)
+{
+	struct hk_sb_info *sbi = HK_SB(sb);
+	u64 addr = HK_BM_ADDR(sbi, bmblk);
+	u64 size = BMBLK_SIZE(sbi);
+	if (hk_range_check(sb, addr, size))
+		return;
+
+	if (hk_is_protected(sb))
+		__hk_memunlock_range(addr, size, flags);
+}
+
+static inline void hk_memlock_bm(struct super_block *sb, u16 bmblk, unsigned long *flags)
+{
+	struct hk_sb_info *sbi = HK_SB(sb);
+	u64 addr = HK_BM_ADDR(sbi, bmblk);
+	u64 size = BMBLK_SIZE(sbi);
+	if (hk_is_protected(sb))
+		__hk_memlock_range(addr, size, flags);
+}
+
 
 #endif /* _HK_WPROTECT_H */

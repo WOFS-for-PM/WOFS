@@ -3,6 +3,15 @@
 - [ ] *Pass out in-DRAM object
 - [ ] *Design Cache-able Objects to Alleviate Memory Consumption.
 
+# 2023/7/1 ~ 2023/8/5: Optimization and Real-World Evaluation
+- [x] Optimizing Append Operation
+  - [x] If the space is already allocated and not overwritten, then we can directly append the data to the end of the file.
+  - [x] Huge page allocation to reduce the number of PMEM allocations and the number of write package to maintain.
+- [x] Optimizing Block Free Operation: Using O(lgN) deletion algorithm instead of O(N) iteration.
+- [x] YCSB with LevelDB
+- [x] GraphChi
+- [x] Recovery Performance  
+
 # 2023/3/8 ~ 2023/4/3: Evaluation and Debugging  
 - [x] Using memcpy to dump packages
 - [x] Pass Normal/Failure Recovery

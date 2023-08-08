@@ -609,8 +609,8 @@ static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, 
     } else {
         prep->blks_prep_to_use = prep->blks_prepared;
         if (*extend) {
-            hk_warn("%s: blks_prepared %lu, blks_orig %lu\n",
-                    __func__, prep->blks_prepared, blks_orig);
+            // hk_warn("%s: blks_prepared %lu, blks_orig %lu\n",
+            //         __func__, prep->blks_prepared, blks_orig);
             /* revert to non-extend */
             *blks = blks_orig - prep->blks_prepared;
             *extend = false;

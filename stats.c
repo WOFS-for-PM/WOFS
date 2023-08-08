@@ -106,6 +106,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"rebuild_dir",
 	"rebuild_file",
 	"imm_set_bitmap",
+	"imm_clear_bitmap",
 
 	/* Meta Operations */
 	"=================== Meta ===================", 

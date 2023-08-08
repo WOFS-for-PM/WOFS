@@ -232,25 +232,25 @@ static int hk_create_dram_bufs_failure(struct hk_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
     hk_info("%s: Try to create 4 bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi) * 4);
-    
+
     in_dram_attr_bm = hk_create_dram_bm_buf(sbi);
     if (!in_dram_attr_bm) {
         return -ENOMEM;
     }
-    
+
     in_dram_data_bm = hk_create_dram_bm_buf(sbi);
     if (!in_dram_data_bm) {
         hk_free_dram_bm_buf(in_dram_attr_bm);
         return -ENOMEM;
     }
-    
+
     in_dram_create_bm = hk_create_dram_bm_buf(sbi);
     if (!in_dram_create_bm) {
         hk_free_dram_bm_buf(in_dram_attr_bm);
         hk_free_dram_bm_buf(in_dram_data_bm);
         return -ENOMEM;
     }
-    
+
     in_dram_unlink_bm = hk_create_dram_bm_buf(sbi);
     if (!in_dram_unlink_bm) {
         hk_free_dram_bm_buf(in_dram_attr_bm);
@@ -295,7 +295,7 @@ static inline u8 *__hk_get_blk_addr(struct hk_sb_info *sbi, void *buf, u32 blk)
         int i, j;
         size_t ra_win = sbi->ra_win;
         size_t win = rounddown_pow_of_two(ra_win / HK_RESCUE_WORKERS);
-        
+
         for (i = 0; i < HK_PBLK_SZ(sbi); i += win) {
             for (j = i; j < (i + win); j += 256) {
                 prefetcht2(get_pm_blk_addr(sbi, blk) + j);
@@ -328,6 +328,8 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
     u64 entrynr;
     u32 blk;
     u32 num;
+    bool second_chance = false;
+    u64 reserved = 0;
 
     data_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_DATA);
     hk_traverse_bm(sbi, data_bm, blk)
@@ -337,6 +339,19 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
         start_addr = cur_data;
         while (cur_data < start_addr + HK_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_data, PKG_DATA, (u64 *)&hdr);
+            if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr)) {
+                second_chance = false;
+            } else {
+                second_chance = true;
+            }
+
+            /* NOTE: reserved field is used for append optimization */
+            if (second_chance) {
+                data = (struct hk_obj_data *)cur_data;
+                reserved = data->hdr.reserved;
+                data->hdr.reserved = 0;
+            }
+
             if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr)) {
                 data = (struct hk_obj_data *)cur_data;
                 sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, data->ino);
@@ -361,6 +376,12 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
                         *max_vtail = data->hdr.vtail;
                 }
             }
+
+            if (second_chance) {
+                data = (struct hk_obj_data *)cur_data;
+                data->hdr.reserved = reserved;
+            }
+
             cur_data += OBJ_DATA_SIZE;
             in_pm_addr += OBJ_DATA_SIZE;
         }
@@ -772,7 +793,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
         tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_unlink)), &param);
 
         __hk_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
-        
+
         if (need_free_sih) {
             hk_free_hk_inode_info_header(sih);
         }
@@ -871,7 +892,7 @@ out:
     return ret;
 }
 
-static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, u64 in_pm_attr, 
+static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, u64 in_pm_attr,
                                        recovery_pkgs_param_t *recovery_param, u32 blk, u64 *max_vtail)
 {
     tlrestore_param_t param;
@@ -898,7 +919,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
     }
 
     INIT_LIST_HEAD(&invalid_data_list);
-    
+
     if (__check_should_update_attr(sbi, sih, attr->hdr.vtail, false)) {
         min_data_vtail = get_min_data_vtail(recovery_param, sih->ino);
         if (attr->hdr.vtail > min_data_vtail) {
@@ -1036,15 +1057,36 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     HK_START_TIMING(imm_set_bm_t, time);
 
     bm = __hk_get_bm_addr(sbi, NULL, bmblk);
-    
+
     hk_memunlock_bm(sb, bmblk, &flags);
     hk_set_bit(blk, bm);
-    /* NOTE: the bm is then fenced together with the first */ 
+    /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
     hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
     hk_memlock_bm(sb, bmblk, &flags);
-    
+
     HK_END_TIMING(imm_set_bm_t, time);
+}
+
+void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
+{
+    u8 *bm;
+    unsigned long flags = 0;
+    struct super_block *sb = sbi->sb;
+    INIT_TIMING(time);
+
+    HK_START_TIMING(imm_clear_bm_t, time);
+
+    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
+
+    hk_memunlock_bm(sb, bmblk, &flags);
+    hk_clear_bit(blk, bm);
+    /* NOTE: the bm is then fenced together with the first */
+    /* written entry in the corresponding container */
+    hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
+    hk_memlock_bm(sb, bmblk, &flags);
+
+    HK_END_TIMING(imm_clear_bm_t, time);
 }
 
 void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
@@ -1449,8 +1491,8 @@ void __assign_rescuer_work(struct hk_sb_info *sbi, u32 rescuer_id, u32 rescuer_n
 
     work->create_bm = in_dram_create_bm; // __hk_get_bm_addr(sbi, in_dram_create_bm, BMBLK_CREATE);
     work->unlink_bm = in_dram_unlink_bm; // __hk_get_bm_addr(sbi, in_dram_unlink_bm, BMBLK_UNLINK);
-    work->attr_bm = in_dram_attr_bm; // __hk_get_bm_addr(sbi, in_dram_attr_bm, BMBLK_ATTR);
-    work->data_bm = in_dram_data_bm; // __hk_get_bm_addr(sbi, in_dram_data_bm, BMBLK_DATA);
+    work->attr_bm = in_dram_attr_bm;     // __hk_get_bm_addr(sbi, in_dram_attr_bm, BMBLK_ATTR);
+    work->data_bm = in_dram_data_bm;     // __hk_get_bm_addr(sbi, in_dram_data_bm, BMBLK_DATA);
     work->probe_start_blk = probe_start_blk;
     work->probe_blks = probe_blks;
 }
@@ -1469,7 +1511,7 @@ u32 hk_probe_hint(struct hk_sb_info *sbi, u8 *cur_blk)
     /* check hdr valid */
     bhint_hdr->hcrc32 = 0;
     calc_hcrc32 = hk_crc32c(~0, (u8 *)bhint_hdr, sizeof(struct killer_bhint_hdr));
-    
+
     if (calc_hcrc32 != orig_hcrc32) {
         goto out;
     }
@@ -1642,9 +1684,9 @@ static int hk_rescue_bm(struct super_block *sb)
     hk_info("Rescue bitmap with %d rescuers\n", rescuer_num);
 
     init_waitqueue_head(&finish_wq);
-    
+
     hk_create_dram_bufs_failure(sbi);
-    
+
     rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * rescuer_num, GFP_KERNEL);
     if (!rescuer_threads) {
         hk_err(sb, "Allocate rescuer threads failed\n");
@@ -1720,7 +1762,7 @@ int hk_failure_recovery(struct super_block *sb)
 
     if (ENABLE_META_PACK(sb)) {
         ret = NEED_FORCE_NORMAL_RECOVERY;
-        hk_rescue_bm(sb);
+        // hk_rescue_bm(sb);
     } else {
         ret = NEED_NO_FURTHER_RECOVERY;
         /* Revisiting Meta Regions Here */

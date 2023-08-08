@@ -544,6 +544,10 @@ int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u1
     tl_build_free_param(&param, blk, (entrynr << 32) | num, TL_MTA | m_alloc_type);
     tlfree(&layout->allocator, &param);
 
+    if ((param.freed & TLFREE_BLK) == TLFREE_BLK) {
+        hk_clear_bm(sbi, meta_type_to_bmblk(TL_ALLOC_MTA_TYPE(m_alloc_type)), blk);
+    }
+
 out:
     return param.freed;
 }

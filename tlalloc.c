@@ -665,6 +665,8 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
                     tlfree_param_t free_blk_param;
                     tl_build_free_param(&free_blk_param, blk, 1, TL_BLK);
                     tlfree(alloc, &free_blk_param);
+
+                    param->freed |= TLFREE_BLK;
                 }
                 break;
             }

@@ -159,6 +159,8 @@ typedef struct tlalloc_param {
     tl_node_t *_ret_node;
 } tlalloc_param_t;
 
+#define TLFREE_BLK 0x8000000000000000
+
 typedef struct tlfree_param {
     u16 flags;
     u64 blk;
@@ -171,6 +173,7 @@ typedef struct tlfree_param {
             u32 entrynum;
         };
     };
+    /* reuse the highest bit of freed to represent whether the block is released.  */
     u64 freed;
 } tlfree_param_t;
 

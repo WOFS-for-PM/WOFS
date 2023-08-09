@@ -587,6 +587,8 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
                     sih->pack_spec.latest_fop.latest_inode->hdr.addr);
 
             obj_mgr_unload_imap_control(sbi->pack_layout.obj_mgr, sih);
+
+            bool found = false;
             for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
                 /* remove from parent */
                 obj_mgr_get_dobjs(sbi->pack_layout.obj_mgr, cpuid, pkg_hdr->unlink_hdr.parent_attr.ino, OBJ_DENTRY, (void *)&dentry_list);
@@ -596,10 +598,18 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
+                            if (sih->pack_spec.latest_fop.latest_attr)
+                                ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
+                            if (sih->pack_spec.latest_fop.latest_inode)
+                                ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
                             hk_free_hk_inode_info_header(sih);
+                            hk_free_obj_ref_dentry(ref_dentry);
+                            found = true;
                             break;
                         }
                     }
+                    if (found)
+                        break;
                 }
             }
         } else {
@@ -747,6 +757,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
+                            hk_free_obj_ref_dentry(ref_dentry);
                             need_free_sih = true;
                             break;
                         }
@@ -795,6 +806,10 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
         __hk_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
 
         if (need_free_sih) {
+            if (sih->pack_spec.latest_fop.latest_attr)
+                ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
+            if (sih->pack_spec.latest_fop.latest_inode)
+                ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
             hk_free_hk_inode_info_header(sih);
         }
     }

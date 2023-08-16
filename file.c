@@ -156,7 +156,8 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
         atomic64_fetch_sub_relaxed(1, &sbi->num_readers);
 
         HK_END_TIMING(memcpy_r_nvmm_t, memcpy_time);
-
+        HK_STATS_ADD(file_read, nr);
+        
         if (left) {
             hk_dbg("%s ERROR!: bytes %lu, left %lu\n",
                    __func__, nr, left);
@@ -711,6 +712,8 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
             do_perform_write(inode, &prep, pos, len, pbuf,
                              index, start_index, end_index,
                              &out_size);
+
+            HK_STATS_ADD(file_write, out_size);
 
             pos += out_size;
             len -= out_size;

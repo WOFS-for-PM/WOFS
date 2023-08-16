@@ -61,6 +61,12 @@ enum timing_category {
 	write_iter_t,
 	wrap_iter_t,
 	write_t,
+	create_inode_package_t,
+	create_data_package_t,
+	update_data_package_t,
+	create_unlink_package_t,
+	create_attr_package_t,
+	coarse_allocation_t,
 
 	/* Memory operations */
 	memory_title_t,
@@ -171,7 +177,12 @@ enum stats_category {
 	dax_new_blocks,
 	inplace_new_blocks,
 	fdatasync,
-
+	meta_read,
+	meta_write,
+	extra_write,		// The number of additional bytes written for crash consistency
+	file_read,
+	file_write,
+	
 	equalizer_migrated_blocks,
 	self_gc_migrated_blocks,
 

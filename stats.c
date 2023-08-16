@@ -37,6 +37,12 @@ const char *Timingstring[TIMING_NUM] = {
 	"write_iter",
 	"wrap_iter",
 	"write",
+	"create_inode_package",
+	"create_data_package",
+	"update_data_package",
+	"create_unlink_package",
+	"create_attr_package",
+	"coarse_allocation",
 
 	/* Memory operations */
 	"============== Memory operations ===============",
@@ -144,6 +150,25 @@ void hk_get_timing_stats(void)
 	}
 }
 
+void hk_print_meta_stats(struct super_block *sb) {
+	unsigned long meta_time = Timingstats[create_attr_package_t] + Timingstats[create_data_package_t]
+		+ Timingstats[create_inode_package_t] + Timingstats[create_unlink_package_t]
+		+ Timingstats[update_data_package_t] + Timingstats[imm_set_bm_t] + Timingstats[imm_clear_bm_t];
+	unsigned long meta_times = 	Countstats[create_attr_package_t] + Countstats[create_data_package_t]
+		+ Countstats[create_inode_package_t] + Countstats[create_unlink_package_t]
+		+ Countstats[update_data_package_t] + Countstats[imm_set_bm_t] + Countstats[imm_clear_bm_t];
+
+	pr_info("=========== NOVA meta_trace stats ============\n");
+	pr_info("meta_read: %llu\n", IOstats[meta_read]);
+	pr_info("meta_write: %llu\n", IOstats[meta_write]);
+	pr_info("data_read: %llu\n", IOstats[file_read]);
+	pr_info("data_write: %llu\n", IOstats[file_write]);
+	pr_info("meta_time: %llu\n", meta_time);
+	pr_info("meta_times: %llu", meta_times);
+	pr_info("data_write_time: %llu\n", Timingstats[memcpy_w_nvmm_t]);
+	pr_info("data_read_time: %llu\n", Timingstats[memcpy_r_nvmm_t]);
+	pr_info("COW_time: %llu\n", Timingstats[write_t]);
+}
 
 void hk_get_IO_stats(void)
 {

@@ -1204,6 +1204,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     int ret = 0;
     unsigned char pkg_buf[MTA_PKG_CREATE_SIZE];
     INIT_TIMING(time);
+    INIT_TIMING(meta_time);
 
     HK_START_TIMING(new_inode_trans_t, time);
 
@@ -1235,6 +1236,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         }
     }
 
+    HK_START_TIMING(create_inode_package_t, meta_time);
     fill_attr_t attr_param;
     // cur_addr = out_param->addr;
     cur_addr = pkg_buf;
@@ -1295,6 +1297,8 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     /* fence-once */
     memcpy_to_pmem_nocache((void *)out_param->addr, pkg_buf, MTA_PKG_CREATE_SIZE);
     hk_memlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
+    HK_END_TIMING(create_inode_package_t, meta_time);
+    HK_STATS_ADD(meta_write, MTA_PKG_CREATE_SIZE);
 
     /* address re-assignment */
     obj_dentry = (struct hk_obj_dentry *)(out_param->addr + OBJ_INODE_SIZE);
@@ -1395,6 +1399,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     u64 dep_ofs;
     int ret;
     INIT_TIMING(time);
+    INIT_TIMING(meta_time);
 
     HK_START_TIMING(new_unlink_trans_t, time);
 
@@ -1410,6 +1415,7 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     cur_addr = out_param->addr;
     dep_ofs = sih->pack_spec.latest_fop.latest_inode->hdr.addr;
 
+    HK_START_TIMING(create_unlink_package_t, meta_time);
     /* fill pkg hdr */
     fill_pkg_hdr_t pkg_hdr_param;
     struct hk_pkg_hdr *pkg_hdr = (struct hk_pkg_hdr *)cur_addr;
@@ -1428,6 +1434,8 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
 
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), cur_addr - out_param->addr, &pkg_hdr->hdr);
+    HK_END_TIMING(create_unlink_package_t, meta_time);
+    HK_STATS_ADD(meta_write, MTA_PKG_UNLINK_SIZE);
 
     /* fill pseudo parent attr to prevent in-PM allocation */
     fill_attr_t attr_param = {
@@ -1465,6 +1473,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     va_list ap;
     struct hk_obj_data *data = (struct hk_obj_data *)hdr_addr;
     size_t new_size = sih->i_size;
+    INIT_TIMING(meta_time);
 
     va_start(ap, (num_kv_pairs << 1));
     for (i = 0; i < num_kv_pairs << 1; i += 2) {
@@ -1472,6 +1481,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         u64 value = va_arg(ap, u64);
         switch (key) {
         case UPDATE_SIZE_FOR_APPEND:
+            HK_START_TIMING(update_data_package_t, meta_time);
             new_size = value;
             /* To avoid re-calc CheckSum, we store the value in the reserved area */
             /* NOTE: To recover, first assign `reserved` to 0, and see if the pack */
@@ -1479,6 +1489,8 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
             /*       can be discarded.*/
             data->hdr.reserved = value;
             hk_flush_buffer(data, CACHELINE_SIZE, true);
+            HK_END_TIMING(update_data_package_t, meta_time);
+            HK_STATS_ADD(meta_write, sizeof(value));
             break;
         default:
             ret = -EINVAL;
@@ -1506,6 +1518,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     u64 blk = 0;
     int ret = 0;
     INIT_TIMING(time);
+    INIT_TIMING(meta_time);
 
     HK_START_TIMING(new_data_trans_t, time);
     blk = get_pm_blk(sbi, data_addr);
@@ -1515,6 +1528,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
         goto out;
     }
 
+    HK_START_TIMING(create_data_package_t, meta_time);
     data = (struct hk_obj_data *)(out_param->addr);
 
     data->ino = sih->ino;
@@ -1534,6 +1548,8 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     }
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_DATA_SIZE, &data->hdr);
+    HK_END_TIMING(create_data_package_t, meta_time);
+    HK_STATS_ADD(meta_write, OBJ_DATA_SIZE);
 
     /* NOTE: prevent read after persist  */
     data_update.build_from_exist = false;
@@ -1563,12 +1579,14 @@ int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     fill_param_t fill_param;
     attr_update_t attr_update;
     int ret = 0;
+    INIT_TIMING(meta_time);
 
     ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_ATTR, MTA_PKG_ATTR_BLK);
     if (ret) {
         goto out;
     }
 
+    HK_START_TIMING(create_attr_package_t, meta_time);
     attr = (struct hk_obj_attr *)(out_param->addr);
     attr_param.options = FILL_ATTR_EXIST | (FILL_ATTR_SIZE_CHANGE | FILL_ATTR_LINK_CHANGE);
     attr_param.inherit = sih;
@@ -1579,6 +1597,8 @@ int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     fill_param.data = &attr_param;
     __fill_pm_attr(sbi, attr, &fill_param);
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_ATTR_SIZE, &attr->hdr);
+    HK_END_TIMING(create_attr_package_t, meta_time);
+    HK_STATS_ADD(meta_write, OBJ_ATTR_SIZE);
 
     attr_update.from_pkg = PKG_ATTR;
     ur_dram_latest_attr(obj_mgr, sih, &attr_update);

@@ -1081,6 +1081,7 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     hk_memlock_bm(sb, bmblk, &flags);
 
     HK_END_TIMING(imm_set_bm_t, time);
+    HK_STATS_ADD(meta_write, 1);
 }
 
 void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
@@ -1102,6 +1103,7 @@ void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     hk_memlock_bm(sb, bmblk, &flags);
 
     HK_END_TIMING(imm_clear_bm_t, time);
+    HK_STATS_ADD(meta_write, 1);
 }
 
 void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)

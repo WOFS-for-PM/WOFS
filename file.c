@@ -674,7 +674,8 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     /* if append write, i.e., pos == file size, try to perform in-place write */
     if (append_like) {
         out_size = hk_try_in_place_append_write(si, pos, len, pbuf);
-
+        HK_STATS_ADD(file_write, out_size);
+        
         pos += out_size;
         len -= out_size;
         pbuf += out_size;

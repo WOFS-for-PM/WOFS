@@ -1080,6 +1080,8 @@ static void hk_put_super(struct super_block *sb)
 #endif
 #endif
 
+    hk_print_timing_stats(sb);
+    
     if (ENABLE_META_ASYNC(sb)) {
         hk_stop_cmt_workers(sb);
         hk_flush_cmt_queue(sb);

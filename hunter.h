@@ -521,6 +521,7 @@ int hk_terminal_equalizer(struct super_block *sb);
 void hk_get_timing_stats(void);
 void hk_get_IO_stats(void);
 void hk_clear_stats(struct super_block *sb);
+void hk_print_timing_stats(struct super_block *sb);
 
 /* ======================= ANCHOR: sysfs.c ========================= */
 extern const char *proc_dirname;

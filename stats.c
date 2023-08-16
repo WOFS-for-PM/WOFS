@@ -170,6 +170,40 @@ void hk_print_meta_stats(struct super_block *sb) {
 	pr_info("COW_time: %llu\n", Timingstats[write_t]);
 }
 
+void hk_print_timing_stats(struct super_block *sb)
+{
+	int i;
+
+	hk_get_timing_stats();
+	hk_get_IO_stats();
+
+	hk_info("=========== HUNTER kernel timing stats ===========\n");
+	for (i = 0; i < TIMING_NUM; i++) {
+		/* Title */
+		if (Timingstring[i][0] == '=') {
+			hk_info("\n%s\n\n", Timingstring[i]);
+			continue;
+		}
+
+		if (measure_timing || Timingstats[i]) {
+			hk_info("%s: count %llu, timing %llu, average %llu\n",
+				Timingstring[i],
+				Countstats[i],
+				Timingstats[i],
+				Countstats[i] ?
+				Timingstats[i] / Countstats[i] : 0);
+		} else {
+			hk_info("%s: count %llu\n",
+				Timingstring[i],
+				Countstats[i]);
+		}
+	}
+
+	hk_info("\n");
+	hk_print_meta_stats(sb);
+}
+
+
 void hk_get_IO_stats(void)
 {
 	int i;

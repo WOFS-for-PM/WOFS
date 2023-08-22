@@ -879,7 +879,7 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
         lnode = list_entry(pos, struct basic_list_node, node);
         in_pm_rename_unlink = (u8 *)lnode->value;
         get_pkg_hdr(in_pm_rename_unlink, PKG_UNLINK, (u64 *)&rename_unlink_pkg_hdr);
-        in_pm_rename_create = get_pm_addr(sbi, rename_unlink_pkg_hdr->rename_hdr.next);
+        in_pm_rename_create = get_pm_addr(sbi, rename_unlink_pkg_hdr->hdr.reserved);
         get_pkg_hdr(in_pm_rename_create, PKG_CREATE, (u64 *)&rename_create_pkg_hdr);
 
         /* create pkg is not valid */

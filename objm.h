@@ -92,12 +92,12 @@ struct create_spec_hdr {
 
 static_assert(sizeof(struct create_spec_hdr) <= 56);
 
-struct rename_spec_hdr {
-    u64 next;  /* next package's offset. CREATE <-> UNLINK */
-    u64 vtail; /* next package's vtail. */
-} __attribute__((__packed__));
+// struct rename_spec_hdr {
+//     u64 next;  /* next package's offset. CREATE <-> UNLINK */
+//     u64 vtail; /* next package's vtail. */
+// } __attribute__((__packed__));
 
-static_assert(sizeof(struct rename_spec_hdr) <= 56);
+// static_assert(sizeof(struct rename_spec_hdr) <= 56);
 
 struct unlink_spec_hdr {
     /* parent attr */
@@ -136,7 +136,6 @@ struct hk_pkg_hdr {
     union {
         struct create_spec_hdr create_hdr;
         struct unlink_spec_hdr unlink_hdr;
-        struct rename_spec_hdr rename_hdr;
         u8 reserved[34];
     };
 } __attribute__((__packed__));

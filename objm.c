@@ -1141,7 +1141,8 @@ void __fill_pm_pkg_hdr(struct hk_sb_info *sbi, struct hk_pkg_hdr *pkg_hdr, fill_
         __assign_unlink_pkg_hdr_param(sbi, pkg_hdr_param, pkg_hdr);
         break;
     case PKG_RENAME:
-        pkg_hdr->rename_hdr.next = get_pm_offset(sbi, pkg_hdr_param->link_addr);
+        __assign_unlink_pkg_hdr_param(sbi, pkg_hdr_param, pkg_hdr);
+        pkg_hdr->hdr.reserved = get_pm_offset(sbi, pkg_hdr_param->link_addr);
         break;
     default:
         break;

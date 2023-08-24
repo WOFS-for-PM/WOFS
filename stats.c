@@ -151,11 +151,12 @@ void hk_get_timing_stats(void)
 }
 
 void hk_print_meta_stats(struct super_block *sb) {
-	unsigned long meta_time = Timingstats[create_attr_package_t] + Timingstats[create_data_package_t]
-		+ Timingstats[create_inode_package_t] + Timingstats[create_unlink_package_t]
+	unsigned long meta_time = Timingstats[new_attr_trans_t] + Timingstats[new_data_trans_t]
+		+ Timingstats[new_inode_trans_t] + Timingstats[new_unlink_trans_t]
 		+ Timingstats[update_data_package_t] + Timingstats[imm_set_bm_t] + Timingstats[imm_clear_bm_t];
-	unsigned long meta_times = 	Countstats[create_attr_package_t] + Countstats[create_data_package_t]
-		+ Countstats[create_inode_package_t] + Countstats[create_unlink_package_t]
+	
+	unsigned long meta_times = 	Countstats[new_attr_trans_t] + Countstats[new_data_trans_t]
+		+ Countstats[new_inode_trans_t] + Countstats[new_unlink_trans_t]
 		+ Countstats[update_data_package_t] + Countstats[imm_set_bm_t] + Countstats[imm_clear_bm_t];
 
 	pr_info("=========== NOVA meta_trace stats ============\n");

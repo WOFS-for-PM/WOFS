@@ -111,6 +111,13 @@ static inline void PERSISTENT_BARRIER(void)
                  :);
 }
 
+static inline void PERSISTENT_BARRIER2(void)
+{
+    asm volatile("mfence\n"
+                 :
+                 :);
+}
+
 static inline void MEMORY_BARRIER(void)
 {
     asm volatile("mfence\n"

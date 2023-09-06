@@ -203,11 +203,17 @@ typedef struct timespec timing_t;
 #define	INIT_TIMING(X)	timing_t X = {0}
 
 #define HK_START_TIMING(name, start) \
-	{if (measure_timing) getrawmonotonic(&start); }
+	{\
+		if (measure_timing)  { \
+			PERSISTENT_BARRIER2(); \
+			getrawmonotonic(&start);\ 
+		}\
+	}\
 
 #define HK_END_TIMING(name, start) \
 	{if (measure_timing) { \
 		INIT_TIMING(end); \
+		PERSISTENT_BARRIER2(); \
 		getrawmonotonic(&end); \
 		__this_cpu_add(Timingstats_percpu[name], \
 			(end.tv_sec - start.tv_sec) * 1000000000 + \

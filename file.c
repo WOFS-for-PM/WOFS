@@ -120,36 +120,34 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
 
         num_readers = atomic64_add_return_relaxed(1, &sbi->num_readers);
         if (!zero) {
-            win = rounddown_pow_of_two(ra_win / num_readers);
-            hk_dbgv("win_size: %lu, num_readers: %d\n", win, num_readers);
-            if (win != 0) {
-                iter = nr & ~(win - 1);
-                remain = nr & (win - 1);
-                for (i = 0; i < iter; i += win) {
-                    for (j = i; j < (i + win); j += 256) {
-                        prefetcht2(dax_mem + offset + j);
+            #if HK_PREFETCH_ENABLE == 1
+                win = rounddown_pow_of_two(ra_win / num_readers);
+                hk_dbgv("win_size: %lu, num_readers: %d\n", win, num_readers);
+                if (win != 0) {
+                    iter = nr & ~(win - 1);
+                    remain = nr & (win - 1);
+                    for (i = 0; i < iter; i += win) {
+                        for (j = i; j < (i + win); j += 256) {
+                            prefetcht2(dax_mem + offset + j);
+                        }
+                        left = __copy_to_user(buf + copied + i,
+                                            dax_mem + offset + i, win);
                     }
-                    left = __copy_to_user(buf + copied + i,
-                                          dax_mem + offset + i, win);
-                }
-                if (remain) {
-                    for (i = iter; i < nr; i += 256) {
-                        prefetcht2(dax_mem + offset + i);
+                    if (remain) {
+                        for (i = iter; i < nr; i += 256) {
+                            prefetcht2(dax_mem + offset + i);
+                        }
+                        left = __copy_to_user(buf + copied + iter,
+                                            dax_mem + offset + iter, remain);
                     }
-                    left = __copy_to_user(buf + copied + iter,
-                                          dax_mem + offset + iter, remain);
+                } else {
+                    left = __copy_to_user(buf + copied,
+                                        dax_mem + offset, nr);
                 }
-            } else {
+            #else
                 left = __copy_to_user(buf + copied,
-                                      dax_mem + offset, nr);
-            }
-
-            /* prefetch per 256 */
-            // for (i = 0; i < nr; i += 256) {
-            //     prefetcht2(dax_mem + offset + i);
-            // }
-            // left = __copy_to_user(buf + copied,
-            //                       dax_mem + offset, nr);
+                                    dax_mem + offset, nr);
+            #endif
         } else {
             left = __clear_user(buf + copied, nr);
         }

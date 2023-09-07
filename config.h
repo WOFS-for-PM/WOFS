@@ -53,7 +53,14 @@
 #define HK_RG_SLOTS              (1024 * 1024)
 #define HK_RG_ENTY_SLOTS         (4)
 #define HK_MLIST_INST_MAXRETRIES (5)
-#define HK_EXTEND_NUM_BLOCKS     (512)        /* for optimizing append/sequntial write */
+
+#ifndef HK_EXTEND_NUM_BLOCKS
+    #define HK_EXTEND_NUM_BLOCKS     (512)        /* for optimizing append/sequntial write */
+#endif
+#ifndef HK_PREFETCH_ENABLE
+    #define HK_PREFETCH_ENABLE       (1)          /* for read prefetch technique */
+#endif  
+
 #define HK_LINIX_SLOTS           (1024 * 256) /* related to init size */
 #define HK_HISTORY_WINDOWS       (1)          /* for dynamic workloads */
 #define HK_NAME_LEN              (128 - 36)

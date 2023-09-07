@@ -440,6 +440,8 @@ static inline void hk_mount_over(struct super_block *sb)
     hk_sync_super(sb);
 
     hk_info("MAX_GAP_BLKS_PER_LAYOUT: %llu\n", HK_MAX_GAPS_INRAM);
+    hk_info("PREFETCH ENABLED: %s\n", HK_PREFETCH_ENABLE == 1 ? "yes" : "no");
+    hk_info("HUGE ALLOCATION ENABLED: %s\n", HK_EXTEND_NUM_BLOCKS == 512 ? "yes(512 blocks)" : "no");
 }
 
 static inline void hk_umount_over(struct super_block *sb)

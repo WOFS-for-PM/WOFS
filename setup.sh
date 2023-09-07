@@ -20,9 +20,21 @@ ORIGINAL=$PWD
 WORK_DIR=$(dirname "$0")
 MNT_POINT=/mnt/pmem0
 
+if [ ! "$2" ]; then
+    HK_PREFETCH_ENABLE=1
+else
+    HK_PREFETCH_ENABLE="$2"
+fi
+
+if [ ! "$3" ]; then
+    HK_EXTEND_NUM_BLOCKS=512
+else
+    HK_EXTEND_NUM_BLOCKS="$3"
+fi
+
 # build project
 cd "$WORK_DIR" || exit
-sudo make -j"$(nproc)"
+sudo make -j"$(nproc)" HK_PREFETCH_ENABLE="$HK_PREFETCH_ENABLE" HK_EXTEND_NUM_BLOCKS="$HK_EXTEND_NUM_BLOCKS"
 sudo dmesg -C
 
 # parse config
@@ -94,5 +106,7 @@ echo "Mounting..."
 sudo mount -t HUNTER -o "$init_str" -o dax /dev/pmem0 $MNT_POINT
 echo "Mount with configs: "
 echo "$config_json" | jq
+echo -e "$CLR_GREEN""> HK_PREFETCH_ENABLE: $HK_PREFETCH_ENABLE""$CLR_END" 
+echo -e "$CLR_GREEN""> HK_EXTEND_NUM_BLOCKS: $HK_EXTEND_NUM_BLOCKS""$CLR_END"
 echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END" 
 cd "$ORIGINAL" || exit

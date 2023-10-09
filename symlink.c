@@ -36,14 +36,13 @@ int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
 		}
 	}
 
-	
 	/* the block is zeroed already */
 	hk_memunlock_block(sb, (void *)blk_addr, &irq_flags);
 	memcpy_to_pmem_nocache((void *)blk_addr, symname, len);
 	hk_memlock_block(sb, (void *)blk_addr, &irq_flags);
 
 	use_layout_for_addr(sb, blk_addr);
-	sm_valid_hdr(sb, blk_addr, inode->i_ino, blk_cur, get_version(sbi));
+	sm_valid_data_sync(sb, blk_addr, inode->i_ino, blk_cur, get_version(sbi));
 	unuse_layout_for_addr(sb, blk_addr);
 	
 	/* first block */
@@ -52,11 +51,6 @@ int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
 	if (out_blk_addr) {
 		*(u64 *)out_blk_addr = blk_addr;
 	}
-
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-	/* use size change for new inode creation */
-	hk_commit_sizechange(sb, inode, len);
-#endif
 
 	return 0;
 }

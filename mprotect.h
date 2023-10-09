@@ -169,21 +169,21 @@ static inline void hk_memlock_hdr(struct super_block *sb,
 		__hk_memlock_range(hdr, sizeof(struct hk_header), flags);
 }
 
-static inline void hk_memunlock_mregion(struct super_block *sb, 
-									struct hk_mregion *rg, unsigned long *flags)
+static inline void hk_memunlock_attr_log(struct super_block *sb, 
+									struct hk_attr_log *rg, unsigned long *flags)
 {
-	if (hk_range_check(sb, rg, sizeof(struct hk_mregion)))
+	if (hk_range_check(sb, rg, sizeof(struct hk_attr_log)))
 		return;
 
 	if (hk_is_protected(sb))
-		__hk_memunlock_range(rg, sizeof(struct hk_mregion), flags);
+		__hk_memunlock_range(rg, sizeof(struct hk_attr_log), flags);
 }
 
-static inline void hk_memlock_mregion(struct super_block *sb,
-				       			  struct hk_mregion *rg, unsigned long *flags)
+static inline void hk_memlock_attr_log(struct super_block *sb,
+				       			  struct hk_attr_log *rg, unsigned long *flags)
 {
 	if (hk_is_protected(sb))
-		__hk_memlock_range(rg, sizeof(struct hk_mregion), flags);
+		__hk_memlock_range(rg, sizeof(struct hk_attr_log), flags);
 }
 
 static inline void hk_memunlock_journal(struct super_block *sb, 

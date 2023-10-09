@@ -112,17 +112,6 @@ static int hk_seq_IO_show(struct seq_file *seq, void *v)
 		free_log_count, freed_log_pages,
 		free_data_count, freed_data_pages);
 
-	seq_printf(seq, "Fast GC %llu, check pages %llu, free pages %llu, average %llu\n",
-		Countstats[fast_gc_t], IOstats[fast_checked_pages],
-		IOstats[fast_gc_pages], Countstats[fast_gc_t] ?
-			IOstats[fast_gc_pages] / Countstats[fast_gc_t] : 0);
-	seq_printf(seq, "Thorough GC %llu, checked pages %llu, free pages %llu, average %llu\n",
-		Countstats[thorough_gc_t],
-		IOstats[thorough_checked_pages], IOstats[thorough_gc_pages],
-		Countstats[thorough_gc_t] ?
-			IOstats[thorough_gc_pages] / Countstats[thorough_gc_t]
-			: 0);
-
 	seq_puts(seq, "\n");
 
 	seq_puts(seq, "================ HK I/O stats ================\n\n");
@@ -137,35 +126,8 @@ static int hk_seq_IO_show(struct seq_file *seq, void *v)
 		IOstats[cow_write_breaks], Countstats[do_cow_write_t] ?
 			IOstats[cow_write_breaks] / Countstats[do_cow_write_t]
 			: 0);
-	seq_printf(seq, "Inplace write %llu, bytes %llu, average %llu, write breaks %llu, average %llu\n",
-		Countstats[inplace_write_t], IOstats[inplace_write_bytes],
-		Countstats[inplace_write_t] ?
-			IOstats[inplace_write_bytes] /
-			Countstats[inplace_write_t] : 0,
-		IOstats[inplace_write_breaks], Countstats[inplace_write_t] ?
-			IOstats[inplace_write_breaks] /
-			Countstats[inplace_write_t] : 0);
-	seq_printf(seq, "Inplace write %llu, allocate new blocks %llu\n",
-			Countstats[inplace_write_t],
-			IOstats[inplace_new_blocks]);
-	seq_printf(seq, "DAX get blocks %llu, allocate new blocks %llu\n",
-			Countstats[dax_get_block_t], IOstats[dax_new_blocks]);
-	seq_printf(seq, "Dirty pages %llu\n", IOstats[dirty_pages]);
-	seq_printf(seq, "Protect head %llu, tail %llu\n",
-			IOstats[protect_head], IOstats[protect_tail]);
-	seq_printf(seq, "Block csum parity %llu\n", IOstats[block_csum_parity]);
-	seq_printf(seq, "Page fault %llu, dax cow fault %llu, dax cow fault during snapshot creation %llu\n"
-			"CoW write overlap mmap range %llu, mapping/pfn updated pages %llu\n",
-			Countstats[mmap_fault_t], Countstats[mmap_cow_t],
-			IOstats[dax_cow_during_snapshot],
-			IOstats[cow_overlap_mmap],
-			IOstats[mapping_updated_pages]);
 	seq_printf(seq, "fsync %llu, fdatasync %llu\n",
 			Countstats[fsync_t], IOstats[fdatasync]);
-
-	seq_puts(seq, "============ HK GC Mechanism ============\n\n");
-	seq_printf(seq, "Self GC Migrations: %llu, Equalizer Migrations: %llu\n",
-		IOstats[self_gc_migrated_blocks], IOstats[equalizer_migrated_blocks]);
 
 	seq_puts(seq, "\n");
 

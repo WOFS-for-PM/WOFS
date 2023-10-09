@@ -1,37 +1,22 @@
 #include "hunter.h"
 
-wait_queue_head_t  cmt_finish_wq;
-int                cmt_finished[HK_CMT_WORKER_NUM];
+wait_queue_head_t cmt_finish_wq;
+int cmt_finished[HK_CMT_WORKER_NUM];
+int hk_request_cmt(struct super_block *sb, void *info, struct hk_inode_info_header *sih, enum hk_cmt_data_type req_type);
 
 static void wait_to_finish_cmt(void)
 {
-	int i;
+    int i;
 
-	for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
-		while (cmt_finished[i] == 0) {
-			wait_event_interruptible_timeout(cmt_finish_wq, false,
-							                 msecs_to_jiffies(1));
-		}
-	}
+    for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
+        while (cmt_finished[i] == 0) {
+            wait_event_interruptible_timeout(cmt_finish_wq, false,
+                                             msecs_to_jiffies(1));
+        }
+    }
 }
 
-int hk_request_cmt(struct super_block *sb, struct hk_cmt_info *info)
-{
-    struct hk_sb_info   *sbi = HK_SB(sb);
-    struct hk_cmt_queue *cq = sbi->cq;
-    u64 ino;
-    int key;
-    
-    ino = info->ino;
-
-    key = hash_min(ino, HK_CMT_QUEUE_BITS);
-    
-    mutex_lock(&cq->locks[key]);
-    chash_add_head(cq->table, &info->slot, key);
-    mutex_unlock(&cq->locks[key]);
-    return 0;
-}
-
+/* ===== High-level ===== */
 void hk_save_inode_state(struct inode *inode, struct hk_inode_state *state)
 {
     state->ino = inode->i_ino;
@@ -44,157 +29,270 @@ void hk_save_inode_state(struct inode *inode, struct hk_inode_state *state)
     state->gid = i_gid_read(inode);
 }
 
-int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
+int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_data_op op)
 {
-    struct hk_cmt_info *info;
+    struct hk_cmt_data_info *data_info;
     struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_inode_info_header *sih = HK_IH(inode);
 
-    info = hk_alloc_cmt_info(sb);
-    info->type = CMT_VALID;
-    info->ino = inode->i_ino;
-    info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ;
-    info->blk_start = f_blk;
-    info->blk_end = f_blk;
-    info->tstamp = get_version(sbi);
+    data_info = hk_alloc_hk_cmt_data_info();
+    INIT_LIST_HEAD(&data_info->lnode);
+    data_info->op = op;
+    data_info->addr_start = batch->addr_start;
+    data_info->addr_end = batch->addr_end;
+    data_info->blk_start = batch->blk_start;
+    data_info->blk_end = batch->blk_end;
+    data_info->tstamp = get_version(sbi);
 
-    hk_save_inode_state(inode, &info->state);
-    
-    hk_request_cmt(sb, info);
+    hk_request_cmt(sb, data_info, sih, DATA);
 
     return 0;
 }
 
-int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
+int hk_delegate_attr_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch)
 {
-    struct hk_cmt_info *info;
+    struct hk_cmt_attr_info *attr_info;
     struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_inode_info_header *sih = HK_IH(inode);
 
-    info = hk_alloc_cmt_info(sb);
-    info->type = CMT_INVALID;
-    info->ino = inode->i_ino;
-    info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ;
-    info->blk_start = f_blk;
-    info->blk_end = f_blk;
-    info->tstamp = get_version(sbi);
+    attr_info = hk_alloc_hk_cmt_attr_info();
+    INIT_LIST_HEAD(&attr_info->lnode);
+    attr_info->tstamp = get_version(sbi);
+    hk_save_inode_state(inode, &attr_info->state);
 
-    hk_save_inode_state(inode, &info->state);
-
-    hk_request_cmt(sb, info);
+    hk_request_cmt(sb, attr_info, sih, ATTR);
 
     return 0;
 }
 
-int hk_valid_range_background(struct super_block *sb, struct inode *inode, struct hk_cmt_batch *batch)
+int hk_delegate_jnl_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch)
 {
-    struct hk_cmt_info *info;
-    struct hk_sb_info *sbi = HK_SB(sb);
-
-    info = hk_alloc_cmt_info(sb);
-    info->type = CMT_VALID;
-    info->ino = inode->i_ino;
-    info->addr_start = batch->addr_start;
-    info->addr_end = batch->addr_end;
-    info->blk_start = batch->blk_start;
-    info->blk_end = batch->blk_end;
-    info->tstamp = get_version(sbi);
-
-    hk_save_inode_state(inode, &info->state);
-
-    hk_request_cmt(sb, info);
-
-    return 0;
+    return -ENOTSUPP;
 }
 
-struct hk_cmt_info *hk_grab_cmt_info(struct super_block *sb, int key)
+int hk_delegate_inode_async(struct super_block *sb, struct inode *inode)
 {
-    struct hk_sb_info   *sbi = HK_SB(sb);
+    return -ENOTSUPP;
+}
+
+/* ===== Low-level ===== */
+struct hk_cmt_node *hk_cmt_node_init(u64 ino)
+{
+    struct hk_cmt_node *node = hk_alloc_hk_cmt_node();
+
+#ifdef CONFIG_DECOUPLE_WORKER
+    hk_inf_queue_init(&node->data_queue);
+    hk_inf_queue_init(&node->attr_queue);
+    hk_inf_queue_init(&node->jnl_queue);
+#else
+    hk_inf_queue_init(&node->mono_queue);
+#endif
+    node->ino = ino;
+    return node;
+}
+
+void hk_cmt_node_destroy(struct hk_cmt_node *node)
+{
+    if (node)
+        hk_free_hk_cmt_node(node);
+}
+
+int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_queue *cq = sbi->cq;
-    struct hk_cmt_info  *info = NULL;
-    struct ch_slot      *slot;
-    
-    mutex_lock(&cq->locks[key]);
-    slot = chash_last(cq->table, key);
-    if (chash_is_sentinal(cq->table, key, slot)) {
-        goto out;
+    struct rb_root *tree = &cq->cmt_tree;
+    struct hk_cmt_node *curr;
+    struct rb_node **temp, *parent;
+    int compVal;
+
+    temp = &(tree->rb_node);
+    parent = NULL;
+
+    mutex_lock(&cq->lock);
+
+    while (*temp) {
+        curr = container_of(*temp, struct hk_cmt_node, rnode);
+        compVal = curr->ino > cmt_node->ino ? -1 : (curr->ino < cmt_node->ino ? 1 : 0);
+        parent = *temp;
+
+        if (compVal == -1) {
+            temp = &((*temp)->rb_left);
+        } else if (compVal == 1) {
+            temp = &((*temp)->rb_right);
+        } else {
+            hk_dbg("cmt node for inode %llu already exists\n", cmt_node->ino);
+            mutex_unlock(&cq->lock);
+            return -EINVAL;
+        }
     }
-    info = chlist_entry(slot, struct hk_cmt_info, slot);
-    chash_del(&info->slot);
-out:
-    mutex_unlock(&cq->locks[key]);
-    return info;
+
+    rb_link_node(&cmt_node->rnode, parent, temp);
+    rb_insert_color(&cmt_node->rnode, tree);
+
+    mutex_unlock(&cq->lock);
+
+    return 0;
 }
 
-int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
+struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino)
 {
-    struct hk_sb_info     *sbi = HK_SB(sb);
-    struct hk_header      *hdr, *hdr_traverse;
-    struct hk_inode       *pi;
-    struct inode          *inode = NULL;
-    struct hk_inode_state *state = NULL;
-    struct hk_layout_info *layout = NULL, *layout_migrated = NULL;
-    u64                   addr, blk, index, addr_migrated;
-    u64                   ino = info->ino;
-    u64                   addr_start = info->addr_start;
-    u64                   addr_end = info->addr_end;
-    u64                   blk_start = info->blk_start;
-    u64                   blk_end = info->blk_end;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_cmt_queue *cq = sbi->cq;
+    struct rb_root *tree = &cq->cmt_tree;
+    struct hk_cmt_node *curr;
+    struct rb_node **temp, *parent;
+    int compVal;
+
+    temp = &(tree->rb_node);
+    parent = NULL;
+
+    mutex_lock(&cq->lock);
+
+    while (*temp) {
+        curr = container_of(*temp, struct hk_cmt_node, rnode);
+        compVal = curr->ino > ino ? -1 : (curr->ino < ino ? 1 : 0);
+        parent = *temp;
+
+        if (compVal == -1) {
+            temp = &((*temp)->rb_left);
+        } else if (compVal == 1) {
+            temp = &((*temp)->rb_right);
+        } else {
+            return curr;
+        }
+    }
+    mutex_unlock(&cq->lock);
+
+    return NULL;
+}
+
+/* NOTE: do free cmt node */
+int hk_cmt_unmanage_node(struct super_block *sb, u64 ino)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_cmt_queue *cq = sbi->cq;
+    struct rb_root *tree = &cq->cmt_tree;
+    struct hk_cmt_node *curr;
+    struct rb_node **temp, *parent;
+    int compVal;
+
+    temp = &(tree->rb_node);
+    parent = NULL;
+
+    mutex_lock(&cq->lock);
+
+    while (*temp) {
+        curr = container_of(*temp, struct hk_cmt_node, rnode);
+        compVal = curr->ino > ino ? -1 : (curr->ino < ino ? 1 : 0);
+        parent = *temp;
+
+        if (compVal == -1) {
+            temp = &((*temp)->rb_left);
+        } else if (compVal == 1) {
+            temp = &((*temp)->rb_right);
+        } else {
+            rb_erase(&curr->rnode, tree);
+            hk_cmt_node_destroy(curr);
+            mutex_unlock(&cq->lock);
+            return 0;
+        }
+    }
+    mutex_unlock(&cq->lock);
+
+    return -EINVAL;
+}
+
+int hk_request_cmt(struct super_block *sb, void *info, struct hk_inode_info_header *sih, enum hk_cmt_data_type req_type)
+{
+#ifdef CONFIG_DECOUPLE_WORKER
+    switch (req_type) {
+    case DATA: {
+        struct hk_cmt_data_info *cmt_data = (struct hk_cmt_data_info *)info;
+        hk_inf_queue_add_tail_locked(&sih->cmt_node->data_queue, &cmt_data->lnode);
+        break;
+    }
+    case ATTR: {
+        struct hk_cmt_attr_info *cmt_attr = (struct hk_cmt_attr_info *)info;
+        hk_inf_queue_add_tail_locked(&sih->cmt_node->attr_queue, &cmt_attr->lnode);
+        break;
+    }
+    case JNL: {
+        struct hk_cmt_jnl_info *cmt_jnl = (struct hk_cmt_jnl_info *)info;
+        hk_inf_queue_add_tail_locked(&sih->cmt_node->jnl_queue, &cmt_jnl->lnode);
+        break;
+    }
+    case INODE:
+        // reader can not access the inode until the cmt_inode is finished value assignment.
+        WRITE_ONCE(sih->cmt_node->cmt_inode, (struct hk_cmt_inode_info *)info);
+        break;
+    default:
+        break;
+    }
+#else
+    struct hk_cmt_common_info *cmt_info = (struct hk_cmt_common_info *)info;
+    hk_inf_queue_add_tail_locked(&sih->cmt_node->mono_queue, &cmt_info->lnode);
+#endif
+    return 0;
+}
+
+int hk_grab_cmt_info(struct super_block *sb, struct hk_cmt_node *cmt_node, void *info_head, int type, int batch_num)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
+    int ret = 0;
+
+#ifdef CONFIG_DECOUPLE_WORKER
+    switch (type) {
+    case DATA:
+        ret = hk_inf_queue_try_pop_front_batch_locked(&cmt_node->data_queue, info_head, batch_num);
+        break;
+    case ATTR:
+        ret = hk_inf_queue_try_pop_front_batch_locked(&cmt_node->attr_queue, info_head, batch_num);
+        break;
+    case JNL:
+        ret = hk_inf_queue_try_pop_front_batch_locked(&cmt_node->jnl_queue, info_head, batch_num);
+        break;
+    case INODE:
+        (void)batch_num;
+        if (cmt_node->cmt_inode != NULL) {
+            info_head = cmt_node->cmt_inode;
+            cmt_node->cmt_inode = NULL;
+        }
+        break;
+    default:
+        BUG_ON(1);
+        break;
+    }
+#else
+    ret = hk_inf_queue_try_pop_front_batch_locked(&sih->cmt_node->mono_queue, &info_head, batch_num);
+#endif
+    return ret;
+}
+
+int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_info *data_info)
+{
+    struct hk_header *hdr;
+    struct hk_layout_info *layout = NULL;
+    u64 addr, blk, index;
+    u64 addr_start = data_info->addr_start;
+    u64 addr_end = data_info->addr_end;
+    u64 blk_start = data_info->blk_start;
+    u64 blk_end = data_info->blk_end;
 
     hdr = sm_get_hdr_by_addr(sb, addr_start);
     layout = sm_get_layout_by_hdr(sb, hdr);
-    
-    /* lock layout then lock nvm inode, preventing deadlock from equlizer */
     use_layout(layout);
-    use_nvm_inode(sb, ino);
-    pi = hk_get_inode_by_ino(sb, ino);
-    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1)
-    {
+    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
-        switch (info->type)
-        {
+        switch (data_info->op) {
         case CMT_VALID: {
-            sm_valid_hdr(sb, addr, ino, blk, info->tstamp);
+            sm_valid_data_sync(sb, addr, ino, blk, data_info->tstamp);
             break;
         }
         case CMT_INVALID: {
-            /* We must handle two exception here 
-               1. The target hdr is valid, but newer than the process info
-               2. The target hdr is invalid
-               - The first situation could be caused by equliazer migration process.
-               - The second situation could only be equliazer migration process, or truncate process  
-            */   
-            if ((hdr->valid && hdr->tstamp > info->tstamp) || 
-                (!hdr->valid)) {
-                hk_dbgv("hdr is migrated, in-NVM ver: %llu, in-Fly ver: %llu, valid: %d\n", 
-                        hdr->tstamp, info->tstamp, hdr->valid);
-                traverse_inode_hdr(sbi, pi, hdr_traverse) {
-                    /* We must ensure that no any invalidator is running at this time */
-                    if (blk == hdr_traverse->f_blk && hdr_traverse->valid) {
-                        addr_migrated = sm_get_addr_by_hdr(sb, hdr_traverse);
-                        layout = sm_get_layout_by_hdr(sb, hdr);
-                        layout_migrated = sm_get_layout_by_hdr(sb, hdr_traverse);
-                        
-                        hk_dbgv("hdr has been migrated: request at %llu in %d, newest at %llu in %d\n", hk_get_dblk_by_addr(sbi, addr), layout->cpuid, hk_get_dblk_by_addr(sbi, addr_migrated), layout_migrated->cpuid);
-                        /* Note that the situation below will not happen in GC-Mechnism workload. */
-                        /* We must handle the situation that (Note that A and B is in the same layout)):
-                            1. The target block (B) is invalid, and is migrated to a newly place A.
-                            2. A is then invalid by a foreground request: i.e. a new cmt request to invalid A is sent to the cmt queue.
-                            3. A is then invalided by Step 1, because we find that B is invalid.
-                            4. The request to invalid A is grabed, and finds that A is already invalid (see Step 3). So the cmt request in Step 2 is satisfied, we should normally drop it.  
-                         */
-                        if (layout->cpuid == layout_migrated->cpuid) {
-                            if (addr_migrated < addr) {
-                                sm_invalid_hdr(sb, addr_migrated, ino);
-                            }
-                        }      
-                    }
-                }
-            }
-            else if (hdr->tstamp <= info->tstamp) {
-                sm_invalid_hdr(sb, addr, ino);           
-            }
-            else {
+            if (hdr->tstamp <= data_info->tstamp) {
+                sm_invalid_data_sync(sb, addr, ino);
+            } else {
                 BUG_ON(1);
             }
             break;
@@ -203,59 +301,100 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
             break;
         }
     }
-    
-    state = &info->state;
-    hk_commit_inode_state(sb, state);
-
-    unuse_nvm_inode(sb, ino);
     unuse_layout(layout);
+}
 
-    hk_free_cmt_info(info);
+int hk_process_attr_info(struct super_block *sb, u64 ino, struct hk_cmt_attr_info *cmt_attr)
+{
+    struct hk_inode_state *state = NULL;
+
+    state = &cmt_attr->state;
+    hk_commit_inode_state(sb, state);
+    return 0;
+}
+
+int hk_process_jnl_info(struct super_block *sb, u64 ino, struct hk_cmt_jnl_info *cmt_jnl)
+{
+    return 0;
+}
+
+int hk_process_inode_info(struct super_block *sb, u64 ino, struct hk_cmt_inode_info *cmt_inode)
+{
+    return 0;
+}
+
+int hk_process_cmt_info(struct super_block *sb, u64 ino, void *info, int type)
+{
+    switch (type) {
+    case DATA:
+        hk_process_data_info(sb, ino, (struct hk_cmt_data_info *)info);
+        hk_free_hk_cmt_data_info((struct hk_cmt_data_info *)info);
+        break;
+    case ATTR:
+        hk_process_attr_info(sb, ino, (struct hk_cmt_attr_info *)info);
+        hk_free_hk_cmt_attr_info((struct hk_cmt_attr_info *)info);
+        break;
+    case JNL:
+        hk_process_jnl_info(sb, ino, (struct hk_cmt_jnl_info *)info);
+        hk_free_hk_cmt_jnl_info((struct hk_cmt_jnl_info *)info);
+        break;
+    case INODE:
+        hk_process_inode_info(sb, ino, (struct hk_cmt_inode_info *)info);
+        hk_free_hk_cmt_inode_info((struct hk_cmt_inode_info *)info);
+        break;
+    default:
+        break;
+    }
 
     return 0;
 }
 
-struct hk_cmt_worker_param
-{
-    struct super_block    *sb;
-    int                   work_id;
+/* == Worker == */
+struct hk_cmt_worker_param {
+    struct super_block *sb;
+    int work_id;
+#ifdef CONFIG_DECOUPLE_WORKER
+    int work_type;
+#endif
 };
 
-/* TODO: Signal Bugs that Occurs in GC */
-/* Reproduce scripts in QEMU:
-    qemu-system-x86_64 \
-        -kernel ~/linux-nova/arch/x86_64/boot/bzImage \
-        -nographic \
-        -smp 32 \
-        -initrd /home/deadpool/Playground/rootfs/initramfs.cpio \
-        -append "root=/dev/ram rdinit=/sbin/init console=ttyS0 nokaslr memmap=1G!1G" \
-        -s -S \
-        -m 8G
-*/
 static int hk_cmt_worker_thread(void *arg)
 {
     struct hk_cmt_worker_param *param = (struct hk_cmt_worker_param *)arg;
     struct super_block *sb = param->sb;
-    struct hk_sb_info  *sbi = HK_SB(sb);
-    struct hk_cmt_info *info;
+    struct hk_sb_info *sbi = HK_SB(sb);
     int work_id = param->work_id;
-    int key, start_key, end_key; 
+    enum hk_cmt_data_type work_type = DATA;
 
-    start_key = work_id * (1 << HK_CMT_QUEUE_BITS) / HK_CMT_WORKER_NUM;
-    end_key = (work_id + 1) * (1 << HK_CMT_QUEUE_BITS) / HK_CMT_WORKER_NUM;
+#ifdef CONFIG_DECOUPLE_WORKER
+    work_type = param->work_type;
+#endif
 
     allow_signal(SIGINT);
 
+    struct hk_cmt_queue *cq = sbi->cq;
+    struct hk_cmt_node *cmt_node, *cmt_node_next;
+    struct hk_cmt_common_info *info, *info_next;
+    struct list_head info_head;
+
+    INIT_LIST_HEAD(&info_head);
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
 
-        for (key = start_key; key < end_key; key++) {
-            up_invalidator(sb);
-            while ((info = hk_grab_cmt_info(sb, key)) != NULL) {
-                hk_process_single_cmt_info(sb, info);
+        rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_tree, rnode)
+        {
+            while (true) {
+                if (hk_grab_cmt_info(sb, cmt_node, &info_head, work_type, HK_CMT_BATCH_NUM) == 0) {
+                    break;
+                }
+
+                list_for_each_entry_safe(info, info_next, &info_head, lnode)
+                {
+                    list_del(&info->lnode);
+                    hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
+                    cond_resched();
+                }
             }
-            cond_resched();
-            down_invalidator(sb);
         }
     }
 
@@ -263,31 +402,44 @@ static int hk_cmt_worker_thread(void *arg)
         kfree(arg);
 
     flush_signals(current);
-    
+
     cmt_finished[work_id] = 1;
-	wake_up_interruptible(&cmt_finish_wq);
+    wake_up_interruptible(&cmt_finish_wq);
     hk_info("cmt workers %d finished\n", work_id);
+    return 0;
+}
+
+int hk_prepare_worker(struct super_block *sb, struct hk_cmt_worker_param *param, int worker_id)
+{
+    param->sb = sb;
+    param->work_id = worker_id;
+
+#ifdef CONFIG_DECOUPLE_WORKER
+    enum hk_cmt_data_type work_type = worker_id;
+    param->work_type = work_type;
+#endif
+
     return 0;
 }
 
 void hk_start_cmt_workers(struct super_block *sb)
 {
     struct hk_cmt_worker_param *param;
-    struct hk_sb_info  *sbi = HK_SB(sb);
+    struct hk_sb_info *sbi = HK_SB(sb);
     int ret;
     int i;
-    
+
     init_waitqueue_head(&cmt_finish_wq);
 
     for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
         param = kmalloc(sizeof(struct hk_cmt_worker_param), GFP_KERNEL);
-        param->sb = sb;
-        param->work_id = i;
-        
+
+        hk_prepare_worker(sb, param, i);
+
         cmt_finished[i] = 0;
-        sbi->cmt_workers[i] = kthread_create(hk_cmt_worker_thread, 
+        sbi->cmt_workers[i] = kthread_create(hk_cmt_worker_thread,
                                              param, "hk_cmt_worker_%d", i);
-        
+
         wake_up_process(sbi->cmt_workers[i]);
         hk_info("start cmt workers %d\n", i);
     }
@@ -295,7 +447,7 @@ void hk_start_cmt_workers(struct super_block *sb)
 
 void hk_stop_cmt_workers(struct super_block *sb)
 {
-    struct hk_sb_info  *sbi = HK_SB(sb);
+    struct hk_sb_info *sbi = HK_SB(sb);
     int i;
 
     for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
@@ -303,55 +455,66 @@ void hk_stop_cmt_workers(struct super_block *sb)
         kthread_stop(sbi->cmt_workers[i]);
         sbi->cmt_workers[i] = NULL;
     }
-    
+
     wait_to_finish_cmt();
 
     hk_info("stop %d cmt workers\n", HK_CMT_WORKER_NUM);
 }
 
-void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino)
+void hk_flush_cmt_inode_queue(struct super_block *sb, struct hk_cmt_node *cmt_node, enum hk_cmt_data_type type)
 {
-    struct hk_sb_info   *sbi = HK_SB(sb);
-    struct hk_cmt_queue *cq = sbi->cq;
-    struct hk_cmt_info  *info;
-    struct ch_slot      *slot;
-    struct ch_slot      *slot_prev;
-    int key;
+    struct hk_cmt_common_info *info, *info_next;
+    struct list_head info_head;
+    int queue_len = 0;
 
-    key = hash_min(ino, HK_CMT_QUEUE_BITS);
+    INIT_LIST_HEAD(&info_head);
 
-    mutex_lock(&cq->locks[key]);
-    
-    slot = chash_last(cq->table, key);
-    
-    /* Prevent Equlizer's function */
-    up_invalidator(sb);
-    while (!chash_is_sentinal(cq->table, key, slot)) {
-        info = chlist_entry(slot, struct hk_cmt_info, slot);
-        slot_prev = slot->prev;
-        if (info->ino == ino) {
-            chash_del(&info->slot);
-            hk_process_single_cmt_info(sb, info);
-        }
-        slot = slot_prev;
+#ifdef CONFIG_DECOUPLE_WORKER
+    switch (type) {
+    case DATA:
+        queue_len = hk_inf_queue_length(&cmt_node->data_queue);
+        break;
+    case ATTR:
+        queue_len = hk_inf_queue_length(&cmt_node->attr_queue);
+        break;
+    case JNL:
+        queue_len = hk_inf_queue_length(&cmt_node->jnl_queue);
+        break;
+    case INODE:
+        queue_len = 1;
+        break;
+    default:
+        break;
+    }
+#else
+    queue_len = hk_inf_queue_length(&cmt_node->mono_queue);
+#endif
+
+    hk_grab_cmt_info(sb, cmt_node, &info_head, type, queue_len);
+
+    list_for_each_entry_safe(info, info_next, &info_head, lnode)
+    {
+        list_del(&info->lnode);
+        hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
         cond_resched();
     }
-    down_invalidator(sb);
-    
-    mutex_unlock(&cq->locks[key]);
+}
+
+void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
+#ifdef CONFIG_DECOUPLE_WORKER
+    hk_flush_cmt_inode_queue(sb, cmt_node, DATA);
+    hk_flush_cmt_inode_queue(sb, cmt_node, ATTR);
+    hk_flush_cmt_inode_queue(sb, cmt_node, JNL);
+    hk_flush_cmt_inode_queue(sb, cmt_node, INODE);
+#else
+    hk_flush_cmt_inode_queue(sb, cmt_node, MAX_CMT_TYPE);
+#endif
 }
 
 void hk_flush_cmt_queue(struct super_block *sb)
 {
-    struct hk_cmt_info *info;
-    int key;
-
-    for (key = 0; key < (1 << HK_CMT_QUEUE_BITS); key++) {
-        while((info = hk_grab_cmt_info(sb, key)) != NULL) {
-            hk_process_single_cmt_info(sb, info);
-            cond_resched();
-        }
-    }
     hk_info("flush all cmt workers\n");
 }
 
@@ -361,17 +524,14 @@ struct hk_cmt_queue *hk_init_cmt_queue(void)
     int i;
 
     cq = kmalloc(sizeof(struct hk_cmt_queue), GFP_KERNEL);
-    
+
     if (!cq) {
         hk_warn("hk_init_cmt_queue: failed to allocate memory for cq\n");
         return NULL;
     }
-    
-    chash_init(cq->table, HK_CMT_QUEUE_BITS);
-    
-    for (i = 0; i < (1 << HK_CMT_QUEUE_BITS); i++) {
-        mutex_init(&cq->locks[i]);
-    }
+
+    cq->cmt_tree = RB_ROOT;
+    mutex_init(&cq->lock);
 
     return cq;
 }

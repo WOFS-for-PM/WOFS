@@ -28,30 +28,16 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
 			__func__, (u64)inode->i_ino,
 			pidir->i_size, ctx->pos);
 
-	// if (sih.) {
-	// 	hk_err(sb, "Dir %lu is NULL!\n", inode->i_ino);
-	// 	return -ENOSPC;
-	// }
-
 	pos = ctx->pos;
 
     if (pos == READDIR_END)
         goto out;
 
-    // TODO: Emit Dirs
-
     /* Commit dots */
     if (!dir_emit_dots(file, ctx))
         return 0;
 
-	// FIXME: Only for the test
-	if (!dir_emit(ctx, "test", 5, 1, DT_REG))
-    {
-        hk_dbg("%s: dir_emit failed\n", __func__);
-        return -EIO;
-    }
-
-	hash_for_each(sih->dirs, bkt, cur, node) {
+	hash_for_each_bits(sih->dirs, HK_HASH_BITS, bkt, cur, node) {
 		child_pi = hk_get_inode_by_ino(sb, cur->direntry->ino);
 		if (!dir_emit(ctx, cur->direntry->name, cur->direntry->name_len, 
 					cur->direntry->ino, 

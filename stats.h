@@ -73,52 +73,7 @@ enum timing_category {
 	/* Memory management */
 	mm_title_t,
 	new_blocks_t,
-	new_data_blocks_t,
-	new_log_blocks_t,
 	free_blocks_t,
-	free_data_t,
-	free_log_t,
-
-	/* Transaction */
-	trans_title_t,
-	create_trans_t,
-	link_trans_t,
-	update_tail_t,
-
-	/* Logging */
-	logging_title_t,
-	append_dir_entry_t,
-	append_file_entry_t,
-	append_mmap_entry_t,
-	append_link_change_t,
-	append_setattr_t,
-	append_snapshot_info_t,
-	update_entry_t,
-
-	/* Tree */
-	tree_title_t,
-	check_entry_t,
-	assign_t,
-
-	/* GC */
-	gc_title_t,
-	fast_gc_t,
-	thorough_gc_t,
-	check_invalid_t,
-
-	/* Integrity */
-	integrity_title_t,
-	block_csum_t,
-	block_parity_t,
-	block_csum_parity_t,
-	protect_memcpy_t,
-	protect_file_data_t,
-	verify_entry_csum_t,
-	verify_data_csum_t,
-	calc_entry_csum_t,
-	restore_data_t,
-	reset_mapping_t,
-	reset_vma_t,
 
 	/* Others */
 	others_title_t,
@@ -137,19 +92,6 @@ enum timing_category {
 	evict_inode_t,
 	perf_t,
 	wprotect_t,
-
-	/* Mmap */
-	mmap_title_t,
-	mmap_fault_t,
-	pmd_fault_t,
-	pfn_mkwrite_t,
-	insert_vma_t,
-	remove_vma_t,
-	set_vma_read_t,
-	mmap_cow_t,
-	update_mapping_t,
-	update_pfn_t,
-	mmap_handler_t,
 
 	/* Rebuild */
 	rebuild_title_t,
@@ -172,6 +114,7 @@ enum timing_category {
 
 	/* Linix */
 	linix_title_t,
+	linix_set_t,
 	linix_get_t,
 
 	/* FriendlyGC */
@@ -204,9 +147,6 @@ enum stats_category {
 	dax_new_blocks,
 	inplace_new_blocks,
 	fdatasync,
-
-	equalizer_migrated_blocks,
-	self_gc_migrated_blocks,
 
 	/* Sentinel */
 	STATS_NUM,

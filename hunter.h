@@ -132,7 +132,9 @@ struct hk_range_node {
 };
 
 /* ======================= ANCHOR: HUNTER Includes ========================= */
+#include "infqueue.h"
 #include "chash.h"
+#include "ext_hashtable.h"
 #include "stats.h"
 #include "config.h"
 #include "dw.h"
@@ -140,11 +142,12 @@ struct hk_range_node {
 #include "linix.h"
 #include "super.h"
 #include "inode.h"
+#include "cmt.h"
+#include "generic_cachep.h"
 #include "config.h"
 #include "balloc.h"
 #include "meta.h"
 #include "mprotect.h"
-#include "cmt.h"
 
 /* blk_addr is the offset addr in NVMM */
 static inline void *hk_get_block(struct super_block *sb, u64 blk_addr)
@@ -304,14 +307,6 @@ int hk_range_remove_range(struct super_block *sb, struct list_head *head,
                           unsigned long range_low, unsigned long range_high);
 void hk_range_free_all(struct list_head *head);
 
-/* ======================= ANCHOR: super.c ========================= */
-struct hk_range_node *hk_alloc_range_node(struct super_block *sb);
-void hk_free_range_node(struct hk_range_node *node);
-struct hk_cmt_info *hk_alloc_cmt_info(struct super_block *sb);
-void hk_free_cmt_info(struct hk_cmt_info *node);
-struct hk_dentry_info *hk_alloc_dentry_info(struct super_block *sb);
-void hk_free_dentry_info(struct hk_dentry_info *node);
-
 /* ======================= ANCHOR: rebuild.c ========================= */
 void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih, 
                     u16 i_mode);
@@ -333,7 +328,6 @@ u64 hk_prepare_layout(struct super_block* sb, int cpuid, u64 blks, enum hk_layou
 int hk_prepare_layouts(struct super_block *sb, u32 blks, bool zero, struct hk_layout_preps *preps);
 void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *prep);
 void hk_trv_prepared_layouts_init(struct hk_layout_preps* preps);
-u64 hk_rollback_layouts(struct super_block *sb, struct hk_layout_preps *preps);
 struct hk_layout_prep* hk_trv_prepared_layouts(struct super_block *sb, 
 											   struct hk_layout_preps* preps);
 int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all);
@@ -357,7 +351,7 @@ long hk_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
 /* ======================= ANCHOR: inode.c ========================= */
 extern const struct address_space_operations hk_aops_dax;
-void hk_init_inode(struct inode *inode, struct hk_inode *pi);
+void hk_init_pi(struct inode *inode, struct hk_inode *pi);
 int hk_init_free_inode_list(struct super_block *sb, bool is_init);
 int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_init);
 u64 hk_get_new_ino(struct super_block *sb);
@@ -371,8 +365,6 @@ int hk_getattr(const struct path *path, struct kstat *stat,
 int hk_notify_change(struct dentry *dentry, struct iattr *attr);
 int hk_write_inode(struct inode *inode, struct writeback_control *wbc);
 void hk_evict_inode(struct inode *inode);
-int hk_free_inode_blks_no_invalidators(struct super_block *sb, struct hk_inode *pi,
-					   		   		   struct hk_inode_info_header *sih);
 int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 					   struct hk_inode_info_header *sih);
 
@@ -393,17 +385,13 @@ void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *s
 
 /* ======================= ANCHOR: meta.c ========================= */
 int hk_format_meta(struct super_block *sb);
-bool hk_get_cur_commit(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, 
-					   struct hk_mentry *entry);
-struct hk_mregion* hk_get_region_by_rgid(struct super_block *sb, int rgid);
-int hk_applying_region(struct super_block *sb, struct hk_mregion *rg);
-int hk_applying_region_to_inode(struct super_block *sb, struct hk_inode *pi);
-int hk_commit_newattr(struct super_block *sb, u64 ino);
-int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode);
-int hk_commit_newattr_innvm(struct super_block *sb, struct hk_inode *pi);
-int hk_commit_linkchange(struct super_block *sb, u64 ino);
-int hk_commit_linkchange_indram(struct super_block *sb, struct inode *inode);
-int hk_commit_linkchange_innvm(struct super_block *sb, struct hk_inode *pi);
+bool hk_get_cur_commit_al_entry(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, 
+					   struct hk_al_entry *entry);
+struct hk_attr_log *hk_get_attr_log_by_alid(struct super_block *sb, int alid);
+int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al);
+int hk_evicting_attr_log_to_inode(struct super_block *sb, struct hk_inode *pi);
+int hk_commit_attrchange(struct super_block *sb, struct inode *inode);
+int hk_commit_linkchange(struct super_block *sb, struct inode *inode);
 int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size);
 int hk_commit_inode_state(struct super_block *sb, struct hk_inode_state *state);
 u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr);
@@ -411,23 +399,29 @@ struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
 struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
 int sm_remove_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr);
 int sm_insert_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr);
-int sm_invalid_hdr(struct super_block *sb, u64 blk_addr, u64 ino);
-int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
+int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
+int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
 struct hk_jentry* hk_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid);
 int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...);
 int hk_finish_tx(struct super_block *sb, int txid);
 
 /* ======================= ANCHOR: cmt.c ========================= */
-int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
-int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
-int hk_valid_range_background(struct super_block *sb, struct inode *inode, struct hk_cmt_batch *batch);
+#ifdef CONFIG_CMT_BACKGROUND
+struct hk_cmt_node* hk_cmt_node_init(u64 ino);
+void hk_cmt_node_destroy(struct hk_cmt_node *node);
+int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node);
+struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino);
+int hk_cmt_unmanage_node(struct super_block *sb, u64 ino);
+int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_data_op op);
+int hk_delegate_attr_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch);
 void hk_start_cmt_workers(struct super_block *sb);
 void hk_stop_cmt_workers(struct super_block *sb);
-void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino);
+void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node);
 void hk_flush_cmt_queue(struct super_block *sb);
 struct hk_cmt_queue *hk_init_cmt_queue(void);
 void hk_free_cmt_queue(struct hk_cmt_queue *cq);
+#endif
 
 /* ======================= ANCHOR: rebuild.c ========================= */
 int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, bool build_blks);
@@ -556,39 +550,6 @@ static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
 	mutex_unlock(&sbi->irange_locks[ino % sbi->cpus]);
-}
-
-static inline void up_invalidator(struct super_block *sb)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    sbi->invalidator_running++;
-    mutex_unlock(&sbi->invalidator_mutex);
-}
-
-static inline void down_invalidator(struct super_block *sb)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    sbi->invalidator_running--;
-    mutex_unlock(&sbi->invalidator_mutex);
-}
-
-static inline bool try_up_gc(struct super_block *sb)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_lock(&sbi->invalidator_mutex);
-    if (sbi->invalidator_running == 0) {
-        return true;
-    }
-    mutex_unlock(&sbi->invalidator_mutex);
-    return false;
-}
-
-static inline void down_gc(struct super_block *sb)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-    mutex_unlock(&sbi->invalidator_mutex);
 }
 
 static inline void hk_sync_super(struct super_block *sb)

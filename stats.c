@@ -49,52 +49,7 @@ const char *Timingstring[TIMING_NUM] = {
 	/* Memory management */
 	"============== Memory management ===============",
 	"alloc_blocks",
-	"new_data_blocks",
-	"new_log_blocks",
 	"free_blocks",
-	"free_data_blocks",
-	"free_log_blocks",
-
-	/* Transaction */
-	"================= Transaction ==================",
-	"transaction_new_inode",
-	"transaction_link_change",
-	"update_tail",
-
-	/* Logging */
-	"============= Logging operations ===============",
-	"append_dir_entry",
-	"append_file_entry",
-	"append_mmap_entry",
-	"append_link_change",
-	"append_setattr",
-	"append_snapshot_info",
-	"inplace_update_entry",
-
-	/* Tree */
-	"=============== Tree operations ================",
-	"checking_entry",
-	"assign_blocks",
-
-	/* GC */
-	"============= Garbage collection ===============",
-	"log_fast_gc",
-	"log_thorough_gc",
-	"check_invalid_log",
-
-	/* Integrity */
-	"============ Integrity operations ==============",
-	"block_csum",
-	"block_parity",
-	"block_csum_parity",
-	"protect_memcpy",
-	"protect_file_data",
-	"verify_entry_csum",
-	"verify_data_csum",
-	"calc_entry_csum",
-	"restore_file_data",
-	"reset_mapping",
-	"reset_vma",
 
 	/* Others */
 	"================ Miscellaneous =================",
@@ -113,19 +68,6 @@ const char *Timingstring[TIMING_NUM] = {
 	"evict_inode",
 	"test_perf",
 	"wprotect",
-
-	/* Mmap */
-	"=============== MMap operations ================",
-	"mmap_page_fault",
-	"mmap_pmd_fault",
-	"mmap_pfn_mkwrite",
-	"insert_vma",
-	"remove_vma",
-	"set_vma_readonly",
-	"mmap_cow",
-	"udpate_mapping",
-	"udpate_pfn",
-	"mmap_handler",
 
 	/* Rebuild */
 	"=================== Rebuild ====================",
@@ -147,11 +89,8 @@ const char *Timingstring[TIMING_NUM] = {
 	"invalid_summary_header",
 
 	"=================== LinIX ===================",
+	"linix_set",
 	"linix_get",
-
-	"=================== FriendlyGC ===================",
-	"layout_equalizer_migrates",
-	"self_gc_migrates"
 };
 
 u64 Timingstats[TIMING_NUM];

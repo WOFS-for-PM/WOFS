@@ -45,12 +45,6 @@ struct hk_layout_info {
 	struct list_head	prep_list;
 
     struct task_struct  *self_gc_thread;
-
-    // pthread_t  gc_self_thread;
-    // pthread_t* gc_obj_senders;
-    // pthread_t* gc_obj_writers;
-    // struct gc_inode_invovled* gc_inodes;        /* Only for normal gc */
-    // struct gc_work_queue gc_wq;
 };
 
 static inline void hk_dump_layout_info(struct hk_layout_info *layout)

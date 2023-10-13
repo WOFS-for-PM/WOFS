@@ -505,8 +505,10 @@ out:
     /* FIXME: add h_addr to setattr entry */
     /* TODO: Commit with background commit thread, remove from critical path */
     /* FIXME: In the later experiment, we omit the code below since we think it's committed by background thread  */
-#ifndef CONFIG_CMT_BACKGROUND
-    hk_commit_newattr_indram(sb, inode);
+#ifdef CONFIG_CMT_BACKGROUND
+    hk_delegate_attr_async(sb, inode);
+#else
+    hk_commit_attrchange(sb, inode);
 #endif
 
     HK_END_TIMING(write_t, write_time);
@@ -586,22 +588,7 @@ static int hk_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
     HK_START_TIMING(fsync_t, fsync_time);
 
-    // TODO: Per cpu STAT is not impl now
-    // if (datasync)
-    // 	hk_STATS_ADD(fdatasync, 1);
-
-    /* No need to flush if the file is not mmaped */
-    if (!mapping_mapped(mapping))
-        goto persist;
-
     // TODO: Now we don't care about mmap
-    /*
-     * Set csum and parity.
-     * We do not protect data integrity during mmap, but we have to
-     * update csum here since msync clears dirty bit.
-     */
-    // hk_reset_mapping_csum_parity(sb, inode, mapping,
-    // 							 	start_pgoff, end_pgoff);
     ret = generic_file_fsync(file, start, end, datasync);
 
     hk_flush_cmt_node_fast(sb, HK_IH(inode)->cmt_node);

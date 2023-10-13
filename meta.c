@@ -465,7 +465,7 @@ int hk_commit_linkchange(struct super_block *sb, struct inode *inode)
 }
 
 /* ======================= ANCHOR: commit state ========================= */
-int hk_commit_inode_state(struct super_block *sb, struct hk_inode_state *state)
+int hk_commit_inode_checkpoint(struct super_block *sb, struct hk_inode_state *state)
 {
     struct hk_al_entry entry;
     struct hk_setattr_entry *setattr;

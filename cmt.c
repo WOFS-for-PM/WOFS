@@ -17,7 +17,7 @@ static void wait_to_finish_cmt(void)
 }
 
 /* ===== High-level ===== */
-void hk_save_inode_state(struct inode *inode, struct hk_inode_state *state)
+void hk_checkpoint_inode_state(struct inode *inode, struct hk_inode_state *state)
 {
     state->ino = inode->i_ino;
     state->atime = inode->i_atime.tv_sec;
@@ -49,7 +49,7 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     return 0;
 }
 
-int hk_delegate_attr_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch)
+int hk_delegate_attr_async(struct super_block *sb, struct inode *inode)
 {
     struct hk_cmt_attr_info *attr_info;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -58,14 +58,14 @@ int hk_delegate_attr_async(struct super_block *sb, struct inode *inode, struct h
     attr_info = hk_alloc_hk_cmt_attr_info();
     INIT_LIST_HEAD(&attr_info->lnode);
     attr_info->tstamp = get_version(sbi);
-    hk_save_inode_state(inode, &attr_info->state);
+    hk_checkpoint_inode_state(inode, &attr_info->state);
 
     hk_request_cmt(sb, attr_info, sih, ATTR);
 
     return 0;
 }
 
-int hk_delegate_jnl_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch)
+int hk_delegate_jnl_async(struct super_block *sb, struct inode *inode)
 {
     return -ENOTSUPP;
 }
@@ -323,7 +323,7 @@ int hk_process_attr_info(struct super_block *sb, u64 ino, struct hk_cmt_attr_inf
     struct hk_inode_state *state = NULL;
 
     state = &cmt_attr->state;
-    hk_commit_inode_state(sb, state);
+    hk_commit_inode_checkpoint(sb, state);
     return 0;
 }
 

@@ -110,6 +110,8 @@ struct hk_cmt_inode_info {
 
 /* Decouple from sih for async flush */
 struct hk_cmt_node {
+    u64 h_addr; /* h_addr in memory, same as hk_inode_data_root */
+
     struct rb_node rnode; /* List of inodes */
     u64 ino;
 
@@ -119,7 +121,7 @@ struct hk_cmt_node {
     struct hk_inf_queue attr_queue;      /* Attr queue for this inode */
     struct hk_inf_queue jnl_queue;       /* The journal entity which involves this inode */
 #else
-    struct hk_inf_queue fuse_queue; /* The monotonic queue contains various metadata */
+    struct hk_inf_queue fuse_queue; /* The fused queue contains various metadata */
 #endif
 };
 

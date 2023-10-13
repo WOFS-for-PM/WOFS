@@ -30,7 +30,7 @@ struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr)
     struct hk_sb_info *sbi = HK_SB(sb);
 
     if (addr < sbi->d_addr) {
-        hk_info("%s: Invalid Addr\n", __func__);
+        hk_info("%s: Invalid Addr %llx\n", __func__, addr);
         BUG_ON(1);
     }
 
@@ -56,14 +56,14 @@ struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
     return &sbi->layouts[cpuid];
 }
 
-int sm_remove_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr)
+// idr: inode data root, might be in DRAM or PM
+int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    unsigned long irq_flags = 0;
-
-    hk_memunlock_all(sb, &irq_flags);
-    if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev) == pi) {
-        pi->h_addr = hdr->ofs_next;
+    struct hk_inode_data_root *idr = _idr;
+    
+    if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev) == _idr) {
+        idr->h_addr = hdr->ofs_next;
     } else {
         ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev))->ofs_next = hdr->ofs_next;
     }
@@ -71,57 +71,53 @@ int sm_remove_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header 
     if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next) != NULL) {
         ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next))->ofs_prev = hdr->ofs_prev;
     }
+
     hdr->ofs_next = NULL;
     hdr->ofs_prev = NULL;
-    hk_memlock_all(sb, &irq_flags);
 
     return 0;
 }
 
-int sm_insert_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr)
+// idr: inode data root, might be in DRAM or PM
+int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    unsigned long irq_flags = 0;
+    struct hk_inode_data_root *idr = _idr;
 
     /* Write Hdr, then persist it */
-    hk_memunlock_all(sb, &irq_flags);
     /* Change the link */
-    hdr->ofs_prev = TRANS_ADDR_TO_OFS(sbi, pi);
-    hdr->ofs_next = pi->h_addr;
-    if (pi->h_addr != NULL) {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, pi->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
+    hdr->ofs_prev = TRANS_ADDR_TO_OFS(sbi, _idr);
+    hdr->ofs_next = idr->h_addr;
+    if (idr->h_addr != 0) {
+        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, idr->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
     }
-    pi->h_addr = TRANS_ADDR_TO_OFS(sbi, hdr);
-    hk_memlock_all(sb, &irq_flags);
+    idr->h_addr = TRANS_ADDR_TO_OFS(sbi, hdr);
+    
     return 0;
 }
 
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
 {
     /*! Note: Do not update tstamp in invalid process, since version control */
-    struct hk_inode *pi;
     struct inode *inode;
     struct hk_header *hdr;
     struct hk_layout_info *layout;
     struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_cmt_node *cmt_node;
     unsigned long irq_flags = 0;
     INIT_TIMING(invalid_time);
 
     HK_START_TIMING(sm_invalid_t, invalid_time);
-    pi = hk_get_inode_by_ino(sb, ino);
+    cmt_node = hk_cmt_search_node(sb, ino);
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
 
-    sm_remove_hdr(sb, pi, hdr);
+    sm_remove_hdr(sb, (void *)cmt_node, hdr);
 
     hk_memunlock_hdr(sb, hdr, &irq_flags);
-    
+
     PERSISTENT_BARRIER();
     hdr->valid = 0;
-#ifndef CONFIG_LAYOUT_TIGHT
     hk_flush_buffer(hdr, sizeof(struct hk_header), true);
-#else
-    /* flush outside with blk */
-#endif
     hk_memlock_hdr(sb, hdr, &irq_flags);
 
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
@@ -138,46 +134,34 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     struct hk_layout_info *layout;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct inode *inode = NULL;
+    struct hk_cmt_node *cmt_node;
     u64 blk;
     unsigned long irq_flags = 0;
     INIT_TIMING(valid_time);
 
     HK_START_TIMING(sm_valid_t, valid_time);
-    pi = hk_get_inode_by_ino(sb, ino);
-    if (!pi)
-        return -1;
+
+    cmt_node = hk_cmt_search_node(sb, ino);
+    // pi = hk_get_inode_by_ino(sb, ino);
+    // if (!pi)
+    //     return -1;
 
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
-
-    if (hdr->f_blk == f_blk &&
-        hdr->ino == ino &&
-        hdr->valid == 1) /*! No need to update */
-    {
-        hk_warn("hdr@0x%llx does not need to update\n", (u64)hdr);
-        return 0;
-    }
 
     // hk_info("hdr at: 0x%llx\n", (u64)hdr);
 
     /* Write Hdr, then persist it */
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
+    hk_memunlock_hdr(sb, (void *)hdr, &irq_flags);
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
-    /* Change the link */
-    hk_memlock_hdr(sb, hdr, &irq_flags);
 
-    sm_insert_hdr(sb, pi, hdr);
-
+    sm_insert_hdr(sb, (void *)cmt_node, hdr);
+    
     PERSISTENT_BARRIER();
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
     hdr->valid = 1;
-#ifndef CONFIG_LAYOUT_TIGHT
     /* this might be relatively slow */
     hk_flush_buffer(hdr, sizeof(struct hk_header), true);
-#else
-    /* flush outside with blk */
-#endif
     hk_memlock_hdr(sb, hdr, &irq_flags);
 
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
@@ -781,7 +765,27 @@ int hk_format_meta(struct super_block *sb)
     struct hk_journal *jnl;
     unsigned long bid, alid, txid;
 
-    /* Step 1: Format Jentry */
+    /* Step 1: Format Inode Table */
+    hk_memunlock_range(sb, (void *)sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
+    memset_nt_large((void *)sbi->ino_tab_addr, 0, sbi->ino_tab_size);
+    hk_memlock_range(sb, sbi->ino_tab_addr, sbi->ino_tab_size, &irq_flags);
+
+    /* Step 2: Format Summary Headers  */
+#ifdef CONFIG_LAYOUT_TIGHT
+    /* Do nothing */
+#else
+    hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+    for (bid = 0; bid < sbi->d_blks; bid++) {
+        hdr = sm_get_hdr_by_blk(sb, bid);
+        hdr->valid = 0;
+    }
+    hk_dbgv("entries: %llu\n", sbi->sm_size / sizeof(struct hk_header));
+    /* Not clean ? */
+    hk_dbgv("sbi->d_blks: %llu\n", sbi->d_blks);
+    hk_memlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
+#endif
+
+    /* Step 3: Format Jentry */
     hk_memunlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
     for (txid = 0; txid < sbi->j_slots; txid++) {
         jnl = hk_get_journal_by_txid(sb, txid);
@@ -790,7 +794,7 @@ int hk_format_meta(struct super_block *sb)
     }
     hk_memlock_range(sb, (void *)sbi->j_addr, sbi->j_size, &irq_flags);
 
-    /* Step 2: Format Attr Logs */
+    /* Step 4: Format Attr Logs */
     hk_memunlock_range(sb, (void *)sbi->al_addr, sbi->al_size, &irq_flags);
     for (alid = 0; alid < sbi->al_slots; alid++) {
         rg = hk_get_attr_log_by_alid(sb, alid);

@@ -221,6 +221,14 @@ void hk_evict_inode(struct inode *inode)
     hk_dw_forward(&sbi->dw, sih->i_size);
 #endif
 
+    /* flush in-DRAM hdr address  */
+    if (sih->cmt_node->h_addr != 0) {
+        if (sih->cmt_node->h_addr != 0) {
+            ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, sih->cmt_node->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, pi);
+        }
+        pi->h_addr = sih->cmt_node->h_addr;
+    }
+
     hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
     if (!inode->i_nlink && !is_bad_inode(inode)) {
         if (IS_APPEND(inode) || IS_IMMUTABLE(inode))

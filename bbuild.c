@@ -176,14 +176,14 @@ int hk_failure_recovery(struct super_block *sb)
                     hdr->valid = 0;
                     hk_memlock_hdr(sb, hdr, &irq_flags);
 
-                    sm_remove_hdr(sb, pi, hdr);
+                    sm_remove_hdr(sb, (void *)pi, hdr);
                     ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
                 } else { /* Re insert */
                     sbi->tstamp = le64_to_cpu(pi->tstamp);
                     not_free_blks = blk + 1;
 
-                    sm_remove_hdr(sb, pi, hdr);
-                    sm_insert_hdr(sb, pi, hdr);
+                    sm_remove_hdr(sb, (void *)pi, hdr);
+                    sm_insert_hdr(sb, (void *)pi, hdr);
                     ind_update(&layout->ind, VALIDATE_BLK, 1);
                 }
             } else {

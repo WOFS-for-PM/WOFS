@@ -506,7 +506,7 @@ out:
     /* TODO: Commit with background commit thread, remove from critical path */
     /* FIXME: In the later experiment, we omit the code below since we think it's committed by background thread  */
 #ifdef CONFIG_CMT_BACKGROUND
-    hk_delegate_attr_async(sb, inode);
+    // hk_delegate_attr_async(sb, inode);
 #else
     hk_commit_attrchange(sb, inode);
 #endif
@@ -588,8 +588,9 @@ static int hk_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
     HK_START_TIMING(fsync_t, fsync_time);
 
-    // TODO: Now we don't care about mmap
-    ret = generic_file_fsync(file, start, end, datasync);
+    if (mapping_mapped(mapping)) {
+        ret = generic_file_fsync(file, start, end, datasync);
+    }
 
     hk_flush_cmt_node_fast(sb, HK_IH(inode)->cmt_node);
 

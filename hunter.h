@@ -397,8 +397,8 @@ int hk_commit_inode_checkpoint(struct super_block *sb, struct hk_inode_state *st
 u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr);
 struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
 struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
-int sm_remove_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr);
-int sm_insert_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr);
+int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
+int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
 int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);

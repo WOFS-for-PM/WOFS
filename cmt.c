@@ -38,6 +38,7 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     data_info = hk_alloc_hk_cmt_data_info();
     INIT_LIST_HEAD(&data_info->lnode);
     data_info->op = op;
+    data_info->type = DATA;
     data_info->addr_start = batch->addr_start;
     data_info->addr_end = batch->addr_end;
     data_info->blk_start = batch->blk_start;
@@ -58,6 +59,7 @@ int hk_delegate_attr_async(struct super_block *sb, struct inode *inode)
     attr_info = hk_alloc_hk_cmt_attr_info();
     INIT_LIST_HEAD(&attr_info->lnode);
     attr_info->tstamp = get_version(sbi);
+    attr_info->type = ATTR;
     hk_checkpoint_inode_state(inode, &attr_info->state);
 
     hk_request_cmt(sb, attr_info, sih, ATTR);
@@ -88,6 +90,8 @@ struct hk_cmt_node *hk_cmt_node_init(u64 ino)
     hk_inf_queue_init(&node->fuse_queue);
 #endif
     node->ino = ino;
+    node->h_addr = 0;
+    
     return node;
 }
 
@@ -159,6 +163,7 @@ struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino)
         } else if (compVal == 1) {
             temp = &((*temp)->rb_right);
         } else {
+            mutex_unlock(&cq->lock);
             return curr;
         }
     }
@@ -536,14 +541,19 @@ void hk_flush_cmt_inode_queue(struct super_block *sb, struct hk_cmt_node *cmt_no
     queue_len = hk_inf_queue_length(&cmt_node->fuse_queue);
 #endif
 
+    if (queue_len == 0) {
+        return;
+    }
+
     hk_grab_cmt_info(sb, cmt_node, &info_head, type, queue_len);
 
     list_for_each_entry_safe(info, info_next, &info_head, lnode)
     {
         list_del(&info->lnode);
         hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
-        cond_resched();
     }
+
+    return;
 }
 
 void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node)

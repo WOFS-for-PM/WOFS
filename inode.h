@@ -13,10 +13,16 @@ enum hk_new_inode_type {
     TYPE_MKDIR
 };
 
+struct hk_inode_data_root {
+    u64 h_addr;
+};
+
 /*
  * Structure of an inode in PMEM
  */
 struct hk_inode {
+    __le64 h_addr;        /* Inode as the head of the files */
+
     u8 valid;             /* Is this inode valid? */
     __le32 i_flags;       /* Inode flags */
     __le64 i_size;        /* Size of data in bytes */
@@ -35,7 +41,6 @@ struct hk_inode {
     __le32 i_create_time; /* Create time */
     __le64 ino;           /* hk inode number */
     __le64 tstamp;        /* Time stamp */
-    __le64 h_addr;        /* Inode as the head of the files */
 
     struct {
         __le32 rdev; /* major/minor # */

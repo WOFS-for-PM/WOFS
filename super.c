@@ -905,11 +905,6 @@ static void hk_i_callback(struct rcu_head *head)
     struct hk_inode_info *vi = HK_I(inode);
     struct super_block *sb = inode->i_sb;
     hk_dbg_verbose("%s: ino %lu\n", __func__, inode->i_ino);
-
-#ifdef CONFIG_DECOUPLE_WORKER
-    hk_cmt_unmanage_node(sb, &vi->header);
-#endif
-
     kmem_cache_free(hk_inode_cachep, vi);
 }
 

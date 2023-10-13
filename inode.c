@@ -105,7 +105,7 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
         unuse_layout(layout);
 #else
         blk_addr = sm_get_addr_by_hdr(sb, hdr);
-        hk_init_cmt_dbatch(&dbatch, blk_addr, hdr->f_blk, 1);
+        hk_init_and_inc_cmt_dbatch(&dbatch, blk_addr, hdr->f_blk, 1);
         hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID);
 #endif
         freed += HK_PBLK_SZ;
@@ -629,7 +629,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
         sm_invalid_data_sync(sb, addr, sih->ino);
         unuse_layout_for_addr(sb, addr);
 #else
-        hk_init_cmt_dbatch(&dbatch, addr, index, 1);
+        hk_init_and_inc_cmt_dbatch(&dbatch, addr, index, 1);
         hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID);
 #endif
         freed++;

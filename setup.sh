@@ -32,6 +32,14 @@ function get_build_options() {
     echo "$config_json" | jq -r ".build.$1"
 }
 
+function get_modules_options() {
+    echo "$config_json" | jq -r ".modules.$1"
+}
+
+function get_fs_options() {
+    echo "$config_json" | jq -r ".fs.$1"
+}
+
 HK_ENABLE_LFS=$(get_build_options HK_ENABLE_LFS)
 HK_ENABLE_ASYNC=$(get_build_options HK_ENABLE_ASYNC)
 HK_ENABLE_IDX_ALLOC_PREDICT=$(get_build_options HK_ENABLE_IDX_ALLOC_PREDICT)
@@ -53,14 +61,6 @@ fi
 if ((fs_wprotect == 1)); then
     init_str+=",wprotect"
 fi
-
-function get_modules_options() {
-    echo "$config_json" | jq -r ".modules.$1"
-}
-
-function get_fs_options() {
-    echo "$config_json" | jq -r ".fs.$1"
-}
 
 # inserting
 echo "umounting..."
@@ -85,7 +85,6 @@ echo -e "$CLR_GREEN""> HK_ENABLE_LFS: $HK_ENABLE_LFS""$CLR_END"
 echo -e "$CLR_GREEN""> HK_ENABLE_ASYNC: $HK_ENABLE_ASYNC""$CLR_END"
 echo -e "$CLR_GREEN""> HK_ENABLE_IDX_ALLOC_PREDICT: $HK_ENABLE_IDX_ALLOC_PREDICT""$CLR_END"
 echo -e "$CLR_GREEN""> HK_ENABLE_DECOUPLE_WORKER: $HK_ENABLE_DECOUPLE_WORKER""$CLR_END"
-echo -e "$CLR_GREEN""> HK_ENABLE_PERFILE_CMT_SYSTEM: $HK_ENABLE_PERFILE_CMT_SYSTEM""$CLR_END"
 echo -e "$CLR_GREEN""> HK_CHECKPOINT_INTERVAL: $HK_CHECKPOINT_INTERVAL""$CLR_END"
 echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END"
 cd "$ORIGINAL" || exit

@@ -6,6 +6,8 @@ sudo fio -filename=/mnt/pmem1/test -fallocate=none -direct=0 -iodepth 1 -rw=writ
 
 sudo fio -directory=/mnt/pmem1 -fallocate=none -direct=0 -iodepth 1 -rw=write -ioengine=sync -bs=1M -size=32G -thread -numjobs=8 -name=write
 
+sudo fio -filename=/mnt/pmem0/test -fallocate=none -direct=0 -iodepth 1 -rw=write -ioengine=sync -bs=4K -size=10G -name=write
+
 
 mkdir mnt && mount -t HUNTER -o init /dev/pmem0 /mnt && cd /mnt
 mkdir dir && fio -directory=/mnt/dir -fallocate=none -direct=0 -iodepth 1 -rw=write -ioengine=sync -bs=4K -size=32G -thread -numjobs=4 -name=write

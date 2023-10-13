@@ -85,7 +85,7 @@ struct hk_cmt_node *hk_cmt_node_init(u64 ino)
     hk_inf_queue_init(&node->attr_queue);
     hk_inf_queue_init(&node->jnl_queue);
 #else
-    hk_inf_queue_init(&node->mono_queue);
+    hk_inf_queue_init(&node->fuse_queue);
 #endif
     node->ino = ino;
     return node;
@@ -203,6 +203,20 @@ int hk_cmt_unmanage_node(struct super_block *sb, u64 ino)
     return -EINVAL;
 }
 
+void hk_cmt_destroy_node_tree(struct super_block *sb, struct rb_root *tree)
+{
+    struct hk_cmt_node *curr;
+    struct rb_node *temp;
+
+    temp = rb_first(tree);
+    while (temp) {
+        curr = container_of(temp, struct hk_cmt_node, rnode);
+        temp = rb_next(temp);
+        rb_erase(&curr->rnode, tree);
+        hk_cmt_node_destroy(curr);
+    }
+}
+
 int hk_request_cmt(struct super_block *sb, void *info, struct hk_inode_info_header *sih, enum hk_cmt_data_type req_type)
 {
 #ifdef CONFIG_DECOUPLE_WORKER
@@ -231,7 +245,7 @@ int hk_request_cmt(struct super_block *sb, void *info, struct hk_inode_info_head
     }
 #else
     struct hk_cmt_common_info *cmt_info = (struct hk_cmt_common_info *)info;
-    hk_inf_queue_add_tail_locked(&sih->cmt_node->mono_queue, &cmt_info->lnode);
+    hk_inf_queue_add_tail_locked(&sih->cmt_node->fuse_queue, &cmt_info->lnode);
 #endif
     return 0;
 }
@@ -264,7 +278,7 @@ int hk_grab_cmt_info(struct super_block *sb, struct hk_cmt_node *cmt_node, void 
         break;
     }
 #else
-    ret = hk_inf_queue_try_pop_front_batch_locked(&sih->cmt_node->mono_queue, &info_head, batch_num);
+    ret = hk_inf_queue_try_pop_front_batch_locked(&cmt_node->fuse_queue, info_head, batch_num);
 #endif
     return ret;
 }
@@ -315,11 +329,13 @@ int hk_process_attr_info(struct super_block *sb, u64 ino, struct hk_cmt_attr_inf
 
 int hk_process_jnl_info(struct super_block *sb, u64 ino, struct hk_cmt_jnl_info *cmt_jnl)
 {
+    // TODO
     return 0;
 }
 
 int hk_process_inode_info(struct super_block *sb, u64 ino, struct hk_cmt_inode_info *cmt_inode)
 {
+    // TODO
     return 0;
 }
 
@@ -356,6 +372,7 @@ struct hk_cmt_worker_param {
 #ifdef CONFIG_DECOUPLE_WORKER
     int work_type;
 #endif
+    const char *name;
 };
 
 static int hk_cmt_worker_thread(void *arg)
@@ -377,24 +394,25 @@ static int hk_cmt_worker_thread(void *arg)
     struct hk_cmt_common_info *info, *info_next;
     struct list_head info_head;
 
-    INIT_LIST_HEAD(&info_head);
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
 
         rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_tree, rnode)
         {
-            while (true) {
-                if (hk_grab_cmt_info(sb, cmt_node, &info_head, work_type, HK_CMT_BATCH_NUM) == 0) {
-                    break;
-                }
+            INIT_LIST_HEAD(&info_head);
 
-                list_for_each_entry_safe(info, info_next, &info_head, lnode)
-                {
-                    list_del(&info->lnode);
-                    hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
-                    cond_resched();
-                }
+            if (hk_grab_cmt_info(sb, cmt_node, &info_head, work_type, HK_CMT_BATCH_NUM) == 0) {
+                continue;
             }
+
+            list_for_each_entry_safe(info, info_next, &info_head, lnode)
+            {
+                list_del(&info->lnode);
+                hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
+                cond_resched();
+            }
+
+            cond_resched();
         }
     }
 
@@ -409,6 +427,21 @@ static int hk_cmt_worker_thread(void *arg)
     return 0;
 }
 
+static inline const char *worker_type_id_to_str(int work_id) { 
+    switch (work_id) {
+    case DATA:
+        return "DATA";
+    case ATTR:
+        return "ATTR";
+    case JNL:
+        return "JNL";
+    case INODE:
+        return "INODE";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 int hk_prepare_worker(struct super_block *sb, struct hk_cmt_worker_param *param, int worker_id)
 {
     param->sb = sb;
@@ -417,6 +450,9 @@ int hk_prepare_worker(struct super_block *sb, struct hk_cmt_worker_param *param,
 #ifdef CONFIG_DECOUPLE_WORKER
     enum hk_cmt_data_type work_type = worker_id;
     param->work_type = work_type;
+    param->name = worker_type_id_to_str(work_type);
+#else
+    param->name = "FUSE";
 #endif
 
     return 0;
@@ -441,7 +477,12 @@ void hk_start_cmt_workers(struct super_block *sb)
                                              param, "hk_cmt_worker_%d", i);
 
         wake_up_process(sbi->cmt_workers[i]);
-        hk_info("start cmt workers %d\n", i);
+
+#ifdef CONFIG_DECOUPLE_WORKER
+        hk_info("start cmt workers %d (%s)\n", i, param->name);
+#else
+        hk_info("start cmt workers %d (%s)\n", i, "FUSE");
+#endif
     }
 }
 
@@ -454,6 +495,11 @@ void hk_stop_cmt_workers(struct super_block *sb)
         send_sig(SIGINT, sbi->cmt_workers[i], 1);
         kthread_stop(sbi->cmt_workers[i]);
         sbi->cmt_workers[i] = NULL;
+#ifdef CONFIG_DECOUPLE_WORKER
+        hk_info("stop cmt worker %d (%s)\n", i, worker_type_id_to_str(i));
+#else
+        hk_info("stop cmt worker %d (%s)\n", i, "FUSE");
+#endif 
     }
 
     wait_to_finish_cmt();
@@ -487,7 +533,7 @@ void hk_flush_cmt_inode_queue(struct super_block *sb, struct hk_cmt_node *cmt_no
         break;
     }
 #else
-    queue_len = hk_inf_queue_length(&cmt_node->mono_queue);
+    queue_len = hk_inf_queue_length(&cmt_node->fuse_queue);
 #endif
 
     hk_grab_cmt_info(sb, cmt_node, &info_head, type, queue_len);
@@ -515,7 +561,24 @@ void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node
 
 void hk_flush_cmt_queue(struct super_block *sb)
 {
-    hk_info("flush all cmt workers\n");
+    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_cmt_queue *cq = sbi->cq;
+    struct hk_cmt_node *cmt_node, *cmt_node_next;
+    struct list_head info_head;
+    enum hk_cmt_data_type work_types[MAX_CMT_TYPE] = {DATA, ATTR, JNL, INODE};
+    int i = 0;
+
+    // for each cmt node, we flush all the data, attr, jnl, inode info in the queue
+    rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_tree, rnode)
+    {
+        for (i = 0; i < MAX_CMT_TYPE; i++) {
+            hk_flush_cmt_inode_queue(sb, cmt_node, work_types[i]);
+        }
+    }
+
+    hk_cmt_destroy_node_tree(sb, &cq->cmt_tree);
+
+    hk_info("Flush all cmt workers\n");
 }
 
 struct hk_cmt_queue *hk_init_cmt_queue(void)

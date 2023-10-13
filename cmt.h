@@ -51,6 +51,13 @@ static inline void hk_inc_cmt_dbatch(struct hk_cmt_dbatch *batch)
     batch->dst_blks -= 1;
 }
 
+static inline void hk_init_and_inc_cmt_dbatch(struct hk_cmt_dbatch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
+{
+    BUG_ON(dst_blks != 1);
+    hk_init_cmt_dbatch(batch, addr, blk_cur, dst_blks);
+    hk_inc_cmt_dbatch(batch);
+}
+
 static inline void hk_next_cmt_dbatch(struct hk_cmt_dbatch *batch)
 {
     batch->addr_start = batch->addr_end;
@@ -112,7 +119,7 @@ struct hk_cmt_node {
     struct hk_inf_queue attr_queue;      /* Attr queue for this inode */
     struct hk_inf_queue jnl_queue;       /* The journal entity which involves this inode */
 #else
-    struct hk_inf_queue mono_queue; /* The monotonic queue contains various metadata */
+    struct hk_inf_queue fuse_queue; /* The monotonic queue contains various metadata */
 #endif
 };
 

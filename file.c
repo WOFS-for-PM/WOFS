@@ -248,7 +248,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi));
             unuse_layout_for_addr(sb, addr);
 #else
-            hk_init_cmt_dbatch(&batch, addr, index_cur, 1);
+            hk_init_and_inc_cmt_dbatch(&batch, addr, index_cur, 1);
             hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
 #endif
 
@@ -267,7 +267,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                 hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
                 addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-                hk_init_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
+                hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
                 hk_delegate_data_async(sb, inode, &batch, CMT_INVALID);
 #endif
             }
@@ -324,7 +324,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     hk_next_cmt_dbatch(&batch);
 
                     addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-                    hk_init_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
+                    hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
                     hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
 #endif
                 }
@@ -362,7 +362,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         /* flush header */
         hk_flush_buffer(addr + HK_LBLK_SZ, CACHELINE_SIZE, true);
 #else
-        hk_init_cmt_dbatch(&dbatch, addr, index_cur, 1);
+        hk_init_and_inc_cmt_dbatch(&dbatch, addr, index_cur, 1);
         hk_delegate_data_async(sb, inode, &dbatch, CMT_VALID);
 #endif
 

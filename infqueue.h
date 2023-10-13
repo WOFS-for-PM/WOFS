@@ -54,6 +54,8 @@ static inline int hk_inf_queue_try_pop_front_batch_locked(struct hk_inf_queue *q
     //       while queue->queue remains a non-circular
     //       doubly linked list
     list_cut_position(popped_head, &queue->queue, pos->prev);
+
+    queue->num -= pop_num;
     spin_unlock(&queue->lock);
 
     return pop_num;

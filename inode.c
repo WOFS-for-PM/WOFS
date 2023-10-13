@@ -54,8 +54,8 @@ static int hk_free_dram_resource(struct super_block *sb,
     unsigned long last_blocknr;
     int freed = 0;
 
-    if (sih->ino == HK_ROOT_INO) /* We should not evict ROOT INO */
-        return 0;
+    // if (sih->ino == HK_ROOT_INO) /* We should not evict ROOT INO */
+    //     return 0;
 
     if (!(S_ISREG(sih->i_mode)) && !(S_ISDIR(sih->i_mode)))
         return 0;

@@ -245,7 +245,7 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
     struct hk_inode_info_header *sih = &si->header;
     struct hk_inode *pi;
     unsigned long irq_flags = 0;
-	struct hk_cmt_node *cmt_node;
+	struct hk_cmt_node *cmt_node, *exist;
     int ret;
 
     ret = hk_check_inode(sb, ino);
@@ -260,14 +260,9 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
 
 #ifdef CONFIG_CMT_BACKGROUND
 	cmt_node = hk_cmt_search_node(sb, ino);
-	if (!cmt_node) {
-		if (ino != HK_ROOT_INO) 
-			BUG_ON(1);
-	} else {
+	if (cmt_node) {
 		/* flush the inode attr */
 		hk_flush_cmt_node_fast(sb, ino);
-		/* remove this from cmt queue */
-		hk_cmt_unmanage_node(sb, ino);
 	}
 #endif
 
@@ -288,8 +283,14 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
     sih->ino = ino;
 
 #ifdef CONFIG_CMT_BACKGROUND
-    cmt_node = hk_cmt_node_init(ino);
-	hk_cmt_manage_node(sb, cmt_node);
+    if (!cmt_node) {
+        cmt_node = hk_cmt_node_init(ino);
+	    ret = hk_cmt_manage_node(sb, cmt_node, NULL);
+        if (ret < 0) {
+            hk_dbg("%s: hk_cmt_manage_node failed, ret %d\n", __func__, ret);
+            BUG_ON(1);
+        }
+    }
 	sih->cmt_node = cmt_node; 
 #endif
 

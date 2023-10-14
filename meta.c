@@ -61,7 +61,7 @@ int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_data_root *idr = _idr;
-    
+
     if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev) == _idr) {
         idr->h_addr = hdr->ofs_next;
     } else {
@@ -92,9 +92,60 @@ int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
         ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, idr->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
     }
     idr->h_addr = TRANS_ADDR_TO_OFS(sbi, hdr);
-    
+
     return 0;
 }
+
+// invalid data without linking. This means, we do not intefere with inode.
+int __sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type)
+{
+    struct inode *inode;
+    struct hk_header *hdr;
+    struct hk_layout_info *layout;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long irq_flags = 0;
+    u64 blk;
+
+    INIT_TIMING(invalid_time);
+
+    HK_START_TIMING(sm_invalid_t, invalid_time);
+
+    hdr = sm_get_hdr_by_addr(sb, blk_addr);
+    hdr->ofs_next = NULL;
+    hdr->ofs_prev = NULL;
+
+    hk_memunlock_hdr(sb, hdr, &irq_flags);
+
+    PERSISTENT_BARRIER();
+    hdr->valid = 0;
+    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
+    hk_memlock_hdr(sb, hdr, &irq_flags);
+
+    layout = sm_get_layout_by_hdr(sb, (u64)hdr);
+
+    if (type == CMT_DELETED_VALID) {
+        blk = hk_get_dblk_by_addr(sbi, blk_addr);
+        hk_range_remove(sb, &layout->prep_list, blk);
+        ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
+    } else if (type == CMT_DELETED_INVALID) {
+        ind_update(&layout->ind, INVALIDATE_BLK, 1);
+    }
+    
+    HK_END_TIMING(sm_invalid_t, invalid_time);
+    return 0;
+}
+
+#ifdef CONFIG_CMT_BACKGROUND
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type)
+{
+    return __sm_delete_data_sync(sb, blk_addr, ino, type);
+}
+#else
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
+{
+    return __sm_delete_data_sync(sb, blk_addr, ino, CMT_DELETED_VALID);
+}
+#endif
 
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
 {
@@ -157,7 +208,7 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     hdr->f_blk = f_blk;
 
     sm_insert_hdr(sb, (void *)cmt_node, hdr);
-    
+
     PERSISTENT_BARRIER();
     hdr->valid = 1;
     /* this might be relatively slow */
@@ -777,7 +828,7 @@ int hk_format_meta(struct super_block *sb)
     hk_memunlock_range(sb, (void *)sbi->sm_addr, sbi->sm_size, &irq_flags);
     for (bid = 0; bid < sbi->d_blks; bid++) {
         hdr = sm_get_hdr_by_blk(sb, bid);
-        hdr->valid = 0;
+        hdr->valid = (u8)-1;
     }
     hk_dbgv("entries: %llu\n", sbi->sm_size / sizeof(struct hk_header));
     /* Not clean ? */

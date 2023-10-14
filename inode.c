@@ -68,13 +68,13 @@ static int hk_free_dram_resource(struct super_block *sb,
 
     return freed;
 }
+
 int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
                        struct hk_inode_info_header *sih)
 {
-    int freed = 0;
+    int freed = 0, i = 0;
     unsigned long irq_flags = 0;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_header *hdr;
     struct hk_layout_info *layout;
     u64 blk_addr;
     struct hk_inode_info *si;
@@ -87,27 +87,22 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 
     si = container_of(sih, struct hk_inode_info, header);
     inode = &si->vfs_inode;
+    
+    for (i = 0; i < sih->i_blocks; i++) {
+        blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, i));
+        
+        if (blk_addr == 0) {
+            hk_info("panic: %d", i);
+        }
+        BUG_ON(blk_addr == 0);
 
-    traverse_inode_hdr(sbi, pi, hdr)
-    {
-#ifndef CONFIG_CMT_BACKGROUND
-        hk_memunlock_hdr(sb, hdr, &irq_flags);
-        hdr->valid = 0;
-        hk_memlock_hdr(sb, hdr, &irq_flags);
-        hk_flush_buffer(hdr, sizeof(struct hk_header), false);
-
-        layout = sm_get_layout_by_hdr(sb, hdr);
-        use_layout(layout);
-        ind_update(&layout->ind, INVALIDATE_BLK, 1);
-        unuse_layout(layout);
+#ifdef CONFIG_CMT_BACKGROUND
+        hk_init_and_inc_cmt_dbatch(&dbatch, blk_addr, i, 1);
+        hk_delegate_data_async(sb, inode, &dbatch, CMT_DELETED_VALID);
 #else
-        blk_addr = sm_get_addr_by_hdr(sb, hdr);
-        hk_init_and_inc_cmt_dbatch(&dbatch, blk_addr, hdr->f_blk, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID);
+        sm_delete_data_sync(sb, blk_addr, sih->ino);
 #endif
         freed += HK_PBLK_SZ;
-        /* Be nice */
-        cond_resched();
     }
 
     HK_END_TIMING(free_inode_log_t, free_time);
@@ -154,14 +149,13 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
     int ret = 0;
     int freed = 0;
     unsigned long irq_flags = 0;
+    struct hk_cmt_node *cmt_node = sih->cmt_node;
+
+    // Clean this anything uncommitted from this node since it has been deleted
+    hk_cmt_unmanage_node(sb, sih->ino);
 
     hk_memunlock_inode(sb, pi, &irq_flags);
     pi->valid = 0;
-    if (pi->valid) {
-        hk_dbg("%s: inode %lu still valid\n",
-               __func__, sih->ino);
-        pi->valid = 0;
-    }
     hk_flush_buffer(pi, sizeof(struct hk_inode), false);
     hk_memlock_inode(sb, pi, &irq_flags);
 
@@ -523,9 +517,13 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
     sih->pi_addr = (u64)pi;
 
 #ifdef CONFIG_CMT_BACKGROUND
-    struct hk_cmt_node *cmt_node;
+    struct hk_cmt_node *cmt_node, *exsit;
     cmt_node = hk_cmt_node_init(ino);
-    hk_cmt_manage_node(sb, cmt_node);
+    errval = hk_cmt_manage_node(sb, cmt_node, &exsit);
+    if (errval == -EEXIST) {
+        hk_cmt_node_destroy(cmt_node);
+        cmt_node = exsit;
+    }
     sih->cmt_node = cmt_node;
 #endif
 

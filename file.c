@@ -467,6 +467,8 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         prep = hk_trv_prepared_layouts(sb, &preps);
         if (!prep) {
             hk_dbg("%s: ERROR: No prep found for index %lu\n", __func__, index);
+            // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
+            hk_flush_cmt_queue(sb);
             hk_prepare_gap(sb, false, &tmp_prep);
             if (tmp_prep.target_addr == 0) {
                 error = -ENOMEM;
@@ -506,6 +508,7 @@ out:
     /* TODO: Commit with background commit thread, remove from critical path */
     /* FIXME: In the later experiment, we omit the code below since we think it's committed by background thread  */
 #ifdef CONFIG_CMT_BACKGROUND
+    // Optimizing for write. Size and Time can be recalculated by background thread.
     // hk_delegate_attr_async(sb, inode);
 #else
     hk_commit_attrchange(sb, inode);

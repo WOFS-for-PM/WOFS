@@ -16,8 +16,14 @@ struct hk_inode_state {
 
 /* for data block valid/invalid */
 enum hk_cmt_data_op {
+    /* used fro block allocation */
     CMT_VALID,
-    CMT_INVALID
+    /* used for block evication */
+    CMT_INVALID,
+    /* used for block allocation after deletion */
+    CMT_DELETED_VALID,
+    /* used for block evication after deletion */
+    CMT_DELETED_INVALID,        
 };
 
 enum hk_cmt_data_type {
@@ -112,8 +118,11 @@ struct hk_cmt_inode_info {
 struct hk_cmt_node {
     u64 h_addr; /* h_addr in memory, same as hk_inode_data_root */
 
-    struct rb_node rnode; /* List of inodes */
+    struct rb_node rnode; /* rb_node */
     u64 ino;
+    /* Note that it will be hard to edit red black tree when worker is processing 
+      (i.e., by iterating the rb tree. So, we just lazily edit the node's state to invalid) */
+    bool valid;           /* if this node is valid. */
 
 #ifdef CONFIG_DECOUPLE_WORKER
     struct hk_cmt_inode_info *cmt_inode; /* The inode entity which backups this inode */

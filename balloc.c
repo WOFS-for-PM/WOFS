@@ -99,7 +99,8 @@ int hk_lazy_build_gaps(struct super_block *sb, int cpuid)
     traverse_layout_blks_reverse(addr, layout)
     {
         hdr = sm_get_hdr_by_addr(sb, addr);
-        if (!hdr->valid) {
+        // NOTE: formatter assign unintilized value to 0xFF.
+        if (hdr->valid == 0) {
             blk = hk_get_dblk_by_addr(sbi, addr);
             /* blk is already in prep state */
             if (hk_range_find_value(sb, &layout->prep_list, blk)) {
@@ -194,6 +195,8 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
 
         blk_start = hk_get_dblk_by_addr(sbi, target_addr);
         hk_range_insert_value(sb, &layout->prep_list, blk_start);
+        
+        hk_dbg("%s: prep gap: %lu", __func__, blk_start);
 
         ind_update(&layout->ind, PREP_LAYOUT_GAP, blks);
 
@@ -352,6 +355,7 @@ void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *pr
             prep->cpuid = cpuid;
             prep->blks_prepared = 1;
             prep->target_addr = target_addr;
+            return;
         }
     }
 
@@ -369,6 +373,7 @@ void hk_prepare_gap(struct super_block *sb, bool zero, struct hk_layout_prep *pr
             prep->cpuid = cpuid;
             prep->blks_prepared = 1;
             prep->target_addr = target_addr;
+            return;
         }
     }
 }

@@ -35,6 +35,8 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info_header *sih = HK_IH(inode);
 
+    BUG_ON(batch->addr_start == 0);
+
     data_info = hk_alloc_hk_cmt_data_info();
     INIT_LIST_HEAD(&data_info->lnode);
     data_info->op = op;
@@ -60,6 +62,7 @@ int hk_delegate_attr_async(struct super_block *sb, struct inode *inode)
     INIT_LIST_HEAD(&attr_info->lnode);
     attr_info->tstamp = get_version(sbi);
     attr_info->type = ATTR;
+
     hk_checkpoint_inode_state(inode, &attr_info->state);
 
     hk_request_cmt(sb, attr_info, sih, ATTR);
@@ -91,17 +94,93 @@ struct hk_cmt_node *hk_cmt_node_init(u64 ino)
 #endif
     node->ino = ino;
     node->h_addr = 0;
-    
+    node->valid = 0;
+    node->cmt_inode = NULL;
+
     return node;
 }
 
 void hk_cmt_node_destroy(struct hk_cmt_node *node)
 {
-    if (node)
+    if (node) {
         hk_free_hk_cmt_node(node);
+    }
 }
 
-int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node)
+void hk_cmt_info_destroy_wo_data(void *cmt_info)
+{
+    struct hk_cmt_common_info *common_info = cmt_info;
+    switch (common_info->type) {
+    case DATA:
+        break;
+    case ATTR:
+        hk_free_hk_cmt_attr_info((struct hk_cmt_attr_info *)common_info);
+        break;
+    case JNL:
+        hk_free_hk_cmt_jnl_info((struct hk_cmt_jnl_info *)common_info);
+        break;
+    case INODE:
+        hk_free_hk_cmt_inode_info((struct hk_cmt_inode_info *)common_info);
+        break;
+    default:
+        break;
+    }
+}
+
+void hk_cmt_info_destroy(void *cmt_info)
+{
+    struct hk_cmt_common_info *common_info = cmt_info;
+    switch (common_info->type) {
+    case DATA:
+        hk_free_hk_cmt_data_info((struct hk_cmt_data_info *)common_info);
+        break;
+    case ATTR:
+    case JNL:
+    case INODE:
+        hk_cmt_info_destroy_wo_data(cmt_info);
+        break;
+    default:
+        break;
+    }
+}
+
+void hk_invalidate_delegated_info_callback(void *node)
+{
+    struct hk_cmt_common_info *common_info = node;
+
+    switch (common_info->type) {
+    case DATA: {
+        u8 op = ((struct hk_cmt_data_info *)common_info)->op;
+        if (op == CMT_VALID)
+            ((struct hk_cmt_data_info *)common_info)->op = CMT_DELETED_VALID;
+        else if (op == CMT_INVALID)
+            ((struct hk_cmt_data_info *)common_info)->op = CMT_DELETED_INVALID;
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void hk_cmt_node_clean(struct hk_cmt_node *node)
+{
+    if (node) {
+#ifdef CONFIG_DECOUPLE_WORKER
+        hk_inf_queue_modify(&node->data_queue, hk_invalidate_delegated_info_callback);
+        hk_inf_queue_destory(&node->attr_queue, hk_cmt_info_destroy);
+        hk_inf_queue_destory(&node->jnl_queue, hk_cmt_info_destroy);
+        if (node->cmt_inode) {
+            hk_cmt_info_destroy(node->cmt_inode);
+            node->cmt_inode = NULL;
+        }
+#else
+        hk_inf_queue_modify(&node->fuse_queue, hk_invalidate_delegated_info_callback);
+        hk_inf_queue_destory(&node->fuse_queue, hk_cmt_info_destroy_wo_data);
+#endif
+    }
+}
+
+int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node, struct hk_cmt_node **exist)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_queue *cq = sbi->cq;
@@ -125,14 +204,28 @@ int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node)
         } else if (compVal == 1) {
             temp = &((*temp)->rb_right);
         } else {
-            hk_dbg("cmt node for inode %llu already exists\n", cmt_node->ino);
-            mutex_unlock(&cq->lock);
-            return -EINVAL;
+            if (curr->valid == 1) {
+                hk_dbgv("cmt node for inode %llu already exists\n", cmt_node->ino);
+                mutex_unlock(&cq->lock);
+                return -EINVAL;
+            } else {
+                curr->valid = 1;
+                if (exist) {
+                    *exist = curr;
+                }
+                hk_dbg("find an invalidated slot for request %llu to reuse\n", cmt_node->ino);
+                mutex_unlock(&cq->lock);
+                return -EEXIST;
+            }
         }
     }
 
     rb_link_node(&cmt_node->rnode, parent, temp);
     rb_insert_color(&cmt_node->rnode, tree);
+
+    if (exist) {
+        *exist = NULL;
+    }
 
     mutex_unlock(&cq->lock);
 
@@ -172,7 +265,6 @@ struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino)
     return NULL;
 }
 
-/* NOTE: do free cmt node */
 int hk_cmt_unmanage_node(struct super_block *sb, u64 ino)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -197,12 +289,16 @@ int hk_cmt_unmanage_node(struct super_block *sb, u64 ino)
         } else if (compVal == 1) {
             temp = &((*temp)->rb_right);
         } else {
-            rb_erase(&curr->rnode, tree);
-            hk_cmt_node_destroy(curr);
+            // NOTE: we cannot free the node here, because background worker might hold this.
+            // FIXME: how to free the node?
+            curr = container_of(*temp, struct hk_cmt_node, rnode);
+            curr->valid = 0;
+            hk_cmt_node_clean(curr);
             mutex_unlock(&cq->lock);
             return 0;
         }
     }
+
     mutex_unlock(&cq->lock);
 
     return -EINVAL;
@@ -218,6 +314,16 @@ void hk_cmt_destroy_node_tree(struct super_block *sb, struct rb_root *tree)
         curr = container_of(temp, struct hk_cmt_node, rnode);
         temp = rb_next(temp);
         rb_erase(&curr->rnode, tree);
+
+#ifdef CONFIG_DECOUPLE_WORKER
+        HK_ASSERT(hk_inf_queue_length(&curr->data_queue) == 0);
+        HK_ASSERT(hk_inf_queue_length(&curr->attr_queue) == 0);
+        HK_ASSERT(hk_inf_queue_length(&curr->jnl_queue) == 0);
+        HK_ASSERT(curr->cmt_inode == NULL);
+#else
+        HK_ASSERT(hk_inf_queue_length(&curr->fuse_queue) == 0);
+#endif
+
         hk_cmt_node_destroy(curr);
     }
 }
@@ -316,6 +422,14 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
             }
             break;
         }
+        case CMT_DELETED_VALID:
+        case CMT_DELETED_INVALID:
+            // NOTE: merge redundant deleted commition.
+            //       In-PM hdr shall be valid or never written.
+            //       If it is invalidated, there will be no
+            //       CMT_DELETED_VALID/INVALID
+            if (hdr->valid != 0)
+                sm_delete_data_sync(sb, addr, ino, data_info->op);
         default:
             break;
         }
@@ -349,23 +463,21 @@ int hk_process_cmt_info(struct super_block *sb, u64 ino, void *info, int type)
     switch (type) {
     case DATA:
         hk_process_data_info(sb, ino, (struct hk_cmt_data_info *)info);
-        hk_free_hk_cmt_data_info((struct hk_cmt_data_info *)info);
         break;
     case ATTR:
         hk_process_attr_info(sb, ino, (struct hk_cmt_attr_info *)info);
-        hk_free_hk_cmt_attr_info((struct hk_cmt_attr_info *)info);
         break;
     case JNL:
         hk_process_jnl_info(sb, ino, (struct hk_cmt_jnl_info *)info);
-        hk_free_hk_cmt_jnl_info((struct hk_cmt_jnl_info *)info);
         break;
     case INODE:
         hk_process_inode_info(sb, ino, (struct hk_cmt_inode_info *)info);
-        hk_free_hk_cmt_inode_info((struct hk_cmt_inode_info *)info);
         break;
     default:
         break;
     }
+
+    hk_cmt_info_destroy(info);
 
     return 0;
 }
@@ -406,9 +518,17 @@ static int hk_cmt_worker_thread(void *arg)
         {
             INIT_LIST_HEAD(&info_head);
 
+            if (!cmt_node->valid) {
+                hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
+                continue;
+            }
+
             if (hk_grab_cmt_info(sb, cmt_node, &info_head, work_type, HK_CMT_BATCH_NUM) == 0) {
                 continue;
             }
+
+            /* Do some preprocess here */
+            // TODO: we might check merge info here
 
             list_for_each_entry_safe(info, info_next, &info_head, lnode)
             {
@@ -432,7 +552,8 @@ static int hk_cmt_worker_thread(void *arg)
     return 0;
 }
 
-static inline const char *worker_type_id_to_str(int work_id) { 
+static inline const char *worker_type_id_to_str(int work_id)
+{
     switch (work_id) {
     case DATA:
         return "DATA";
@@ -504,7 +625,7 @@ void hk_stop_cmt_workers(struct super_block *sb)
         hk_info("stop cmt worker %d (%s)\n", i, worker_type_id_to_str(i));
 #else
         hk_info("stop cmt worker %d (%s)\n", i, "FUSE");
-#endif 
+#endif
     }
 
     wait_to_finish_cmt();
@@ -585,8 +706,6 @@ void hk_flush_cmt_queue(struct super_block *sb)
             hk_flush_cmt_inode_queue(sb, cmt_node, work_types[i]);
         }
     }
-
-    hk_cmt_destroy_node_tree(sb, &cq->cmt_tree);
 
     hk_info("Flush all cmt workers\n");
 }

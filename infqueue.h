@@ -14,6 +14,34 @@ static inline void hk_inf_queue_init(struct hk_inf_queue *queue)
     spin_lock_init(&queue->lock);
 }
 
+static inline void hk_inf_queue_destory(struct hk_inf_queue *queue, void (*destor)(void *node))
+{
+    struct list_head *pos = NULL, *n = NULL;
+
+    spin_lock(&queue->lock);
+    list_for_each_safe(pos, n, &queue->queue)
+    {
+        list_del(pos);
+        queue->num--;
+        if (destor)
+            destor(pos);
+    }
+    spin_unlock(&queue->lock);
+}
+
+static inline void hk_inf_queue_modify(struct hk_inf_queue *queue, void (*callback)(void *node))
+{
+    struct list_head *pos = NULL;
+
+    spin_lock(&queue->lock);
+    list_for_each(pos, &queue->queue)
+    {
+        if (callback)
+            callback(pos);
+    }
+    spin_unlock(&queue->lock);
+}
+
 static inline int hk_inf_queue_length(struct hk_inf_queue *queue)
 {
     spin_lock(&queue->lock);

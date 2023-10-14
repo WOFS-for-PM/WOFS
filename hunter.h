@@ -399,6 +399,12 @@ struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
 struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
 int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
 int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
+#ifdef CONFIG_CMT_BACKGROUND
+/* delete data without linking, used for background */
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type);
+#else
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
+#endif
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
 int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
@@ -410,7 +416,7 @@ int hk_finish_tx(struct super_block *sb, int txid);
 #ifdef CONFIG_CMT_BACKGROUND
 struct hk_cmt_node* hk_cmt_node_init(u64 ino);
 void hk_cmt_node_destroy(struct hk_cmt_node *node);
-int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node);
+int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node, struct hk_cmt_node **exist);
 struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino);
 int hk_cmt_unmanage_node(struct super_block *sb, u64 ino);
 int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_data_op op);
@@ -419,6 +425,7 @@ void hk_start_cmt_workers(struct super_block *sb);
 void hk_stop_cmt_workers(struct super_block *sb);
 void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node);
 void hk_flush_cmt_queue(struct super_block *sb);
+void hk_cmt_destroy_node_tree(struct super_block *sb, struct rb_root *tree);
 struct hk_cmt_queue *hk_init_cmt_queue(void);
 void hk_free_cmt_queue(struct hk_cmt_queue *cq);
 #endif

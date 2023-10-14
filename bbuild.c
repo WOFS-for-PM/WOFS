@@ -46,6 +46,13 @@ int hk_save_layouts(struct super_block *sb)
         hk_sb->s_layout->s_ind.invalid_blks = cpu_to_le64(layout->ind.invalid_blks);
         hk_sb->s_layout->s_ind.prep_blks = cpu_to_le64(layout->ind.prep_blks);
         HK_ASSERT(hk_sb->s_layout->s_ind.prep_blks == 0);
+        if (hk_sb->s_layout->s_ind.prep_blks != 0) {
+            struct hk_range_node *cur;
+            list_for_each_entry(cur, &layout->prep_list, node)
+            {
+                hk_info("prep_list for (%d): %llu\n", cpuid, le64_to_cpu(cur->range_low));
+            }
+        }
         hk_sb->s_layout->s_ind.valid_blks = cpu_to_le64(layout->ind.valid_blks);
         hk_sb->s_layout->s_ind.total_blks = cpu_to_le64(layout->ind.total_blks);
     }

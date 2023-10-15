@@ -81,37 +81,9 @@ int ind_update(struct hk_indicator *ind, enum hk_ind_upt_type type, u64 blks)
         BUG_ON(1);
     }
 
-    return 0;
-}
-
-int hk_lazy_build_gaps(struct super_block *sb, int cpuid)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout = &sbi->layouts[cpuid];
-    struct hk_header *hdr;
-    u64 addr;
-    u64 blk;
-
-    if (layout->num_gaps_indram != 0) {
-        return -1;
-    }
-
-    traverse_layout_blks_reverse(addr, layout)
-    {
-        hdr = sm_get_hdr_by_addr(sb, addr);
-        // NOTE: formatter assign unintilized value to 0xFF.
-        if (hdr->valid == 0) {
-            blk = hk_get_dblk_by_addr(sbi, addr);
-            /* blk is already in prep state */
-            if (hk_range_find_value(sb, &layout->prep_list, blk)) {
-                continue;
-            }
-            hk_range_insert_value(sb, &layout->gaps_list, blk);
-            layout->num_gaps_indram++;
-        }
-        if (layout->num_gaps_indram > MAX_GAPS_IN_DRAM(sbi)) {
-            break;
-        }
+    if (ind->prep_blks & 0x1000000000000000) {
+        hk_info("Prep Blks Overflow!\n");
+        BUG_ON(1);
     }
 
     return 0;
@@ -124,8 +96,6 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid)
     struct hk_header *hdr;
     u64 blk;
     u64 addr;
-
-    hk_lazy_build_gaps(sb, cpuid);
 
     if (layout->num_gaps_indram == 0) {
         hk_info("%s: No more invalid blks in cpuid: %d \n", __func__, cpuid);
@@ -179,10 +149,6 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         }
 
         /* The blks that has been prepared */
-        blk_start = hk_get_dblk_by_addr(sbi, target_addr);
-        blk_end = blk_start + blks - 1;
-        hk_range_insert_range(sb, &layout->prep_list, blk_start, blk_end);
-
         ind_update(&layout->ind, PREP_LAYOUT_APPEND, blks);
     } else if (type == LAYOUT_GAP && blks == 1) {
         // TODO: Gap write
@@ -192,10 +158,8 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         if (target_addr == 0) {
             return 0;
         }
-
-        blk_start = hk_get_dblk_by_addr(sbi, target_addr);
-        hk_range_insert_value(sb, &layout->prep_list, blk_start);
         
+        blk_start = hk_get_dblk_by_addr(sbi, target_addr);
         hk_dbg("%s: prep gap: %lu", __func__, blk_start);
 
         ind_update(&layout->ind, PREP_LAYOUT_GAP, blks);
@@ -441,7 +405,6 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         INIT_LIST_HEAD(&layout->gaps_list);
         ind_init(sb, cpuid);
         mutex_init(&layout->layout_lock);
-        INIT_LIST_HEAD(&layout->prep_list);
         hk_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
     }
     sbi->max_invalid_blks_threshold = blks_per_layout;
@@ -458,11 +421,6 @@ int hk_layouts_free(struct hk_sb_info *sbi)
             layout = &sbi->layouts[cpuid];
 
             hk_range_free_all(&layout->gaps_list);
-            hk_range_free_all(&layout->prep_list);
-
-            if (layout->self_gc_thread) {
-                kfree(layout->self_gc_thread);
-            }
         }
         kfree(sbi->layouts);
     }

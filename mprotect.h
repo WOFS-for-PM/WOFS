@@ -235,7 +235,7 @@ static inline void hk_memlock_all(struct super_block *sb, unsigned long *flags)
 		__hk_memlock_range(sbi->virt_addr, sbi->initsize, flags);
 }
 
-static inline void hk_memunlock_inode(struct super_block *sb, 
+static inline void hk_memunlock_pi(struct super_block *sb, 
 									  struct hk_inode *pi, unsigned long *flags)
 {
 	if (hk_range_check(sb, pi, sizeof(struct hk_inode)))
@@ -245,7 +245,7 @@ static inline void hk_memunlock_inode(struct super_block *sb,
 		__hk_memunlock_range(pi, sizeof(struct hk_inode), flags);
 }
 
-static inline void hk_memlock_inode(struct super_block *sb,
+static inline void hk_memlock_pi(struct super_block *sb,
 				       struct hk_inode *pi, unsigned long *flags)
 {
 	if (hk_is_protected(sb))

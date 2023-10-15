@@ -72,11 +72,11 @@
 #endif
 
 /* #define hk_dbg(s, args...)		pr_debug(s, ## args) */
-#define hk_dbg(s, args ...)		    pr_info(s, ## args)
+#define hk_dbg(s, args ...)		    pr_info("%s: " s, __func__, ## args)
 #define hk_dbg1(s, args ...)
 #define hk_err(sb, s, args ...)	    hk_error_mng(sb, s, ## args)
-#define hk_warn(s, args ...)		pr_warn(s, ## args)
-#define hk_info(s, args ...)		pr_info(s, ## args)
+#define hk_warn(s, args ...)		pr_warn("%s: " s, __func__, ## args)
+#define hk_info(s, args ...)		pr_info("%s: " s, __func__, ## args)
 
 extern unsigned int hk_dbgmask;
 #define HK_DBGMASK_MMAPHUGE	        (0x00000001)
@@ -321,7 +321,6 @@ u64 get_version(struct hk_sb_info *sbi);
 int ind_update(struct hk_indicator *ind, enum hk_ind_upt_type type, u64 blks);
 int hk_layouts_init(struct hk_sb_info *sbi, int cpus);
 int hk_layouts_free(struct hk_sb_info *sbi);
-int hk_lazy_build_gaps(struct super_block *sb, int cpuid);
 unsigned long hk_count_free_blocks(struct super_block *sb);
 u64 hk_prepare_layout(struct super_block* sb, int cpuid, u64 blks, enum hk_layout_type type, 
                       u64* blks_prepared, bool zero);
@@ -351,29 +350,26 @@ long hk_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
 /* ======================= ANCHOR: inode.c ========================= */
 extern const struct address_space_operations hk_aops_dax;
-void hk_init_pi(struct inode *inode, struct hk_inode *pi);
 int hk_init_free_inode_list(struct super_block *sb, bool is_init);
 int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_init);
-u64 hk_get_new_ino(struct super_block *sb);
+u64 hk_alloc_ino(struct super_block *sb);
 struct inode *hk_iget_opened(struct super_block *sb, unsigned long ino);
 struct inode *hk_iget(struct super_block *sb, unsigned long ino);
 struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir, 
 							  u64 ino, umode_t mode, size_t size, dev_t rdev, 
 							  const struct qstr *qstr);
+void hk_init_pi(struct super_block *sb, struct inode *inode, umode_t mode, u32 i_flags);
 int hk_getattr(const struct path *path, struct kstat *stat,
 		 	   u32 request_mask, unsigned int query_flags);
 int hk_notify_change(struct dentry *dentry, struct iattr *attr);
 int hk_write_inode(struct inode *inode, struct writeback_control *wbc);
 void hk_evict_inode(struct inode *inode);
-int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
-					   struct hk_inode_info_header *sih);
+int hk_free_data_blks(struct super_block *sb, struct hk_inode_info_header *sih);
 
 /* ======================= ANCHOR: namei.c ========================= */
 extern const struct inode_operations hk_dir_inode_operations;
 extern const struct inode_operations hk_special_inode_operations;
 struct hk_dentry *hk_dentry_by_ix_from_blk(u64 blk_addr, u16 ix);
-int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char *name, 
-						   int namelen, u64 ino, u16 link_change, struct hk_dentry **out_direntry);
 struct dentry *hk_get_parent(struct dentry *child);
 int hk_insert_dir_table(struct super_block *sb, struct hk_inode_info_header *sih, const char *name, 
 				  	    int namelen, struct hk_dentry *direntry);
@@ -390,23 +386,26 @@ bool hk_get_cur_commit_al_entry(struct super_block *sb, struct hk_inode *pi, enu
 struct hk_attr_log *hk_get_attr_log_by_alid(struct super_block *sb, int alid);
 int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al);
 int hk_evicting_attr_log_to_inode(struct super_block *sb, struct hk_inode *pi);
+
+int hk_commit_icp(struct super_block *sb, struct hk_cmt_icp *icp);
+int hk_commit_icp_attrchange(struct super_block *sb, struct hk_cmt_icp *icp);
+int hk_commit_icp_linkchange(struct super_block *sb, struct hk_cmt_icp *icp);
+
 int hk_commit_attrchange(struct super_block *sb, struct inode *inode);
 int hk_commit_linkchange(struct super_block *sb, struct inode *inode);
 int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size);
-int hk_commit_inode_checkpoint(struct super_block *sb, struct hk_inode_state *state);
+
 u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr);
 struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
 struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
+
 int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
 int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
-#ifdef CONFIG_CMT_BACKGROUND
-/* delete data without linking, used for background */
-int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type);
-#else
-int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
-#endif
+
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr);
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
 int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
+
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
 struct hk_jentry* hk_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid);
 int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...);
@@ -414,20 +413,26 @@ int hk_finish_tx(struct super_block *sb, int txid);
 
 /* ======================= ANCHOR: cmt.c ========================= */
 #ifdef CONFIG_CMT_BACKGROUND
+
 struct hk_cmt_node* hk_cmt_node_init(u64 ino);
 void hk_cmt_node_destroy(struct hk_cmt_node *node);
 int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node, struct hk_cmt_node **exist);
 struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino);
-int hk_cmt_unmanage_node(struct super_block *sb, u64 ino);
-int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_data_op op);
-int hk_delegate_attr_async(struct super_block *sb, struct inode *inode);
+int hk_cmt_unmanage_node(struct super_block *sb, struct hk_cmt_node *cmt_node);
+
+int hk_delegate_create_async(struct super_block *sb, struct inode *inode, struct inode *dir, struct hk_dentry *direntry);
+int hk_delegate_unlink_async(struct super_block *sb, struct inode *inode, struct inode *dir, struct hk_dentry *direntry, bool invalidate);
+int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_info_type type);
+int hk_delegate_close_async(struct super_block *sb, struct inode *inode);
+int hk_delegate_delete_async(struct super_block *sb, struct inode *inode);
+
+struct hk_cmt_queue *hk_init_cmt_queue(int num_workers);
+void hk_free_cmt_queue(struct hk_cmt_queue *cq);
 void hk_start_cmt_workers(struct super_block *sb);
 void hk_stop_cmt_workers(struct super_block *sb);
 void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node);
 void hk_flush_cmt_queue(struct super_block *sb);
-void hk_cmt_destroy_node_tree(struct super_block *sb, struct rb_root *tree);
-struct hk_cmt_queue *hk_init_cmt_queue(void);
-void hk_free_cmt_queue(struct hk_cmt_queue *cq);
+void hk_cmt_destory_forest(struct super_block *sb);
 #endif
 
 /* ======================= ANCHOR: rebuild.c ========================= */

@@ -97,7 +97,7 @@ int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
 }
 
 // invalid data without linking. This means, we do not intefere with inode.
-int __sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type)
+int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
 {
     struct inode *inode;
     struct hk_header *hdr;
@@ -123,29 +123,15 @@ int __sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type
 
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
 
-    if (type == CMT_DELETED_VALID) {
-        blk = hk_get_dblk_by_addr(sbi, blk_addr);
-        hk_range_remove(sb, &layout->prep_list, blk);
-        ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
-    } else if (type == CMT_DELETED_INVALID) {
-        ind_update(&layout->ind, INVALIDATE_BLK, 1);
-    }
-    
+    ind_update(&layout->ind, INVALIDATE_BLK, 1);
+
+    blk = hk_get_dblk_by_addr(sbi, blk_addr);
+    hk_range_insert_value(sb, &layout->gaps_list, blk);
+    layout->num_gaps_indram++;
+
     HK_END_TIMING(sm_invalid_t, invalid_time);
     return 0;
 }
-
-#ifdef CONFIG_CMT_BACKGROUND
-int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u8 type)
-{
-    return __sm_delete_data_sync(sb, blk_addr, ino, type);
-}
-#else
-int sm_delete_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
-{
-    return __sm_delete_data_sync(sb, blk_addr, ino, CMT_DELETED_VALID);
-}
-#endif
 
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
 {
@@ -156,6 +142,7 @@ int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_node *cmt_node;
     unsigned long irq_flags = 0;
+    u64 blk;
     INIT_TIMING(invalid_time);
 
     HK_START_TIMING(sm_invalid_t, invalid_time);
@@ -174,6 +161,11 @@ int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
 
     ind_update(&layout->ind, INVALIDATE_BLK, 1);
+
+    blk = hk_get_dblk_by_addr(sbi, blk_addr);
+    hk_range_insert_value(sb, &layout->gaps_list, blk);
+    layout->num_gaps_indram++;
+
     HK_END_TIMING(sm_invalid_t, invalid_time);
     return 0;
 }
@@ -193,7 +185,7 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     HK_START_TIMING(sm_valid_t, valid_time);
 
     cmt_node = hk_cmt_search_node(sb, ino);
-    // pi = hk_get_inode_by_ino(sb, ino);
+    // pi = hk_get_pi_by_ino(sb, ino);
     // if (!pi)
     //     return -1;
 
@@ -216,10 +208,6 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     hk_memlock_hdr(sb, hdr, &irq_flags);
 
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
-
-    /* Remove Prep from Layouts */
-    blk = hk_get_dblk_by_addr(sbi, blk_addr);
-    hk_range_remove(sb, &layout->prep_list, blk);
 
     ind_update(&layout->ind, VALIDATE_BLK, 1);
 
@@ -284,9 +272,9 @@ void hk_evicting_al_entry_once(struct super_block *sb, struct hk_inode *pi, stru
     struct hk_attr_log *al;
     unsigned long irq_flags = 0;
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    hk_memunlock_pi(sb, pi, &irq_flags);
     hk_evicting_al_entry(sb, pi, entry);
-    hk_memlock_inode(sb, pi, &irq_flags);
+    hk_memlock_pi(sb, pi, &irq_flags);
 
     al = hk_get_attr_log_by_ino(sb, le64_to_cpu(pi->ino));
 
@@ -308,7 +296,7 @@ int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al)
 {
     u32 ino = al->ino;
     int slotid;
-    struct hk_inode *pi = hk_get_inode_by_ino(sb, ino);
+    struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
     unsigned long irq_flags = 0;
 
     if (!pi->valid) {
@@ -320,13 +308,13 @@ int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al)
     hk_memlock_attr_log(sb, al, &irq_flags);
     hk_flush_buffer(al, sizeof(struct hk_attr_log), true);
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    hk_memunlock_pi(sb, pi, &irq_flags);
     for (slotid = 0; slotid < HK_ATTRLOG_ENTY_SLOTS; slotid++) {
         if (al->last_valid_setattr == slotid || al->last_valid_linkchange == slotid) {
             hk_evicting_al_entry(sb, pi, &al->entries[slotid]);
         }
     }
-    hk_memlock_inode(sb, pi, &irq_flags);
+    hk_memlock_pi(sb, pi, &irq_flags);
     hk_flush_buffer(pi, sizeof(struct hk_inode), true);
 
     hk_memunlock_attr_log(sb, al, &irq_flags);
@@ -452,6 +440,28 @@ int hk_commit_attrchange(struct super_block *sb, struct inode *inode)
     hk_do_commit_al_entry(sb, inode->i_ino, &entry);
 }
 
+int hk_commit_icp_attrchange(struct super_block *sb, struct hk_cmt_icp *icp)
+{ 
+    struct hk_al_entry entry;
+    struct hk_setattr_entry *setattr;
+    struct hk_sb_info *sbi = HK_SB(sb);
+
+    setattr = &entry.entry.setattr;
+
+    setattr->mode = cpu_to_le16(icp->mode);
+    setattr->gid = cpu_to_le32(icp->gid);
+    setattr->uid = cpu_to_le32(icp->uid);
+    setattr->mtime = cpu_to_le32(icp->mtime);
+    setattr->atime = cpu_to_le32(icp->atime);
+    setattr->ctime = cpu_to_le32(icp->ctime);
+    setattr->size = cpu_to_le64(icp->size);
+
+    entry.type = SET_ATTR;
+    setattr->tstamp = get_version(sbi);
+
+    hk_do_commit_al_entry(sb, icp->ino, &entry);
+}
+
 /* ======================= ANCHOR: commit sizechange ========================= */
 /* used only for hk_setsize(), inode must be opened */
 int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size)
@@ -499,30 +509,46 @@ int hk_commit_linkchange(struct super_block *sb, struct inode *inode)
     return 0;
 }
 
-/* ======================= ANCHOR: commit state ========================= */
-int hk_commit_inode_checkpoint(struct super_block *sb, struct hk_inode_state *state)
+int hk_commit_icp_linkchange(struct super_block *sb, struct hk_cmt_icp *icp)
 {
     struct hk_al_entry entry;
-    struct hk_setattr_entry *setattr;
+    struct hk_linkchange_entry *linkchange;
     struct hk_sb_info *sbi = HK_SB(sb);
+
+    entry.type = LINK_CHANGE;
+    linkchange = &entry.entry.linkchange;
+    linkchange->tstamp = get_version(sbi);
+    linkchange->links = cpu_to_le16(icp->links_count);
+    linkchange->ctime = cpu_to_le32(icp->ctime);
+
+    hk_do_commit_al_entry(sb, icp->ino, &entry);
+
+    return 0;
+}
+
+/* ======================= ANCHOR: commit icp ========================= */
+int hk_commit_icp(struct super_block *sb, struct hk_cmt_icp *icp)
+{
     struct hk_inode *pi = NULL;
+    unsigned long irq_flags = 0;
 
-    pi = hk_get_inode_by_ino(sb, state->ino);
+    pi = hk_get_pi_by_ino(sb, icp->ino);
 
-    setattr = &entry.entry.setattr;
-    entry.type = SET_ATTR;
-
-    setattr->mode = cpu_to_le16(state->mode);
-    setattr->gid = cpu_to_le32(state->gid);
-    setattr->uid = cpu_to_le32(state->uid);
-    setattr->mtime = cpu_to_le32(state->mtime);
-    setattr->atime = cpu_to_le32(state->atime);
-    setattr->ctime = cpu_to_le32(state->ctime);
-    setattr->size = cpu_to_le64(state->size);
-
-    setattr->tstamp = cpu_to_le64(get_version(sbi));
-
-    hk_do_commit_al_entry(sb, pi->ino, &entry);
+    hk_memunlock_pi(sb, pi, &irq_flags);
+    pi->ino = cpu_to_le64(icp->ino);
+    pi->i_mode = cpu_to_le16(icp->mode);
+    pi->i_uid = cpu_to_le32(icp->uid);
+    pi->i_gid = cpu_to_le32(icp->gid);
+    pi->i_size = cpu_to_le64(icp->size);
+    pi->i_atime = cpu_to_le32(icp->atime);
+    pi->i_ctime = cpu_to_le32(icp->ctime);
+    pi->i_mtime = cpu_to_le32(icp->mtime);
+    pi->i_links_count = cpu_to_le16(icp->links_count);
+    pi->h_addr = 0;
+    pi->i_generation = cpu_to_le32(icp->generation);
+    pi->tstamp = icp->tstamp;
+    pi->i_flags = cpu_to_le32(icp->flags);
+    hk_memlock_pi(sb, pi, &irq_flags);
 
     return 0;
 }
@@ -784,7 +810,6 @@ int hk_finish_tx(struct super_block *sb, int txid)
     use_journal(sb, txid);
     hk_memunlock_journal(sb, jnl, &irq_flags);
     jnl->jhdr.jtype = IDLE;
-    hk_flush_buffer(jnl, sizeof(struct hk_jheader), true);
     jnl->jhdr.jofs_head = jnl->jhdr.jofs_tail;
     hk_flush_buffer(jnl, sizeof(struct hk_jheader), true);
     hk_memlock_journal(sb, jnl, &irq_flags);

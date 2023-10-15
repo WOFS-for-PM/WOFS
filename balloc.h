@@ -38,13 +38,9 @@ struct hk_layout_info {
 	    
     u64 		 	    num_gaps_indram;
     struct list_head 	gaps_list;
-    // struct mfreelist gaps;                      /* Sort asending  */
 
-    // /* For GC */
+    // Statistics
     struct hk_indicator ind;
-	struct list_head	prep_list;
-
-    struct task_struct  *self_gc_thread;
 };
 
 static inline void hk_dump_layout_info(struct hk_layout_info *layout)
@@ -74,7 +70,6 @@ struct hk_layout_preps
     struct hk_layout_prep preps[HK_MAX_LAYOUTS];
 };
 
-#define MAX_GAPS_IN_DRAM(sbi)              (sbi->max_invalid_blks_threshold / sbi->num_layout)
 #define traverse_layout_blks(addr, layout) for (addr = layout->layout_start; addr < layout->layout_start + layout->atomic_counter; addr += HK_PBLK_SZ)
 #define traverse_layout_blks_reverse(addr, layout) for (addr = layout->layout_start + layout->atomic_counter - HK_PBLK_SZ; addr >= layout->layout_start; addr -= HK_PBLK_SZ)
 #define GET_LAST_BLK_FROM_LAYOUT(layout)   (layout->atomic_counter + layout->layout_start - HK_PBLK_SZ)

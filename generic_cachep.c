@@ -24,10 +24,11 @@ DEFINE_GENERIC_CACHEP(hk_range_node);
 DEFINE_GENERIC_CACHEP(hk_dentry_info);
 DEFINE_GENERIC_CACHEP(hk_inode_info_header);
 
-DEFINE_GENERIC_CACHEP(hk_cmt_jnl_info);
 DEFINE_GENERIC_CACHEP(hk_cmt_data_info);
-DEFINE_GENERIC_CACHEP(hk_cmt_attr_info);
-DEFINE_GENERIC_CACHEP(hk_cmt_inode_info);
+DEFINE_GENERIC_CACHEP(hk_cmt_new_inode_info);
+DEFINE_GENERIC_CACHEP(hk_cmt_unlink_inode_info);
+DEFINE_GENERIC_CACHEP(hk_cmt_delete_inode_info);
+DEFINE_GENERIC_CACHEP(hk_cmt_close_info);
 
 DEFINE_GENERIC_CACHEP(hk_cmt_node);
 

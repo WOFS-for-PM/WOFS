@@ -55,7 +55,7 @@ struct hk_inode {
 static_assert(sizeof(struct hk_inode) != PM_ACCESS_GRANU, "hk_inode size mismatch");
 
 /*
- * hk-specific inode state kept in DRAM
+ * hk-specific inode icp kept in DRAM
  */
 struct hk_inode_info_header {
     struct linix ix; /* Linear Index for blks in use */
@@ -98,7 +98,7 @@ struct hk_inode_rebuild {
 };
 
 /*
- * DRAM state for inodes
+ * DRAM icp for inodes
  */
 struct hk_inode_info {
     struct hk_inode_info_header header;
@@ -129,9 +129,9 @@ static inline struct hk_inode_info_header *HK_IH(struct inode *inode)
 }
 
 /* If this is part of a read-modify-write of the inode metadata,
- * hk_memunlock_inode() before calling!
+ * hk_memunlock_pi() before calling!
  */
-static inline struct hk_inode *hk_get_inode_by_ino(struct super_block *sb, u64 ino)
+static inline struct hk_inode *hk_get_pi_by_ino(struct super_block *sb, u64 ino)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
 

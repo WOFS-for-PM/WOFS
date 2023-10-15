@@ -137,9 +137,9 @@ static int hk_rebuild_blks_finish(struct super_block *sb, struct hk_inode *pi,
     sih->i_num_dentrys = le64_to_cpu(reb->i_num_entrys);
     sih->tstamp = reb->tstamp;
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    hk_memunlock_pi(sb, pi, &irq_flags);
     hk_update_inode_with_rebuild(sb, reb, pi);
-    hk_memlock_inode(sb, pi, &irq_flags);
+    hk_memlock_pi(sb, pi, &irq_flags);
 
     hk_flush_buffer(pi, sizeof(struct hk_inode), true);
     return 0;
@@ -233,7 +233,7 @@ int hk_check_inode(struct super_block *sb, u64 ino)
     struct hk_inode *pi;
 
     // TODO: Check Inode Integrity
-    pi = hk_get_inode_by_ino(sb, ino);
+    pi = hk_get_pi_by_ino(sb, ino);
     ret = pi->valid == 1 ? 0 : -ESTALE;
 
     return ret;
@@ -250,13 +250,13 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
 
     ret = hk_check_inode(sb, ino);
     if (ret) {
-        pi = hk_get_inode_by_ino(sb, ino);
+        pi = hk_get_pi_by_ino(sb, ino);
         hk_dump_inode(sb, pi);
         hk_warn("%s: Invalid inode: %llu, %d\n", __func__, ino, ret);
         return ret;
     }
 
-    pi = (struct hk_inode *)hk_get_inode_by_ino(sb, ino);
+    pi = (struct hk_inode *)hk_get_pi_by_ino(sb, ino);
 
 #ifdef CONFIG_CMT_BACKGROUND
 	cmt_node = hk_cmt_search_node(sb, ino);

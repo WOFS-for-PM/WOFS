@@ -276,82 +276,16 @@ struct dentry *hk_get_parent(struct dentry *child)
     return d_obtain_alias(inode);
 }
 
-static int hk_build_pseudo_dentry_for_tx(struct hk_dentry *direntry, u64 ino, struct dentry *dentry,
-                                         struct inode *dir)
-{
-    struct hk_inode *pidir;
-
-    pidir = hk_get_inode(dir->i_sb, dir);
-
-    /* Construct Pseudo direntry  */
-    direntry->ino = cpu_to_le64(ino);
-    direntry->name_len = dentry->d_name.len;
-    memcpy(direntry->name, dentry->d_name.name, direntry->name_len);
-    direntry->name[dentry->d_name.len] = '\0';
-    direntry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
-    direntry->links_count = cpu_to_le16(0);
-    direntry->valid = 1;
-    direntry->tstamp = pidir->tstamp;
-
-    return 0;
-}
-
-static int hk_build_pseudo_inode_for_tx(struct hk_inode *pi, struct super_block *sb, u64 ino,
-                                        struct hk_inode *pidir, struct inode *dir, umode_t mode, dev_t rdev)
-{
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct inode *inode;
-    struct hk_inode_info_header *sih;
-    int ret = 0;
-
-    /* Construct Pseudo Inode */
-    inode = new_inode(sb);
-    if (!inode) {
-        ret = -ENOMEM;
-        goto out;
-    }
-
-    inode_init_owner(inode, dir, mode);
-    inode->i_blocks = inode->i_size = 0;
-    inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-    inode->i_generation = atomic_add_return(1, &sbi->next_generation);
-    atomic_dec(&sbi->next_generation);
-    inode->i_size = 0;
-    inode->i_ino = ino;
-    if (rdev) {
-        init_special_inode(inode, mode, rdev);
-    }
-
-    /* for handle evict */
-    sih = HK_IH(inode);
-    hk_init_header(sb, sih, S_IFPSEUDO);
-
-    pi->i_flags = hk_mask_flags(mode, pidir->i_flags);
-    pi->ino = ino;
-    pi->i_create_time = current_time(inode).tv_sec;
-    hk_init_pi(inode, pi);
-
-out:
-    iput(inode);
-    return ret;
-}
-
-static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
-                                     struct inode *dir, umode_t mode, dev_t rdev)
+int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
+                              u64 dir_ino, umode_t mode)
 {
     struct hk_inode *pidir = NULL;
     struct hk_inode *pi;
-    struct hk_inode_info_header *sih = HK_IH(dir);
     unsigned long irq_flags = 0;
     int ret = 0;
 
-    pidir = hk_get_inode(sb, dir);
-    if (!pidir) {
-        ret = -ENOENT;
-        goto out;
-    }
-
-    pi = hk_get_inode_by_ino(sb, ino);
+    pidir = hk_get_pi_by_ino(sb, dir_ino);
+    pi = hk_get_pi_by_ino(sb, ino);
 
     switch (mode & S_IFMT) {
     case S_IFDIR:
@@ -368,31 +302,123 @@ static int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_
         break;
     }
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    hk_memunlock_pi(sb, pi, &irq_flags);
     pi->valid = 1;
-    hk_memlock_inode(sb, pi, &irq_flags);
+    hk_memlock_pi(sb, pi, &irq_flags);
 
 out:
     return ret;
 }
 
-static int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
-                                  struct hk_dentry *direntry, struct hk_inode *pidir,
-                                  bool invalidate)
+int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
+                           struct hk_dentry *direntry, struct hk_inode *pidir,
+                           bool invalidate)
 {
     int ret = 0;
     unsigned long irq_flags = 0;
+    
     /* make sure meta consistency */
     hk_evicting_attr_log_to_inode(sb, pi);
     ret = hk_start_tx(sb, UNLINK, pi, direntry, pidir);
 
     if (invalidate) {
-        hk_memunlock_inode(sb, pi, &irq_flags);
+        hk_memunlock_pi(sb, pi, &irq_flags);
         pi->valid = 0;
-        hk_memlock_inode(sb, pi, &irq_flags);
+        hk_memlock_pi(sb, pi, &irq_flags);
     }
+    
 out:
     return ret;
+}
+
+static int hk_start_tx_for_symlink(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
+                                   struct inode *dir, umode_t mode, u64 sym_blk_addr)
+{
+    struct hk_inode *pidir = NULL;
+
+    int ret = 0;
+
+    pidir = hk_get_inode(sb, dir);
+    if (!pidir) {
+        ret = -ENOENT;
+        goto out;
+    }
+
+    struct hk_inode *pi;
+    pi = hk_get_pi_by_ino(sb, ino);
+
+    ret = hk_start_tx(sb, SYMLINK, pi, direntry, pidir, sym_blk_addr);
+
+out:
+    return ret;
+}
+
+static int hk_start_tx_for_rename(struct super_block *sb, struct hk_inode *pi,
+                                  struct hk_dentry *pd, struct hk_dentry *pd_new,
+                                  struct hk_inode *pi_par, struct hk_inode *pi_new)
+{
+    int ret;
+    u64 ino = le64_to_cpu(pi->ino);
+
+    /* make sure meta consistency */
+    hk_evicting_attr_log_to_inode(sb, pi);
+
+    ret = hk_start_tx(sb, RENAME, pi, pd, pd_new, pi_par, pi_new);
+out:
+    return ret;
+}
+
+/* ===== Operation ===== */
+static int __hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+                       bool excl, dev_t rdev, enum hk_new_inode_type type)
+{
+    struct inode *inode = NULL;
+    int err = PTR_ERR(inode);
+    struct super_block *sb = dir->i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_dentry *direntry;
+    struct hk_inode *pidir, *pi;
+    u64 ino;
+    u64 pi_addr = 0;
+
+    hk_dbgv("%s: %s\n", __func__, dentry->d_name.name);
+    hk_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
+
+    ino = hk_alloc_ino(sb);
+    if (ino == -1)
+        goto out_err;
+
+    err = hk_add_dentry(dentry, ino, 0, &direntry);
+    if (err)
+        goto out_err;
+
+    inode = hk_create_inode(type, dir, ino, mode,
+                            0, rdev, &dentry->d_name);
+    if (IS_ERR(inode))
+        goto out_err;
+
+#ifdef CONFIG_CMT_BACKGROUND
+    hk_delegate_create_async(sb, inode, dir, direntry);
+#else
+    int txid;
+    hk_init_pi(sb, inode, mode, dir->i_flags);
+    txid = hk_start_tx_for_new_inode(sb, ino, direntry, dir->i_ino, mode);
+    if (txid < 0) {
+        err = txid;
+        goto out_err;
+    }
+    hk_commit_attrchange(sb, dir);
+    hk_finish_tx(sb, txid);
+#endif
+
+    d_instantiate(dentry, inode);
+    unlock_new_inode(inode);
+
+    return err;
+
+out_err:
+    hk_err(sb, "%s return %d\n", __func__, err);
+    return err;
 }
 
 /* Returns new tail after append */
@@ -407,56 +433,33 @@ out:
 static int hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
                      bool excl)
 {
-    struct inode *inode = NULL;
-    int err = PTR_ERR(inode);
-    struct super_block *sb = dir->i_sb;
-    struct hk_inode *pidir, *pi;
-    struct hk_dentry *direntry;
-    u64 pi_addr = 0;
-    u64 ino;
-    int txid;
+    int err = 0;
     INIT_TIMING(create_time);
-
     HK_START_TIMING(create_t, create_time);
-
-    pidir = hk_get_inode(sb, dir);
-    if (!pidir)
-        goto out_err;
-
-    ino = hk_get_new_ino(sb);
-    if (ino == -1)
-        goto out_err;
-
-    err = hk_add_dentry(dentry, ino, 0, &direntry);
-    if (err)
-        goto out_err;
-
-    hk_dbgv("%s: %s\n", __func__, dentry->d_name.name);
-    hk_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
-
-    inode = hk_create_inode(TYPE_CREATE, dir, ino, mode,
-                            0, 0, &dentry->d_name);
-    if (IS_ERR(inode))
-        goto out_err;
-
-    txid = hk_start_tx_for_new_inode(sb, ino, direntry, dir, mode, 0);
-    if (txid < 0) {
-        err = txid;
-        goto out_err;
-    }
-    hk_commit_attrchange(sb, dir);
-
-    hk_finish_tx(sb, txid);
-
-    d_instantiate(dentry, inode);
-    unlock_new_inode(inode);
-
+    err = __hk_create(dir, dentry, mode, excl, 0, TYPE_CREATE);
     HK_END_TIMING(create_t, create_time);
     return err;
+}
 
-out_err:
-    hk_err(sb, "%s return %d\n", __func__, err);
-    HK_END_TIMING(create_t, create_time);
+static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+                    dev_t rdev)
+{
+    int err = 0;
+    INIT_TIMING(mknod_time);
+    HK_START_TIMING(mknod_t, mknod_time);
+    err = __hk_create(dir, dentry, mode, false, rdev, TYPE_MKNOD);
+    HK_END_TIMING(mknod_t, mknod_time);
+    return err;
+}
+
+static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
+{
+    int err = 0;
+    INIT_TIMING(mkdir_time);
+    HK_START_TIMING(mkdir_t, mkdir_time);
+    err = __hk_create(dir, dentry, S_IFDIR | mode, false, 0, TYPE_MKDIR);
+    inc_nlink(dir);
+    HK_END_TIMING(mkdir_t, mkdir_time);
     return err;
 }
 
@@ -493,84 +496,6 @@ static struct dentry *hk_lookup(struct inode *dir, struct dentry *dentry,
     return d_splice_alias(inode, dentry);
 }
 
-static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
-                    dev_t rdev)
-{
-    struct inode *inode = NULL;
-    int err = PTR_ERR(inode);
-    struct super_block *sb = dir->i_sb;
-    u64 pi_addr = 0;
-    struct hk_inode *pidir, *pi;
-    struct hk_dentry *direntry;
-    u64 ino;
-    int txid;
-    INIT_TIMING(mknod_time);
-
-    HK_START_TIMING(mknod_t, mknod_time);
-
-    pidir = hk_get_inode(sb, dir);
-    if (!pidir)
-        goto out_err;
-
-    ino = hk_get_new_ino(sb);
-    if (ino == -1)
-        goto out_err;
-
-    err = hk_add_dentry(dentry, ino, 0, &direntry);
-    if (err)
-        goto out_err;
-
-    hk_dbgv("%s: %s\n", __func__, dentry->d_name.name);
-    hk_dbgv("%s: inode %llu, dir %lu\n", __func__, ino, dir->i_ino);
-
-    inode = hk_create_inode(TYPE_MKNOD, dir, ino, mode,
-                            0, rdev, &dentry->d_name);
-    if (IS_ERR(inode))
-        goto out_err;
-
-    txid = hk_start_tx_for_new_inode(sb, ino, direntry, dir, mode, rdev);
-    if (txid < 0) {
-        err = txid;
-        goto out_err;
-    }
-    hk_commit_attrchange(sb, dir);
-
-    hk_finish_tx(sb, txid);
-
-    d_instantiate(dentry, inode);
-    unlock_new_inode(inode);
-
-    HK_END_TIMING(mknod_t, mknod_time);
-    return err;
-
-out_err:
-    hk_err(sb, "%s return %d\n", __func__, err);
-    HK_END_TIMING(mknod_t, mknod_time);
-    return err;
-}
-
-static int hk_start_tx_for_symlink(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
-                                   struct inode *dir, umode_t mode, u64 sym_blk_addr)
-{
-    struct hk_inode *pidir = NULL;
-
-    int ret = 0;
-
-    pidir = hk_get_inode(sb, dir);
-    if (!pidir) {
-        ret = -ENOENT;
-        goto out;
-    }
-
-    struct hk_inode *pi;
-    pi = hk_get_inode_by_ino(sb, ino);
-
-    ret = hk_start_tx(sb, SYMLINK, pi, direntry, pidir, sym_blk_addr);
-
-out:
-    return ret;
-}
-
 static int hk_symlink(struct inode *dir, struct dentry *dentry,
                       const char *symname)
 {
@@ -596,7 +521,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     if (!pidir)
         goto out_fail;
 
-    ino = hk_get_new_ino(sb);
+    ino = hk_alloc_ino(sb);
     if (ino == 0)
         goto out_fail;
 
@@ -614,6 +539,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
         err = PTR_ERR(inode);
         goto out_fail;
     }
+    hk_init_pi(sb, inode, S_IFLNK | 0777, dir->i_flags);
 
     pi = hk_get_inode(sb, inode);
 
@@ -685,7 +611,7 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
     inode->i_ctime = current_time(inode);
     inc_nlink(inode);
 
-    txid = hk_start_tx_for_new_inode(sb, inode->i_ino, direntry, dir, S_IFLNK | 0777, 0);
+    txid = hk_start_tx_for_new_inode(sb, inode->i_ino, direntry, dir->i_ino, S_IFLNK | 0777);
     if (txid < 0) {
         err = txid;
         iput(inode);
@@ -733,6 +659,9 @@ static int hk_unlink(struct inode *dir, struct dentry *dentry)
     if (inode->i_nlink)
         drop_nlink(inode);
 
+#ifdef CONFIG_CMT_BACKGROUND
+    hk_delegate_unlink_async(sb, inode, dir, direntry, invalidate);
+#else
     txid = hk_start_tx_for_unlink(sb, pi, direntry, pidir, invalidate);
     if (txid < 0) {
         retval = txid;
@@ -742,6 +671,7 @@ static int hk_unlink(struct inode *dir, struct dentry *dentry)
     hk_commit_linkchange(sb, inode);
 
     hk_finish_tx(sb, txid);
+#endif
 
     HK_END_TIMING(unlink_t, unlink_time);
     return 0;
@@ -750,79 +680,6 @@ out_err:
     hk_err(sb, "%s return %d\n", __func__, retval);
     HK_END_TIMING(unlink_t, unlink_time);
     return retval;
-}
-
-static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
-{
-    struct inode *inode;
-    struct super_block *sb = dir->i_sb;
-    struct hk_inode *pidir, *pi;
-    struct hk_dentry *direntry;
-    struct hk_inode_info *si, *sidir;
-    struct hk_inode_info_header *sih = NULL;
-
-    u64 pi_addr = 0;
-    u64 ino;
-    int err = -EMLINK;
-    int txid;
-    INIT_TIMING(mkdir_time);
-
-    HK_START_TIMING(mkdir_t, mkdir_time);
-    if (dir->i_nlink >= HK_LINK_MAX)
-        goto out;
-
-    ino = hk_get_new_ino(sb);
-    if (ino == 0)
-        goto out_err;
-
-    hk_dbgv("%s: name %s\n", __func__, dentry->d_name.name);
-    hk_dbgv("%s: inode %llu, dir %lu, link %d\n", __func__,
-            ino, dir->i_ino, dir->i_nlink);
-
-    err = hk_add_dentry(dentry, ino, 0, &direntry);
-    if (err)
-        goto out_err;
-
-    inode = hk_create_inode(TYPE_MKDIR, dir, ino, S_IFDIR | mode,
-                            0, 0, &dentry->d_name);
-    if (IS_ERR(inode)) {
-        err = PTR_ERR(inode);
-        goto out_err;
-    }
-
-    pi = hk_get_inode(sb, inode);
-    si = HK_I(inode);
-
-    pidir = hk_get_inode(sb, dir);
-    sidir = HK_I(dir);
-
-    sih = &si->header;
-
-    // TODO: What's this
-    dir->i_blocks = sih->i_blocks;
-
-    inc_nlink(dir);
-
-    txid = hk_start_tx_for_new_inode(sb, ino, direntry, dir, S_IFDIR | mode, 0);
-    if (txid < 0) {
-        err = txid;
-        goto out_err;
-    }
-    hk_commit_attrchange(sb, dir);
-
-    hk_finish_tx(sb, txid);
-
-    d_instantiate(dentry, inode);
-    unlock_new_inode(inode);
-
-out:
-    HK_END_TIMING(mkdir_t, mkdir_time);
-    return err;
-
-out_err:
-    //	clear_nlink(inode);
-    hk_err(sb, "%s return %d\n", __func__, err);
-    goto out;
 }
 
 /*
@@ -842,21 +699,6 @@ static bool hk_empty_dir(struct inode *inode)
     }
 
     return true;
-}
-
-static int hk_start_tx_for_rename(struct super_block *sb, struct hk_inode *pi,
-                                  struct hk_dentry *pd, struct hk_dentry *pd_new,
-                                  struct hk_inode *pi_par, struct hk_inode *pi_new)
-{
-    int ret;
-    u64 ino = le64_to_cpu(pi->ino);
-
-    /* make sure meta consistency */
-    hk_evicting_attr_log_to_inode(sb, pi);
-
-    ret = hk_start_tx(sb, RENAME, pi, pd, pd_new, pi_par, pi_new);
-out:
-    return ret;
 }
 
 static int hk_rename(struct inode *old_dir,
@@ -977,11 +819,11 @@ static int hk_rename(struct inode *old_dir,
         invalidate_new_inode = 1;
 
     if (new_inode && invalidate_new_inode) {
-        hk_memunlock_inode(sb, new_pi, &irq_flags);
+        hk_memunlock_pi(sb, new_pi, &irq_flags);
         new_pi->valid = 0;
         hk_flush_buffer((void *)new_pi, sizeof(struct hk_inode), true);
-        hk_memlock_inode(sb, new_pi, &irq_flags);
-        hk_free_inode_blks(sb, new_pi, HK_IH(new_inode));
+        hk_memlock_pi(sb, new_pi, &irq_flags);
+        hk_free_data_blks(sb, HK_IH(new_inode));
     }
 
     txid = hk_start_tx_for_rename(sb, old_pi, pd, pd_new,

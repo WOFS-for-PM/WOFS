@@ -36,7 +36,7 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
         hk_range_insert_range(sb, &sbi->ilists[cpuid], start_ino, end_ino);
     } else {
         for (i = end_ino; i >= start_ino; i--) {
-            pi = hk_get_inode_by_ino(sb, i);
+            pi = hk_get_pi_by_ino(sb, i);
             if (!pi->valid) {
                 hk_range_insert_value(sb, &sbi->ilists[cpuid], i);
             }
@@ -69,17 +69,14 @@ static int hk_free_dram_resource(struct super_block *sb,
     return freed;
 }
 
-int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
-                       struct hk_inode_info_header *sih)
+int hk_free_data_blks(struct super_block *sb, struct hk_inode_info_header *sih)
 {
     int freed = 0, i = 0;
-    unsigned long irq_flags = 0;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout;
     u64 blk_addr;
     struct hk_inode_info *si;
     struct inode *inode;
-    struct hk_cmt_dbatch dbatch;
+    struct hk_layout_info *layout;
 
     INIT_TIMING(free_time);
 
@@ -87,21 +84,19 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 
     si = container_of(sih, struct hk_inode_info, header);
     inode = &si->vfs_inode;
-    
+
     for (i = 0; i < sih->i_blocks; i++) {
         blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, i));
-        
+
         if (blk_addr == 0) {
             hk_info("panic: %d", i);
         }
         BUG_ON(blk_addr == 0);
-
-#ifdef CONFIG_CMT_BACKGROUND
-        hk_init_and_inc_cmt_dbatch(&dbatch, blk_addr, i, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_DELETED_VALID);
-#else
-        sm_delete_data_sync(sb, blk_addr, sih->ino);
-#endif
+    
+        use_layout_for_addr(sb, blk_addr);
+        sm_delete_data_sync(sb, blk_addr);
+        unuse_layout_for_addr(sb, blk_addr);
+        
         freed += HK_PBLK_SZ;
     }
 
@@ -118,24 +113,19 @@ static int hk_get_cpuid_by_ino(struct super_block *sb, u64 ino)
     return cpuid;
 }
 
-static int hk_free_inode(struct super_block *sb, struct hk_inode *pi,
-                         struct hk_inode_info_header *sih)
+int hk_free_ino(struct super_block *sb, u64 ino)
 {
     int err = 0;
+    int cpuid;
     struct hk_sb_info *sbi = HK_SB(sb);
     INIT_TIMING(free_time);
 
     HK_START_TIMING(free_inode_t, free_time);
 
-    sih->i_mode = 0;
-    sih->pi_addr = 0;
-    sih->i_size = 0;
-    sih->i_blocks = 0;
+    cpuid = hk_get_cpuid_by_ino(sb, ino);
 
-    int cpuid;
-    cpuid = hk_get_cpuid_by_ino(sb, le64_to_cpu(pi->ino));
     mutex_lock(&sbi->ilist_locks[cpuid]);
-    err = hk_range_insert_value(sb, &sbi->ilists[cpuid], le64_to_cpu(pi->ino));
+    err = hk_range_insert_value(sb, &sbi->ilists[cpuid], ino);
     mutex_unlock(&sbi->ilist_locks[cpuid]);
 
     HK_END_TIMING(free_inode_t, free_time);
@@ -151,23 +141,20 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
     unsigned long irq_flags = 0;
     struct hk_cmt_node *cmt_node = sih->cmt_node;
 
-    // Clean this anything uncommitted from this node since it has been deleted
-    hk_cmt_unmanage_node(sb, sih->ino);
-
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    hk_memunlock_pi(sb, pi, &irq_flags);
     pi->valid = 0;
-    hk_flush_buffer(pi, sizeof(struct hk_inode), false);
-    hk_memlock_inode(sb, pi, &irq_flags);
+    hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+    hk_memlock_pi(sb, pi, &irq_flags);
 
     /* invalid blks hdr belongs to inode */
-    hk_free_inode_blks(sb, pi, sih);
+    hk_free_data_blks(sb, sih);
 
     freed = hk_free_dram_resource(sb, sih);
 
     hk_dbg_verbose("%s: %d Blks Freed\n", __func__, freed);
 
     /* Then we can free the inode */
-    ret = hk_free_inode(sb, pi, sih);
+    ret = hk_free_ino(sb, sih->ino);
     if (ret)
         hk_err(sb, "%s: free inode %lu failed\n",
                __func__, sih->ino);
@@ -187,7 +174,6 @@ void hk_evict_inode(struct inode *inode)
 {
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode *pi = hk_get_inode(sb, inode);
     struct hk_inode_info_header *sih = HK_IH(inode);
     INIT_TIMING(evict_time);
     int destroy = 0;
@@ -201,50 +187,43 @@ void hk_evict_inode(struct inode *inode)
         goto out;
     }
 
-    // pi can be NULL if the file has already been deleted, but a handle
-    // remains.
-    if (pi && pi->ino != inode->i_ino) {
-        hk_err(sb, "%s: inode %lu ino does not match: %llu\n",
-               __func__, inode->i_ino, pi->ino);
-        hk_dbg("sih: ino %lu, inode size %lu, mode %u, inode mode %u\n",
-               sih->ino, sih->i_size,
-               sih->i_mode, inode->i_mode);
-    }
-
 #ifdef CONFIG_DYNAMIC_WORKLOAD
     hk_dw_forward(&sbi->dw, sih->i_size);
 #endif
 
-    /* flush in-DRAM hdr address  */
-    if (sih->cmt_node->h_addr != 0) {
-        if (sih->cmt_node->h_addr != 0) {
-            ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, sih->cmt_node->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, pi);
-        }
-        pi->h_addr = sih->cmt_node->h_addr;
-    }
-
     hk_dbgv("%s: %lu\n", __func__, inode->i_ino);
+
     if (!inode->i_nlink && !is_bad_inode(inode)) {
         if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
             goto out;
 
-        if (pi) {
-            ret = hk_free_inode_resource(sb, pi, sih);
-            if (ret)
-                goto out;
-        }
+#ifdef CONFIG_CMT_BACKGROUND
+        /* close -> flush the idr (inode data root) to persistent memory */
+        hk_delegate_close_async(sb, inode);
+        /* delete -> I have a whole file view, and I can deallocate PM resource, including data and ino. */
+        hk_delegate_delete_async(sb, inode);
+        hk_free_dram_resource(sb, sih);
+#else
+        struct hk_inode *pi = hk_get_pi_by_ino(sb, inode->i_ino);
+        ret = hk_free_inode_resource(sb, pi, sih);
+        if (ret)
+            goto out;
+#endif
 
         destroy = 1;
-        pi = NULL; /* we no longer own the hk_inode */
-
         inode->i_mtime = inode->i_ctime = current_time(inode);
         inode->i_size = 0;
     }
+
 out:
     if (destroy == 0) {
-        hk_dbgv("%s: destroying %lu\n", __func__, inode->i_ino);
+#ifdef CONFIG_CMT_BACKGROUND
+        hk_delegate_close_async(sb, inode);
+#endif
+        hk_dbgv("%s: closing %lu\n", __func__, inode->i_ino);
         hk_free_dram_resource(sb, sih);
     }
+
     /* TODO: Since we don't use page-cache, do we really need the following
      * call?
      */
@@ -277,8 +256,7 @@ int hk_getattr(const struct path *path, struct kstat *stat,
     return 0;
 }
 
-void hk_set_inode_flags(struct inode *inode, struct hk_inode *pi,
-                        unsigned int flags)
+void hk_set_inode_flags(struct inode *inode, unsigned int flags)
 {
     inode->i_flags &=
         ~(S_SYNC | S_APPEND | S_IMMUTABLE | S_NOATIME | S_DIRSYNC);
@@ -292,8 +270,7 @@ void hk_set_inode_flags(struct inode *inode, struct hk_inode *pi,
         inode->i_flags |= S_NOATIME;
     if (flags & FS_DIRSYNC_FL)
         inode->i_flags |= S_DIRSYNC;
-    if (!pi->i_xattr)
-        inode_has_no_xattr(inode);
+    inode_has_no_xattr(inode);
     inode->i_flags |= S_DAX;
 }
 
@@ -318,9 +295,16 @@ static void hk_get_inode_flags(struct inode *inode, struct hk_inode *pi)
     pi->i_flags = cpu_to_le32(hk_flags);
 }
 
-/* Init in-NVM inode structure */
-void hk_init_pi(struct inode *inode, struct hk_inode *pi)
+void hk_init_pi(struct super_block *sb, struct inode *inode, umode_t mode, u32 i_flags)
 {
+    unsigned long irq_flags = 0;
+    u64 ino = inode->i_ino;
+    struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
+
+    hk_memunlock_pi(sb, pi, &irq_flags);
+    pi->i_flags = hk_mask_flags(mode, i_flags);
+    pi->ino = ino;
+    pi->i_create_time = current_time(inode).tv_sec;
     pi->i_mode = cpu_to_le16(inode->i_mode);
     pi->i_uid = cpu_to_le32(i_uid_read(inode));
     pi->i_gid = cpu_to_le32(i_gid_read(inode));
@@ -333,13 +317,13 @@ void hk_init_pi(struct inode *inode, struct hk_inode *pi)
 
     pi->h_addr = cpu_to_le64(0);
     pi->tstamp = cpu_to_le64(get_version(HK_SB(inode->i_sb)));
-    hk_get_inode_flags(inode, pi);
 
     if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
         pi->dev.rdev = cpu_to_le32(inode->i_rdev);
+    hk_memlock_pi(sb, pi, &irq_flags);
 }
 
-/* copy persistent state to struct inode */
+/* copy persistent icp to struct inode */
 static int hk_build_vfs_inode(struct super_block *sb, struct inode *inode,
                               u64 ino)
 {
@@ -348,14 +332,14 @@ static int hk_build_vfs_inode(struct super_block *sb, struct inode *inode,
     struct hk_inode_info_header *sih = &si->header;
     int ret = -EIO;
 
-    pi = hk_get_inode_by_ino(sb, ino);
+    pi = hk_get_pi_by_ino(sb, ino);
 
     inode->i_mode = sih->i_mode;
     i_uid_write(inode, le32_to_cpu(pi->i_uid));
     i_gid_write(inode, le32_to_cpu(pi->i_gid));
 
     inode->i_generation = le32_to_cpu(pi->i_generation);
-    hk_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
+    hk_set_inode_flags(inode, le32_to_cpu(pi->i_flags));
 
     inode->i_blocks = sih->i_blocks;
     inode->i_mapping->a_ops = &hk_aops_dax;
@@ -394,7 +378,7 @@ bad_inode:
     return ret;
 }
 
-u64 hk_get_new_ino(struct super_block *sb)
+u64 hk_alloc_ino(struct super_block *sb)
 {
     u64 ino = (u64)-1;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -467,7 +451,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         goto fail1;
     }
 
-    pi = (struct hk_inode *)hk_get_inode_by_ino(sb, ino);
+    pi = (struct hk_inode *)hk_get_pi_by_ino(sb, ino);
     hk_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
                    __func__, ino, (u64)pi);
 
@@ -499,20 +483,14 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
         break;
     }
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
-    pi->i_flags = hk_mask_flags(mode, diri->i_flags);
-    pi->ino = ino;
-    pi->i_create_time = current_time(inode).tv_sec;
-    hk_init_pi(inode, pi);
-    hk_memlock_inode(sb, pi, &irq_flags);
-
     si = HK_I(inode);
     sih = &si->header;
     hk_init_header(sb, sih, inode->i_mode);
     sih->ino = ino;
     sih->tstamp = le64_to_cpu(pi->tstamp);
 
-    hk_set_inode_flags(inode, pi, le32_to_cpu(pi->i_flags));
+    /* Initial Pi Outside */
+    hk_set_inode_flags(inode, hk_mask_flags(mode, diri->i_flags));
     sih->i_flags = le32_to_cpu(pi->i_flags);
     sih->pi_addr = (u64)pi;
 
@@ -633,7 +611,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
         unuse_layout_for_addr(sb, addr);
 #else
         hk_init_and_inc_cmt_dbatch(&dbatch, addr, index, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID);
+        hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID_DATA);
 #endif
         freed++;
     }
@@ -781,7 +759,7 @@ struct inode *hk_iget(struct super_block *sb, unsigned long ino)
 
     hk_dbgv("%s: inode %lu\n", __func__, ino);
 
-    pi = hk_get_inode_by_ino(sb, ino);
+    pi = hk_get_pi_by_ino(sb, ino);
 
     if (!pi) {
         hk_dbg("%s: failed to get inode %lu, only supports up to %lu\n",

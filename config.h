@@ -63,10 +63,6 @@
 #define HK_CMT_TIME_GAP 5
 #endif
 
-#if HK_ENABLE_DECOUPLE_WORKER == 1
-#define CONFIG_DECOUPLE_WORKER
-#endif
-
 #endif
 
 /* enable dynamic workload detection */

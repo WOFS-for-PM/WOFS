@@ -38,7 +38,7 @@ static int hk_readdir(struct file *file, struct dir_context *ctx)
         return 0;
 
 	hash_for_each_bits(sih->dirs, HK_HASH_BITS, bkt, cur, node) {
-		child_pi = hk_get_inode_by_ino(sb, cur->direntry->ino);
+		child_pi = hk_get_pi_by_ino(sb, cur->direntry->ino);
 		if (!dir_emit(ctx, cur->direntry->name, cur->direntry->name_len, 
 					cur->direntry->ino, 
 					IF2DT(le16_to_cpu(child_pi->i_mode))))

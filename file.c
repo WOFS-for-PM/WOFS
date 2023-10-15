@@ -249,7 +249,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             unuse_layout_for_addr(sb, addr);
 #else
             hk_init_and_inc_cmt_dbatch(&batch, addr, index_cur, 1);
-            hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
+            hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
 #endif
 
             if (is_overlay) {
@@ -268,7 +268,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 #else
                 addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
                 hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                hk_delegate_data_async(sb, inode, &batch, CMT_INVALID);
+                hk_delegate_data_async(sb, inode, &batch, CMT_INVALID_DATA);
 #endif
             }
 
@@ -320,12 +320,12 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                     hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
-                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
+                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
                     hk_next_cmt_dbatch(&batch);
 
                     addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
                     hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
+                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
 #endif
                 }
 
@@ -338,7 +338,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             }
 
             if (hk_is_cmt_dbatch_valid(&batch)) {
-                hk_delegate_data_async(sb, inode, &batch, CMT_VALID);
+                hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
             }
         }
 #else
@@ -362,7 +362,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         hk_flush_buffer(addr + HK_LBLK_SZ, CACHELINE_SIZE, true);
 #else
         hk_init_and_inc_cmt_dbatch(&dbatch, addr, index_cur, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_VALID);
+        hk_delegate_data_async(sb, inode, &dbatch, CMT_VALID_DATA);
 #endif
 
         if (is_overlay) {
@@ -423,6 +423,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *prep = NULL;
     struct hk_layout_prep tmp_prep;
     size_t out_size = 0;
+    int retries = 0;
 
     INIT_TIMING(write_time);
     INIT_TIMING(memcpy_time);
@@ -464,12 +465,17 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         prep = hk_trv_prepared_layouts(sb, &preps);
         if (!prep) {
             hk_dbg("%s: ERROR: No prep found for index %lu\n", __func__, index);
-            // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
-            hk_flush_cmt_queue(sb);
+retry:
             hk_prepare_gap(sb, false, &tmp_prep);
             if (tmp_prep.target_addr == 0) {
-                error = -ENOMEM;
-                goto out;
+                retries++;
+                if (retries > 1) {
+                    error = -ENOMEM;
+                    goto out;
+                }
+                // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
+                hk_flush_cmt_queue(sb);
+                goto retry;
             }
             prep = &tmp_prep;
         }

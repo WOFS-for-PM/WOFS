@@ -46,13 +46,6 @@ int hk_save_layouts(struct super_block *sb)
         hk_sb->s_layout->s_ind.invalid_blks = cpu_to_le64(layout->ind.invalid_blks);
         hk_sb->s_layout->s_ind.prep_blks = cpu_to_le64(layout->ind.prep_blks);
         HK_ASSERT(hk_sb->s_layout->s_ind.prep_blks == 0);
-        if (hk_sb->s_layout->s_ind.prep_blks != 0) {
-            struct hk_range_node *cur;
-            list_for_each_entry(cur, &layout->prep_list, node)
-            {
-                hk_info("prep_list for (%d): %llu\n", cpuid, le64_to_cpu(cur->range_low));
-            }
-        }
         hk_sb->s_layout->s_ind.valid_blks = cpu_to_le64(layout->ind.valid_blks);
         hk_sb->s_layout->s_ind.total_blks = cpu_to_le64(layout->ind.total_blks);
     }
@@ -176,7 +169,7 @@ int hk_failure_recovery(struct super_block *sb)
         {
             hdr = sm_get_hdr_by_addr(sb, addr);
             if (hdr->valid) {
-                pi = hk_get_inode_by_ino(sb, hdr->ino);
+                pi = hk_get_pi_by_ino(sb, hdr->ino);
                 /* Remove The Invalid Hdr */
                 if (!pi->valid || hdr->tstamp > pi->tstamp) {
                     hk_memunlock_hdr(sb, hdr, &irq_flags);

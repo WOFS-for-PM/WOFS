@@ -326,8 +326,6 @@ static inline void hk_mount_over(struct super_block *sb)
     hk_update_super_crc(sb);
 
     hk_sync_super(sb);
-
-    hk_info("MAX_GAP_BLKS_PER_LAYOUT: %llu\n", MAX_GAPS_IN_DRAM(sbi));
 }
 
 static inline void hk_umount_over(struct super_block *sb)
@@ -389,10 +387,10 @@ static struct hk_inode *hk_init(struct super_block *sb,
     /* Flush In-DRAM superblock into NVM */
     hk_sync_super(sb);
 
-    root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
+    root_pi = hk_get_pi_by_ino(sb, HK_ROOT_INO);
     hk_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);
 
-    hk_memunlock_inode(sb, root_pi, &irq_flags);
+    hk_memunlock_pi(sb, root_pi, &irq_flags);
     root_pi->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
     root_pi->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
     root_pi->i_gid = cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
@@ -403,7 +401,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
     root_pi->ino = cpu_to_le64(0);
     root_pi->valid = 1;
     root_pi->h_addr = 0;
-    hk_memlock_inode(sb, root_pi, &irq_flags);
+    hk_memlock_pi(sb, root_pi, &irq_flags);
 
     /* We don't care the order */
     hk_flush_buffer(root_pi, sizeof(struct hk_inode), false);
@@ -559,7 +557,7 @@ static int hk_super_dram_init(struct hk_sb_info *sbi)
 
 #ifdef CONFIG_CMT_BACKGROUND
     /* Background Commit Related */
-    sbi->cq = hk_init_cmt_queue();
+    sbi->cq = hk_init_cmt_queue(HK_CMT_WORKER_NUM);
     if (!sbi->cq) {
         ret = -ENOMEM;
         goto err5;
@@ -700,7 +698,7 @@ static int hk_fill_super(struct super_block *sb, void *data, int silent)
     hk_dbg_verbose("blocksize %lu\n", blocksize);
 
     /* Read the root inode */
-    root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
+    root_pi = hk_get_pi_by_ino(sb, HK_ROOT_INO);
 
     /* Check that the root inode is in a sane state */
     hk_root_check(sb, root_pi);
@@ -853,7 +851,7 @@ static void hk_put_super(struct super_block *sb)
 #ifdef CONFIG_CMT_BACKGROUND
     hk_stop_cmt_workers(sb);
     hk_flush_cmt_queue(sb);
-    hk_cmt_destroy_node_tree(sb, &sbi->cq->cmt_tree);
+    hk_cmt_destory_forest(sb);
 #endif
 
     /* It's unmount time, so unmap the hk memory */
@@ -1045,43 +1043,49 @@ static int __init init_hk_fs(void)
     if (rc)
         goto out2;
 
-    rc = init_hk_cmt_jnl_info_cache();
-    if (rc)
-        goto out3;
-
     rc = init_hk_cmt_data_info_cache();
     if (rc)
+        goto out3;
+    
+    rc = init_hk_cmt_new_inode_info_cache();
+    if (rc)
         goto out4;
-
-    rc = init_hk_cmt_attr_info_cache();
+    
+    rc = init_hk_cmt_unlink_inode_info_cache();
     if (rc)
         goto out5;
 
-    rc = init_hk_cmt_inode_info_cache();
+    rc = init_hk_cmt_delete_inode_info_cache();
     if (rc)
         goto out6;
 
-    rc = init_hk_cmt_node_cache();
+    rc = init_hk_cmt_close_info_cache();
     if (rc)
         goto out7;
 
-    rc = register_filesystem(&hk_fs_type);
+    rc = init_hk_cmt_node_cache();
     if (rc)
         goto out8;
+
+    rc = register_filesystem(&hk_fs_type);
+    if (rc)
+        goto out9;
 
     HK_END_TIMING(init_t, init_time);
     return 0;
 
-out8:
+out9:
     destroy_hk_cmt_node_cache();
+out8:
+    destroy_hk_cmt_close_info_cache();
 out7:
-    destroy_hk_cmt_inode_info_cache();
+    destroy_hk_cmt_delete_inode_info_cache();
 out6:
-    destroy_hk_cmt_attr_info_cache();
-out5:   
+    destroy_hk_cmt_unlink_inode_info_cache();
+out5:
+    destroy_hk_cmt_new_inode_info_cache();
+out4:   
     destroy_hk_cmt_data_info_cache();
-out4:
-    destroy_hk_cmt_jnl_info_cache();
 out3:   
     destroy_hk_dentry_info_cache();
 out2:   
@@ -1097,15 +1101,16 @@ static void __exit exit_hk_fs(void)
     destroy_inodecache();
     destroy_hk_range_node_cache();
     destroy_hk_dentry_info_cache();
-    destroy_hk_cmt_jnl_info_cache();
     destroy_hk_cmt_data_info_cache();
-    destroy_hk_cmt_attr_info_cache();
-    destroy_hk_cmt_inode_info_cache();
+    destroy_hk_cmt_new_inode_info_cache();
+    destroy_hk_cmt_unlink_inode_info_cache();
+    destroy_hk_cmt_delete_inode_info_cache();
+    destroy_hk_cmt_close_info_cache();
     destroy_hk_cmt_node_cache();
 }
 
 MODULE_AUTHOR("Yanqi Pan <deadpoolmine@qq.com>");
-MODULE_DESCRIPTION("HUNTER: A Multi-Log Persistent Memory File System");
+MODULE_DESCRIPTION("HUNTER: A Metadata-Async Accelerated Persistent Memory File System");
 MODULE_LICENSE("GPL");
 
 module_init(init_hk_fs)

@@ -346,7 +346,6 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                                         start_index, end_index,
                                         &each_ofs, &each_size,
                                         size);
-        cow_try_up_invalidator(sb, is_overlay);
 
         HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
         hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
@@ -386,8 +385,6 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         }
 
         linix_insert(&sih->ix, index_cur, addr, true);
-
-        cow_try_down_invalidator(sb, is_overlay);
 
         addr += HK_PBLK_SZ;
         index_cur += 1;

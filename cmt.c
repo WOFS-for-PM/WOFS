@@ -534,10 +534,10 @@ static int hk_cmt_worker_thread(void *arg)
             {
                 list_del(&info->lnode);
                 hk_process_cmt_info(sb, cmt_node->ino, info, info->type);
-                cond_resched();
+                schedule();
             }
 
-            cond_resched();
+            schedule();
         }
     }
 

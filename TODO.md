@@ -1,11 +1,18 @@
 
-# 2023/10/13
+# 2023/10/15 -- 
 
-- [ ] Decouple Summary Hdr with Inode to prevent random accesses in fsync.
+- [ ] Maintaining gap list in time to provide consistent (sync) view of PM space usage.
+- [ ] Before worker process data info, it should use a tree to check if the corresponding block (valid addr) can be invalidated by the latter invalidated block (invalid addr). By doing so, we reduce the number of updates of summary hdr.
+- [ ] Async flush of inode for creation, How? By doing so, we enable the deletion of this inode without interacting with PM. 
+
+# 2023/10/13 -- 2023/10/14
+
+- [x] Decouple Summary Hdr with Inode to prevent random accesses in fsync.
 ~~- [ ] Using free cores to flush different metadata concurrently?~~
 - [ ] How to resolve slow sync?
-  - [x] Per file queue
-  - [ ] Reduced Metadata (Append)
+  - [x] Per File Queue
+  - [x] Reduced Metadata (Append)
+  - [x] Decoupled inode and summary hdr using hybrid inode data root (IDR). IDR is flushed only when inode is flushed.
 
 # Before
 

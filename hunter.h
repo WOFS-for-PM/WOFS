@@ -431,7 +431,7 @@ void hk_free_cmt_queue(struct hk_cmt_queue *cq);
 void hk_start_cmt_workers(struct super_block *sb);
 void hk_stop_cmt_workers(struct super_block *sb);
 void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node);
-void hk_flush_cmt_queue(struct super_block *sb);
+void hk_flush_cmt_queue(struct super_block *sb, int num_cpus);
 void hk_cmt_destory_forest(struct super_block *sb);
 #endif
 

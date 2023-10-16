@@ -850,7 +850,7 @@ static void hk_put_super(struct super_block *sb)
 
 #ifdef CONFIG_CMT_BACKGROUND
     hk_stop_cmt_workers(sb);
-    hk_flush_cmt_queue(sb);
+    hk_flush_cmt_queue(sb, sbi->cpus);
     hk_cmt_destory_forest(sb);
 #endif
 

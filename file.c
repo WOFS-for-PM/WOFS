@@ -474,7 +474,7 @@ retry:
                     goto out;
                 }
                 // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
-                hk_flush_cmt_queue(sb);
+                hk_flush_cmt_queue(sb, sbi->cpus);
                 goto retry;
             }
             prep = &tmp_prep;

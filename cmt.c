@@ -1,8 +1,11 @@
 #include "hunter.h"
 
-wait_queue_head_t cmt_finish_wq;
-int cmt_finished[HK_CMT_WORKER_NUM];
 int hk_request_cmt(struct super_block *sb, void *info, struct hk_inode_info_header *sih);
+
+/* ===== Sync ===== */
+wait_queue_head_t cmt_finish_wq, flush_finish_wq;
+int cmt_finished[HK_CMT_WORKER_NUM];
+int *flush_finished;
 
 static void wait_to_finish_cmt(void)
 {
@@ -11,6 +14,18 @@ static void wait_to_finish_cmt(void)
     for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
         while (cmt_finished[i] == 0) {
             wait_event_interruptible_timeout(cmt_finish_wq, false,
+                                             msecs_to_jiffies(1));
+        }
+    }
+}
+
+static void wait_to_finish_flush(int num_cpus)
+{
+    int i;
+
+    for (i = 0; i < num_cpus; i++) {
+        while (flush_finished[i] == 0) {
+            wait_event_interruptible_timeout(flush_finish_wq, false,
                                              msecs_to_jiffies(1));
         }
     }
@@ -343,7 +358,7 @@ struct hk_cmt_node *hk_cmt_node_init(u64 ino)
     node->ino = ino;
     node->h_addr = 0;
     node->valid = 0;
-    
+
     mutex_init(&node->processing);
 
     return node;
@@ -507,6 +522,17 @@ struct hk_cmt_worker_param {
     int work_id;
 };
 
+struct __hk_cmt_node_wrapper {
+    struct list_head lnode;
+    struct hk_cmt_node *cmt_node;
+};
+
+struct hk_flush_worker_param {
+    struct super_block *sb;
+    struct list_head cmt_node_wrppers;
+    int work_id;
+};
+
 static int hk_cmt_worker_thread(void *arg)
 {
     struct hk_cmt_worker_param *param = (struct hk_cmt_worker_param *)arg;
@@ -531,7 +557,7 @@ static int hk_cmt_worker_thread(void *arg)
             // fsync should hold this. Two situations:
             // 1. Worker is not processing this node. Then main thread can process this node with lock held.
             // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
-             
+
             mutex_lock(&cmt_node->processing);
 
             if (!cmt_node->valid) {
@@ -571,15 +597,6 @@ static int hk_cmt_worker_thread(void *arg)
     return 0;
 }
 
-int hk_prepare_worker(struct super_block *sb, struct hk_cmt_worker_param *param, int worker_id)
-{
-    param->sb = sb;
-    param->work_id = worker_id;
-    param->name = "FUSE";
-
-    return 0;
-}
-
 void hk_start_cmt_workers(struct super_block *sb)
 {
     struct hk_cmt_worker_param *param;
@@ -592,7 +609,9 @@ void hk_start_cmt_workers(struct super_block *sb)
     for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
         param = kmalloc(sizeof(struct hk_cmt_worker_param), GFP_KERNEL);
 
-        hk_prepare_worker(sb, param, i);
+        param->sb = sb;
+        param->work_id = i;
+        param->name = "FUSE";
 
         cmt_finished[i] = 0;
         sbi->cmt_workers[i] = kthread_create(hk_cmt_worker_thread,
@@ -621,7 +640,7 @@ void hk_stop_cmt_workers(struct super_block *sb)
     hk_info("stop %d cmt workers\n", HK_CMT_WORKER_NUM);
 }
 
-void hk_flush_cmt_inode_queue(struct super_block *sb, struct hk_cmt_node *cmt_node)
+void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node)
 {
     struct hk_cmt_info *info, *info_next;
     struct list_head info_head;
@@ -646,32 +665,114 @@ void hk_flush_cmt_inode_queue(struct super_block *sb, struct hk_cmt_node *cmt_no
     return;
 }
 
-void hk_flush_cmt_node_fast(struct super_block *sb, struct hk_cmt_node *cmt_node)
+static int hk_flush_worker_thread(void *arg)
 {
+    struct hk_flush_worker_param *param = (struct hk_flush_worker_param *)arg;
+    struct super_block *sb = param->sb;
     struct hk_sb_info *sbi = HK_SB(sb);
+    struct __hk_cmt_node_wrapper *cmt_node_wrpper, *cmt_node_wrpper_next;
+    struct hk_cmt_node *cmt_node;
+    int work_id = param->work_id;
 
-    hk_flush_cmt_inode_queue(sb, cmt_node);
+    list_for_each_entry_safe(cmt_node_wrpper, cmt_node_wrpper_next, &param->cmt_node_wrppers, lnode)
+    {
+        cmt_node = cmt_node_wrpper->cmt_node;
+        list_del(&cmt_node_wrpper->lnode);
+        hk_flush_cmt_node_fast(sb, cmt_node);
+        kfree(cmt_node_wrpper);
+    }
+
+    flush_finished[work_id] = 1;
+    wake_up_interruptible(&flush_finish_wq);
+
+    hk_info("flush workers %d finished\n", work_id);
+    
+    return 0;
 }
 
-void hk_flush_cmt_queue(struct super_block *sb)
+void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_queue *cq = sbi->cq;
     struct hk_cmt_node *cmt_node, *cmt_node_next;
     struct list_head info_head;
-    int i = 0, work_id = 0;
+    struct hk_flush_worker_param *params;
+    struct task_struct **flush_workers;
+    bool use_mt = true;
+    u64 cnt = 0;
+    int i = 0, cmt_work_id = 0, flush_work_id = 0;
 
-    for (work_id = 0; work_id < HK_CMT_WORKER_NUM; work_id++) {
-        // for each cmt node, we flush all the operation in the queue
-        rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
-        {
-            for (i = 0; i < MAX_CMT_TYPE; i++) {
-                hk_flush_cmt_inode_queue(sb, cmt_node);
+    init_waitqueue_head(&flush_finish_wq);
+
+    flush_workers = kmalloc_array(num_cpus, sizeof(struct task_struct *), GFP_KERNEL);
+    if (!flush_workers) {
+        hk_warn("%s: failed to allocate memory for flush_workers, try to use cur thread\n", __func__);
+        use_mt = false;
+    }
+
+    flush_finished = kmalloc_array(num_cpus, sizeof(int), GFP_KERNEL);
+    if (!flush_finished) {
+        hk_warn("%s: failed to allocate memory for flush_finished, try to use cur thread\n", __func__);
+        kfree(flush_workers);
+        use_mt = false;
+    }
+
+    if (num_cpus == 1) {
+        use_mt = false;
+        kfree(flush_workers);
+        kfree(flush_finished);
+    }
+
+    if (use_mt) {
+        hk_info("Start flushing all pending cmt with %d threads\n", num_cpus);
+        params = kmalloc_array(num_cpus, sizeof(struct hk_flush_worker_param), GFP_KERNEL);
+        BUG_ON(!params);
+        
+        for (i = 0; i < num_cpus; i++) {
+            params[i].sb = sb;
+            params[i].work_id = i;
+            INIT_LIST_HEAD(&params[i].cmt_node_wrppers);
+        }
+
+        cnt = 0;
+        for (cmt_work_id = 0; cmt_work_id < HK_CMT_WORKER_NUM; cmt_work_id++) {
+            rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[cmt_work_id], rnode)
+            {
+                /* Pass the ownership to worker */
+                struct __hk_cmt_node_wrapper *cmt_node_wrpper = kmalloc(sizeof(struct __hk_cmt_node_wrapper), GFP_KERNEL);
+                BUG_ON(!cmt_node_wrpper);
+                INIT_LIST_HEAD(&cmt_node_wrpper->lnode);
+                cmt_node_wrpper->cmt_node = cmt_node;
+                
+                list_add_tail(&cmt_node_wrpper->lnode, &params[cnt % num_cpus].cmt_node_wrppers);   
+                cnt++;        
+            }
+        }
+
+        for (i = 0; i < num_cpus; i++) {
+            flush_finished[i] = 0;
+            flush_workers[i] = kthread_create(hk_flush_worker_thread,
+                                              &params[i], "hk_flush_worker_%d", i);
+            wake_up_process(flush_workers[i]);
+            hk_info("start flush workers %d (%s)\n", i, "FUSE");
+        }
+        
+        wait_to_finish_flush(num_cpus);
+
+        kfree(params);
+        kfree(flush_workers);
+        kfree(flush_finished);
+    } else {
+        for (cmt_work_id = 0; cmt_work_id < HK_CMT_WORKER_NUM; cmt_work_id++) {
+            // for each cmt node, we flush all the operation in the queue
+            rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[cmt_work_id], rnode)
+            {
+                hk_flush_cmt_node_fast(sb, cmt_node);
             }
         }
     }
 
-    hk_info("Flush all cmt workers\n");
+    hk_info("All cmts flushed\n");
 }
 
 struct hk_cmt_queue *hk_init_cmt_queue(int num_workers)

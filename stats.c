@@ -43,7 +43,6 @@ const char *Timingstring[TIMING_NUM] = {
 	"============== Memory operations ===============",
 	"memcpy_read_nvmm",
 	"memcpy_write_nvmm",
-	"memcpy_write_back_to_nvmm",
 	"handle_partial_block",
 
 	/* Memory management */
@@ -75,19 +74,17 @@ const char *Timingstring[TIMING_NUM] = {
 	"rebuild_file",
 	"rebuild_snapshot_table",
 
-	/* Snapshot */
-	"=================== Snapshot ===================",
-	"create_snapshot",
-	"init_snapshot_info",
-	"delete_snapshot",
-	"append_snapshot_filedata",
-	"append_snapshot_inode",
-
 	/* Meta Operations */
 	"=================== Meta ===================", 
 	"valid_summary_header",
 	"invalid_summary_header",
+	"process_data_info",
+	"process_new_inode_info",
+	"process_unlink_inode_info",
+	"process_delete_inode_info",
+	"process_close_inode_info",
 
+	/* Linear index */
 	"=================== LinIX ===================",
 	"linix_set",
 	"linix_get",

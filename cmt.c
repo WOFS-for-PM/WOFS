@@ -190,10 +190,13 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
     u64 addr_start = data_info->addr_start;
     u64 addr_end = data_info->addr_end;
     u64 blk_start = data_info->blk_start;
+    
+    INIT_TIMING(time);
 
     hdr = sm_get_hdr_by_addr(sb, addr_start);
     layout = sm_get_layout_by_hdr(sb, hdr);
 
+    HK_START_TIMING(process_data_info_t, time);
     use_layout(layout);
     for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
@@ -215,6 +218,7 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
         }
     }
     unuse_layout(layout);
+    HK_END_TIMING(process_data_info_t, time);
 }
 
 extern int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
@@ -227,6 +231,9 @@ int hk_process_new_inode_info(struct super_block *sb, u64 ino, struct hk_cmt_new
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
     u64 pidir_ino = new_inode_info->dir_inode_cp.ino;
     int txid = 0;
+    INIT_TIMING(time);
+
+    HK_START_TIMING(process_new_inode_info_t, time);
 
     hk_commit_icp(sb, &new_inode_info->inode_cp);
 
@@ -237,6 +244,8 @@ int hk_process_new_inode_info(struct super_block *sb, u64 ino, struct hk_cmt_new
     }
     hk_commit_icp_attrchange(sb, &new_inode_info->dir_inode_cp);
     hk_finish_tx(sb, txid);
+
+    HK_END_TIMING(process_new_inode_info_t, time);
 }
 
 extern int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
@@ -250,7 +259,9 @@ int hk_process_unlink_info(struct super_block *sb, u64 ino, struct hk_cmt_unlink
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
     u64 pidir_ino = unlink_info->dir_inode_cp.ino;
     int txid = 0;
+    INIT_TIMING(time);
 
+    HK_START_TIMING(process_unlink_inode_info_t, time);
     txid = hk_start_tx_for_unlink(sb, pi, unlink_info->direntry, pidir_ino, unlink_info->invalidate);
     if (txid < 0) {
         hk_dbgv("hk_start_tx_for_unlink failed\n");
@@ -259,6 +270,7 @@ int hk_process_unlink_info(struct super_block *sb, u64 ino, struct hk_cmt_unlink
     hk_commit_icp_attrchange(sb, &unlink_info->inode_cp);
     hk_commit_icp_linkchange(sb, &unlink_info->dir_inode_cp);
     hk_finish_tx(sb, txid);
+    HK_END_TIMING(process_unlink_inode_info_t, time);
 }
 
 extern int hk_free_ino(struct super_block *sb, u64 ino);
@@ -271,10 +283,12 @@ int hk_process_delete_info(struct super_block *sb, struct hk_cmt_node *cmt_node,
     struct hk_header *hdr, *n;
     unsigned long irq_flags = 0;
     u64 blk_addr;
+    INIT_TIMING(time);
 
     // Do not use this, this is a tag.
     (void)delete_info;
 
+    HK_START_TIMING(process_delete_inode_info_t, time);
     hk_memunlock_pi(sb, pi, &irq_flags);
     pi->valid = 0;
     hk_flush_buffer(pi, sizeof(struct hk_inode), true);
@@ -297,6 +311,7 @@ int hk_process_delete_info(struct super_block *sb, struct hk_cmt_node *cmt_node,
     hk_free_ino(sb, ino);
 
     hk_dbgv("%s end", __func__);
+    HK_END_TIMING(process_delete_inode_info_t, time);
     return 0;
 }
 
@@ -305,10 +320,11 @@ int hk_process_close_info(struct super_block *sb, struct hk_cmt_node *cmt_node, 
     u64 ino = cmt_node->ino;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
-
+    INIT_TIMING(time);
     // Do not use this, this is a tag.
     (void)close_info;
 
+    HK_START_TIMING(process_close_inode_info_t, time);
     /* flush in-DRAM hdr address  */
     if (cmt_node->h_addr != 0) {
         if (cmt_node->h_addr != 0) {
@@ -316,7 +332,7 @@ int hk_process_close_info(struct super_block *sb, struct hk_cmt_node *cmt_node, 
         }
         pi->h_addr = cmt_node->h_addr;
     }
-
+    HK_END_TIMING(process_close_inode_info_t, time);
     return 0;
 }
 

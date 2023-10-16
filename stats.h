@@ -67,7 +67,6 @@ enum timing_category {
 	memory_title_t,
 	memcpy_r_nvmm_t,				/* Memory copy read NVMM time */
 	memcpy_w_nvmm_t,				/* Memory copy write NVMM time */
-	memcpy_w_wb_t,
 	partial_block_t,
 
 	/* Memory management */
@@ -99,28 +98,20 @@ enum timing_category {
 	rebuild_blks_t,
 	rebuild_snapshot_t,
 
-	/* Snapshot */
-	snapshot_title_t,
-	create_snapshot_t,
-	init_snapshot_info_t,
-	delete_snapshot_t,
-	append_snapshot_file_t,
-	append_snapshot_inode_t,
-
 	/* Meta Operations */
 	meta_title_t, 
 	sm_valid_t,
 	sm_invalid_t,
+	process_data_info_t,
+	process_new_inode_info_t,
+	process_unlink_inode_info_t,
+	process_delete_inode_info_t,
+	process_close_inode_info_t,
 
 	/* Linix */
 	linix_title_t,
 	linix_set_t,
 	linix_get_t,
-
-	/* FriendlyGC */
-	friendly_gc_title_t,
-	equalizer_migrates_t,
-	self_gc_migrates_t,
 
 	/* Sentinel */
 	TIMING_NUM,

@@ -265,19 +265,23 @@ int hk_process_delete_info(struct super_block *sb, struct hk_cmt_node *cmt_node,
     hk_flush_buffer(pi, sizeof(struct hk_inode), true);
     hk_memlock_pi(sb, pi, &irq_flags);
 
+    hk_dbgv("%s: start from pi->h_addr: %llx", __func__, pi->h_addr);
+
     // Tag data hdr as invalid, and release data asyncly
     traverse_inode_hdr_safe(sbi, pi, hdr, n)
     {
         blk_addr = sm_get_addr_by_hdr(sb, hdr);
-        // hk_info("delete data blk %llu for %llu\n", hdr->f_blk, pi->ino);
+        hk_dbgv("delete data blk %llu for %llu\n", hdr->f_blk, pi->ino);
         use_layout_for_addr(sb, blk_addr);
         sm_delete_data_sync(sb, blk_addr);
         unuse_layout_for_addr(sb, blk_addr);
+        hk_dbgv("delete data blk %llu for %llu finished\n", hdr->f_blk, pi->ino);
     }
 
     // Release ino asyncly
     hk_free_ino(sb, ino);
 
+    hk_dbgv("%s end", __func__);
     return 0;
 }
 
@@ -339,6 +343,8 @@ struct hk_cmt_node *hk_cmt_node_init(u64 ino)
     node->ino = ino;
     node->h_addr = 0;
     node->valid = 0;
+    
+    mutex_init(&node->processing);
 
     return node;
 }
@@ -522,12 +528,20 @@ static int hk_cmt_worker_thread(void *arg)
         {
             INIT_LIST_HEAD(&info_head);
 
+            // fsync should hold this. Two situations:
+            // 1. Worker is not processing this node. Then main thread can process this node with lock held.
+            // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
+             
+            mutex_lock(&cmt_node->processing);
+
             if (!cmt_node->valid) {
                 hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
+                mutex_unlock(&cmt_node->processing);
                 continue;
             }
 
             if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
+                mutex_unlock(&cmt_node->processing);
                 continue;
             }
 
@@ -538,8 +552,9 @@ static int hk_cmt_worker_thread(void *arg)
             {
                 list_del(&info->lnode);
                 hk_process_cmt_info(sb, cmt_node, info, info->type);
-                schedule();
             }
+
+            mutex_unlock(&cmt_node->processing);
 
             schedule();
         }

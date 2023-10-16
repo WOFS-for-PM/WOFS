@@ -181,7 +181,7 @@ struct hk_tx_info {
 
 #define traverse_inode_hdr(sbi, idr, hdr_traverse) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(idr->h_addr)); hdr_traverse != NULL; hdr_traverse = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)))
 
-#define traverse_inode_hdr_safe(sbi, idr, hdr_traverse, hdr_next) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(idr->h_addr)), hdr_next = TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)); hdr_traverse != NULL; hdr_traverse = hdr_traverse == NULL ? NULL : hdr_next, hdr_next = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)))
+#define traverse_inode_hdr_safe(sbi, idr, hdr_traverse, hdr_next) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(idr->h_addr)), hdr_next = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)); hdr_traverse != NULL; hdr_traverse = hdr_traverse == NULL ? NULL : hdr_next, hdr_next = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)))
 
 #define traverse_tx_info(ji, slotid, info) for (ji = &info->ji_pi, slotid = 0; slotid < HK_MAX_OBJ_INVOVED; slotid++, ji = hk_tx_get_ji_from_tx_info(info, slotid))
 

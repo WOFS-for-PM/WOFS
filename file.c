@@ -596,14 +596,15 @@ static int hk_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 
     if (mapping_mapped(mapping)) {
         ret = generic_file_fsync(file, start, end, datasync);
+        PERSISTENT_BARRIER();
     }
 
+    mutex_lock(&HK_IH(inode)->cmt_node->processing);
     hk_flush_cmt_node_fast(sb, HK_IH(inode)->cmt_node);
+    mutex_unlock(&HK_IH(inode)->cmt_node->processing);
 
 persist:
-    PERSISTENT_BARRIER();
     HK_END_TIMING(fsync_t, fsync_time);
-
     return ret;
 }
 

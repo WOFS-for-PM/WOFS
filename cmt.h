@@ -128,6 +128,7 @@ struct hk_cmt_node {
     /* Note that it will be hard to edit red black tree when worker is processing
       (i.e., by iterating the rb tree. So, we just lazily edit the node's state to invalid) */
     bool valid; /* if this node is valid. */
+    struct mutex processing; /* if this node is being processed by worker */
 
     struct hk_inf_queue op_q; /* Data queue for this inode */
 };

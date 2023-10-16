@@ -102,6 +102,8 @@ enum timing_category {
 	meta_title_t, 
 	sm_valid_t,
 	sm_invalid_t,
+	sm_delete_t,
+	sm_update_t,
 	process_data_info_t,
 	process_new_inode_info_t,
 	process_unlink_inode_info_t,

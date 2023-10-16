@@ -404,7 +404,8 @@ int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
 
 int sm_delete_data_sync(struct super_block *sb, u64 blk_addr);
 int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
-int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
+int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime);
+int sm_update_data_sync(struct super_block *sb, u64 blk_addr, u64 size);
 
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
 struct hk_jentry* hk_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid);
@@ -422,7 +423,7 @@ int hk_cmt_unmanage_node(struct super_block *sb, struct hk_cmt_node *cmt_node);
 
 int hk_delegate_create_async(struct super_block *sb, struct inode *inode, struct inode *dir, struct hk_dentry *direntry);
 int hk_delegate_unlink_async(struct super_block *sb, struct inode *inode, struct inode *dir, struct hk_dentry *direntry, bool invalidate);
-int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_info_type type);
+int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, u64 size, enum hk_cmt_info_type type);
 int hk_delegate_close_async(struct super_block *sb, struct inode *inode);
 int hk_delegate_delete_async(struct super_block *sb, struct inode *inode);
 

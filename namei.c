@@ -205,7 +205,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
 
     if (is_alloc_new) {
         use_layout_for_addr(sb, blk_addr);
-        sm_valid_data_sync(sb, blk_addr, dir->i_ino, blk_cur, get_version(sbi));
+        sm_valid_data_sync(sb, blk_addr, dir->i_ino, blk_cur, get_version(sbi), 1, dir->i_ctime.tv_sec);
         unuse_layout_for_addr(sb, blk_addr);
 
         linix_insert(&sih->ix, blk_cur, blk_addr, true);

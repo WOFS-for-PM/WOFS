@@ -42,7 +42,7 @@ int hk_block_symlink(struct super_block *sb, struct hk_inode *pi,
 	hk_memlock_block(sb, (void *)blk_addr, &irq_flags);
 
 	use_layout_for_addr(sb, blk_addr);
-	sm_valid_data_sync(sb, blk_addr, inode->i_ino, blk_cur, get_version(sbi));
+	sm_valid_data_sync(sb, blk_addr, inode->i_ino, blk_cur, get_version(sbi), len, inode->i_ctime.tv_sec);
 	unuse_layout_for_addr(sb, blk_addr);
 	
 	/* first block */

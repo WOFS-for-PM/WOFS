@@ -57,6 +57,7 @@ void *__hk_generic_info_init(enum hk_cmt_info_type type)
     switch (type) {
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
+    case CMT_UPDATE_DATA:
         info = hk_alloc_hk_cmt_data_info();
         break;
     case CMT_NEW_INODE:
@@ -81,13 +82,18 @@ void *__hk_generic_info_init(enum hk_cmt_info_type type)
     return info;
 }
 
-int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, enum hk_cmt_info_type type)
+/* `size`: size of this write; `dbatch`: data blocks allocated for this write */
+int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct hk_cmt_dbatch *batch, u64 size, enum hk_cmt_info_type type)
 {
     struct hk_cmt_data_info *data_info;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info_header *sih = HK_IH(inode);
 
     BUG_ON(batch->addr_start == 0);
+    
+    if (type == CMT_INVALID_DATA) {
+        hk_info("invalid data for %llu\n", inode->i_ino);
+    }
 
     data_info = __hk_generic_info_init(type);
 
@@ -96,6 +102,11 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     data_info->blk_start = batch->blk_start;
     data_info->blk_end = batch->blk_end;
     data_info->tstamp = get_version(sbi);
+    if (type == CMT_INVALID_DATA)
+        data_info->size = 0;
+    else
+        data_info->size = size;
+    data_info->cmtime = inode->i_ctime.tv_sec;
 
     hk_request_cmt(sb, data_info, sih);
 
@@ -162,6 +173,7 @@ void hk_cmt_info_destroy(void *cmt_info)
     switch (info->type) {
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
+    case CMT_UPDATE_DATA:
         hk_free_hk_cmt_data_info((struct hk_cmt_data_info *)info);
         break;
     case CMT_NEW_INODE:
@@ -190,7 +202,8 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
     u64 addr_start = data_info->addr_start;
     u64 addr_end = data_info->addr_end;
     u64 blk_start = data_info->blk_start;
-    
+    u64 size = data_info->size;
+
     INIT_TIMING(time);
 
     hdr = sm_get_hdr_by_addr(sb, addr_start);
@@ -198,11 +211,12 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
 
     HK_START_TIMING(process_data_info_t, time);
     use_layout(layout);
+    
     for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
         switch (data_info->type) {
         case CMT_VALID_DATA: {
-            sm_valid_data_sync(sb, addr, ino, blk, data_info->tstamp);
+            sm_valid_data_sync(sb, addr, ino, blk, data_info->tstamp, size, data_info->cmtime);
             break;
         }
         case CMT_INVALID_DATA: {
@@ -213,9 +227,14 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
             }
             break;
         }
+        case CMT_UPDATE_DATA: {
+            sm_update_data_sync(sb, addr, size);
+            break;
+        }
         default:
             break;
         }
+        size += HK_PBLK_SZ;
     }
     unuse_layout(layout);
     HK_END_TIMING(process_data_info_t, time);
@@ -341,6 +360,7 @@ int hk_process_cmt_info(struct super_block *sb, struct hk_cmt_node *cmt_node, vo
     switch (type) {
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
+    case CMT_UPDATE_DATA:
         hk_process_data_info(sb, cmt_node->ino, (struct hk_cmt_data_info *)info);
         break;
     case CMT_UNLINK_INODE:

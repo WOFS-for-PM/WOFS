@@ -78,6 +78,8 @@ const char *Timingstring[TIMING_NUM] = {
 	"=================== Meta ===================", 
 	"valid_summary_header",
 	"invalid_summary_header",
+	"delete_summary_header",
+	"update_summary_header",
 	"process_data_info",
 	"process_new_inode_info",
 	"process_unlink_inode_info",

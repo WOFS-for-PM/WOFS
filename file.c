@@ -218,6 +218,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     struct hk_header *hdr, *hdr_start;
     struct hk_cmt_dbatch batch;
     unsigned long irq_flags = 0;
+    u64 _size = 0;
 
     INIT_TIMING(memcpy_time);
 
@@ -243,13 +244,14 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
             HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+            _size = ofs + each_size;
 #ifndef CONFIG_CMT_BACKGROUND
             use_layout_for_addr(sb, addr);
-            sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi));
+            sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
             unuse_layout_for_addr(sb, addr);
 #else
             hk_init_and_inc_cmt_dbatch(&batch, addr, index_cur, 1);
-            hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
+            hk_delegate_data_async(sb, inode, &batch, _size, CMT_VALID_DATA);
 #endif
 
             if (is_overlay) {
@@ -266,9 +268,10 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                 hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
+                hk_info("pos %llu, size %llu, index %llu, addr %llu\n", ofs, size, index_cur, addr);
                 addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
                 hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                hk_delegate_data_async(sb, inode, &batch, CMT_INVALID_DATA);
+                hk_delegate_data_async(sb, inode, &batch, 0, CMT_INVALID_DATA);
 #endif
             }
 
@@ -295,12 +298,14 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
             hk_init_cmt_dbatch(&batch, addr, index_cur, dst_blks);
 
+            _size = ofs + HK_LBLK_SZ;
+
             while (dst_blks) {
                 is_overlay = hk_check_overlay(si, index_cur);
 
 #ifndef CONFIG_CMT_BACKGROUND
                 use_layout_for_addr(sb, addr);
-                sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi));
+                sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
                 unuse_layout_for_addr(sb, addr);
 #endif
 
@@ -320,12 +325,12 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                     hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
-                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
+                    hk_delegate_data_async(sb, inode, &batch, _size, CMT_VALID_DATA);
                     hk_next_cmt_dbatch(&batch);
 
                     addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
                     hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                    hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
+                    hk_delegate_data_async(sb, inode, &batch, 0, CMT_INVALID_DATA);
 #endif
                 }
 
@@ -335,10 +340,11 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                 addr += HK_PBLK_SZ;
                 index_cur += 1;
+                _size += HK_LBLK_SZ;
             }
 
             if (hk_is_cmt_dbatch_valid(&batch)) {
-                hk_delegate_data_async(sb, inode, &batch, CMT_VALID_DATA);
+                hk_delegate_data_async(sb, inode, &batch, _size, CMT_VALID_DATA);
             }
         }
 #else
@@ -356,7 +362,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
 #ifndef CONFIG_CMT_BACKGROUND
         use_layout_for_addr(sb, addr);
-        sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi));
+        sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), each_size, inode->i_ctime.tv_sec);
         unuse_layout_for_addr(sb, addr);
         /* flush header */
         hk_flush_buffer(addr + HK_LBLK_SZ, CACHELINE_SIZE, true);
@@ -398,6 +404,69 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     return 0;
 }
 
+/* Check whether partial content can be written in the allocated block. */
+/* `overflow` indicates that the [pos, pos + len) can not be written */
+/* in the current block. */
+static __always_inline bool hk_check_in_place_append(struct hk_inode_info_header *sih, loff_t pos, size_t len,
+                                                     bool *overflow, size_t *out_size)
+{
+    bool is_inplace = false;
+    loff_t end_pos = pos + len - 1;
+    loff_t allocated_size = sih->i_blocks << PAGE_SHIFT;
+
+    *overflow = false;
+
+    if (pos >= allocated_size) {
+        *out_size = 0;
+        return false;
+    }
+
+    if (end_pos >= allocated_size) {
+        *overflow = true;
+    }
+
+    *out_size = min(allocated_size - pos, len);
+
+    return true;
+}
+
+static size_t hk_try_in_place_append_write(struct hk_inode_info *si, loff_t pos, size_t len, unsigned char *content)
+{
+    bool in_place = false, overflow = false;
+    struct hk_inode_info_header *sih = &si->header;
+    struct super_block *sb = si->vfs_inode.i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long irq_flags = 0;
+    size_t out_size = 0;
+    u64 target_addr;
+    struct hk_cmt_dbatch batch;
+
+    INIT_TIMING(memcpy_time);
+
+    in_place = hk_check_in_place_append(sih, pos, len, &overflow, &out_size);
+    // hk_info("ino: %ld, i_size: %ld, i_blocks: %ld, in_place: %d, overflow: %d, written: %lu\n",
+    //         sih->ino, sih->i_size, sih->i_blocks, in_place, overflow, written);
+    if (in_place) {
+        target_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, pos >> PAGE_SHIFT));
+
+        HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+        hk_memunlock_range(sb, target_addr, out_size, &irq_flags);
+        memcpy_to_pmem_nocache(target_addr, content, out_size);
+        hk_memlock_range(sb, target_addr, out_size, &irq_flags);
+        HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+#ifdef CONFIG_CMT_BACKGROUND
+        hk_init_and_inc_cmt_dbatch(&batch, target_addr, pos >> PAGE_SHIFT, 1);
+        hk_delegate_data_async(sb, &si->vfs_inode, &batch, sih->i_size + out_size, CMT_UPDATE_DATA);
+#else
+        sm_update_data_sync(sb, target_addr, sih->i_size + out_size);
+#endif
+        sih->i_size = sih->i_size + out_size;
+    }
+
+    return out_size;
+}
+
 ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                          size_t len, loff_t *ppos)
 {
@@ -423,6 +492,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *prep = NULL;
     struct hk_layout_prep tmp_prep;
     size_t out_size = 0;
+    bool append_like = false;
     int retries = 0;
 
     INIT_TIMING(write_time);
@@ -440,22 +510,40 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
 
     pos = *ppos;
 
-    if (filp->f_flags & O_APPEND)
+    if (filp->f_flags & O_APPEND) {
+        append_like = true;
         pos = i_size_read(inode);
+    }
 
-    start_index = index = pos >> PAGE_SHIFT;   /* Start from which blk */
-    end_index = (pos + len - 1) >> PAGE_SHIFT; /* End till which blk */
-    blks = (end_index - index + 1);            /* Total blks to be written */
+    if (pos == i_size_read(inode)) {
+        append_like = true;
+    }
 
     error = file_remove_privs(filp);
     if (error)
         goto out;
 
+    /* if append write, i.e., pos == file size, try to perform in-place write */
+    if (append_like) {
+        out_size = hk_try_in_place_append_write(si, pos, len, pbuf);
+
+        pos += out_size;
+        len -= out_size;
+        pbuf += out_size;
+        written += out_size;
+    }
+
+    out_size = 0;
+
+    start_index = index = pos >> PAGE_SHIFT;   /* Start from which blk */
+    end_index = (pos + len - 1) >> PAGE_SHIFT; /* End till which blk */
+    blks = (end_index - index + 1);            /* Total blks to be written */
+
     inode->i_ctime = inode->i_mtime = current_time(inode);
     time = current_time(inode).tv_sec;
 
-    hk_dbgv("%s: inode %lu, offset %lld, blks %lu\n",
-            __func__, inode->i_ino, pos, blks);
+    hk_dbgv("%s: inode %lu, offset %lld, blks %lu, len %lu\n",
+            __func__, inode->i_ino, pos, blks, len);
 
     hk_prepare_layouts(sb, blks, false, &preps);
 
@@ -465,7 +553,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         prep = hk_trv_prepared_layouts(sb, &preps);
         if (!prep) {
             hk_dbg("%s: ERROR: No prep found for index %lu\n", __func__, index);
-retry:
+        retry:
             hk_prepare_gap(sb, false, &tmp_prep);
             if (tmp_prep.target_addr == 0) {
                 retries++;

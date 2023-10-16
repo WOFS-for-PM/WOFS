@@ -92,11 +92,11 @@ int hk_free_data_blks(struct super_block *sb, struct hk_inode_info_header *sih)
             hk_info("panic: %d", i);
         }
         BUG_ON(blk_addr == 0);
-    
+
         use_layout_for_addr(sb, blk_addr);
         sm_delete_data_sync(sb, blk_addr);
         unuse_layout_for_addr(sb, blk_addr);
-        
+
         freed += HK_PBLK_SZ;
     }
 
@@ -611,7 +611,7 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
         unuse_layout_for_addr(sb, addr);
 #else
         hk_init_and_inc_cmt_dbatch(&dbatch, addr, index, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_INVALID_DATA);
+        hk_delegate_data_async(sb, inode, &dbatch, 0, CMT_INVALID_DATA);
 #endif
         freed++;
     }

@@ -106,9 +106,9 @@ int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
     unsigned long irq_flags = 0;
     u64 blk;
 
-    INIT_TIMING(invalid_time);
+    INIT_TIMING(time);
 
-    HK_START_TIMING(sm_invalid_t, invalid_time);
+    HK_START_TIMING(sm_delete_t, time);
 
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
     hdr->ofs_next = NULL;
@@ -129,7 +129,7 @@ int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
     hk_range_insert_value(sb, &layout->gaps_list, blk);
     layout->num_gaps_indram++;
 
-    HK_END_TIMING(sm_invalid_t, invalid_time);
+    HK_END_TIMING(sm_delete_t, time);
     return 0;
 }
 
@@ -170,7 +170,28 @@ int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
     return 0;
 }
 
-int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp)
+int sm_update_data_sync(struct super_block *sb, u64 blk_addr, u64 size)
+{
+    struct hk_header *hdr;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long irq_flags = 0;
+
+    INIT_TIMING(time);
+
+    HK_START_TIMING(sm_update_t, time);
+
+    hdr = sm_get_hdr_by_addr(sb, blk_addr);
+
+    hk_memunlock_hdr(sb, (void *)hdr, &irq_flags);
+    hdr->size = size;
+    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
+    hk_memlock_hdr(sb, hdr, &irq_flags);
+
+    HK_END_TIMING(sm_update_t, time);
+    return 0;
+} 
+
+int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime)
 {
     struct hk_inode *pi;
     struct hk_header *hdr;
@@ -198,6 +219,9 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
+    // TODO: pass cmtime and size
+    hdr->cmtime = size;
+    hdr->size = cmtime;
 
     sm_insert_hdr(sb, (void *)cmt_node, hdr);
 

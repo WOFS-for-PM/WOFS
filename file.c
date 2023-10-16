@@ -545,39 +545,41 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     hk_dbgv("%s: inode %lu, offset %lld, blks %lu, len %lu\n",
             __func__, inode->i_ino, pos, blks, len);
 
-    hk_prepare_layouts(sb, blks, false, &preps);
+    if (len != 0) {
+        hk_prepare_layouts(sb, blks, false, &preps);
 
-    hk_trv_prepared_layouts_init(&preps);
+        hk_trv_prepared_layouts_init(&preps);
 
-    while (index <= end_index) {
-        prep = hk_trv_prepared_layouts(sb, &preps);
-        if (!prep) {
-            hk_dbg("%s: ERROR: No prep found for index %lu\n", __func__, index);
-        retry:
-            hk_prepare_gap(sb, false, &tmp_prep);
-            if (tmp_prep.target_addr == 0) {
-                retries++;
-                if (retries > 1) {
-                    error = -ENOMEM;
-                    goto out;
+        while (index <= end_index) {
+            prep = hk_trv_prepared_layouts(sb, &preps);
+            if (!prep) {
+                hk_dbg("%s: ERROR: No prep found for index %lu\n", __func__, index);
+            retry:
+                hk_prepare_gap(sb, false, &tmp_prep);
+                if (tmp_prep.target_addr == 0) {
+                    retries++;
+                    if (retries > 1) {
+                        error = -ENOMEM;
+                        goto out;
+                    }
+                    // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
+                    hk_flush_cmt_queue(sb, sbi->cpus);
+                    goto retry;
                 }
-                // make sure all the invalidated data is flushed. So that HUNTER can generate gap list.
-                hk_flush_cmt_queue(sb, sbi->cpus);
-                goto retry;
+                prep = &tmp_prep;
             }
-            prep = &tmp_prep;
+
+            do_perform_write(inode, prep, pos, len, pbuf,
+                             index, start_index, end_index,
+                             &out_size);
+
+            pos += out_size;
+            len -= out_size;
+            pbuf += out_size;
+            written += out_size;
+
+            index += prep->blks_prepared;
         }
-
-        do_perform_write(inode, prep, pos, len, pbuf,
-                         index, start_index, end_index,
-                         &out_size);
-
-        pos += out_size;
-        len -= out_size;
-        pbuf += out_size;
-        written += out_size;
-
-        index += prep->blks_prepared;
     }
 
     sih->i_blocks = end_index + 1;

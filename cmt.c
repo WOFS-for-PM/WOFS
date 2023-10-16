@@ -92,7 +92,7 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     BUG_ON(batch->addr_start == 0);
     
     if (type == CMT_INVALID_DATA) {
-        hk_info("invalid data for %llu\n", inode->i_ino);
+        hk_dbgv("invalid data for %llu\n", inode->i_ino);
     }
 
     data_info = __hk_generic_info_init(type);

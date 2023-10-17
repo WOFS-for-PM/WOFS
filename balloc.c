@@ -106,7 +106,7 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid)
     /* TODO: pop batched blocks */
     req_blks = 1;
     blk = hk_range_pop(&layout->gaps_tree, &req_blks);
-    if (blk == 0) {
+    if (req_blks == 0) {
         hk_info("%s: Wrong Gaps %llu\n", __func__, blk);
         BUG_ON(1);
     }

@@ -405,7 +405,7 @@ u64 hk_alloc_ino(struct super_block *sb)
         }
     
         ino = hk_range_pop(&sbi->inode_forest[cpuid], &req_ino_num);
-        if (ino == 0) {
+        if (req_ino_num != 0) {
             spin_unlock(&sbi->inode_forest_locks[cpuid]);
             break;
         }

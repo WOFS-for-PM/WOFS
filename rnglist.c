@@ -167,27 +167,31 @@ int hk_range_insert_range(struct rb_root_cached *tree, unsigned long range_low, 
 
     return ret;
 }
-
-// TODO: Return range_low and `num` is the number of consecutive blocks in the range. Namely range_high - range_low + 1 
+ 
+// num is the request number passed in and the allocated number returned
 unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num)
 {
     struct rb_node *temp;
-    struct hk_range_node *curr;
+    struct hk_range_node *curr = NULL;
     unsigned long range_low = 0;
     u64 allocated = 0;
 
     hk_traverse_tree(tree, temp, curr)
     {
         allocated = curr->range_high - curr->range_low + 1 >= *num ? *num : curr->range_high - curr->range_low + 1;
-        range_low = curr->range_low;
-        curr->range_low += allocated;
-        *num = allocated;
         break;
     }
 
-    if (curr->range_low > curr->range_high) {
-        rb_erase_cached(&curr->rbnode, tree);
-        hk_free_hk_range_node(curr);
+    if (curr) {
+        curr->range_low += allocated;
+        range_low = curr->range_low;
+        *num = allocated;
+        if (curr->range_low > curr->range_high) {
+            rb_erase_cached(&curr->rbnode, tree);
+            hk_free_hk_range_node(curr);
+        }
+    } else {
+        *num = 0;
     }
 
     return range_low;

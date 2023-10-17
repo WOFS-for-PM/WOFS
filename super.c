@@ -852,6 +852,8 @@ static void hk_put_super(struct super_block *sb)
     hk_stop_cmt_workers(sb);
     hk_flush_cmt_queue(sb, sbi->cpus);
     hk_cmt_destory_forest(sb);
+    if (measure_timing)
+        hk_print_timing();
 #endif
 
     /* It's unmount time, so unmap the hk memory */

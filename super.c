@@ -523,44 +523,36 @@ static int hk_super_dram_init(struct hk_sb_info *sbi)
     int i, ret;
 
     /* Inode List Related */
-    sbi->ilists = kcalloc(sbi->cpus, sizeof(struct list_head), GFP_KERNEL);
-    if (!sbi->ilists) {
+    sbi->inode_forest = kcalloc(sbi->cpus, sizeof(struct rb_root_cached), GFP_KERNEL);
+    if (!sbi->inode_forest) {
         ret = -ENOMEM;
         goto err1;
     }
     for (i = 0; i < sbi->cpus; i++)
-        INIT_LIST_HEAD(&sbi->ilists[i]);
+        sbi->inode_forest[i] = RB_ROOT_CACHED;
 
-    sbi->ilist_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
-    if (!sbi->ilist_locks) {
+    sbi->inode_forest_locks = kcalloc(sbi->cpus, sizeof(spinlock_t), GFP_KERNEL);
+    if (!sbi->inode_forest_locks) {
         ret = -ENOMEM;
         goto err2;
     }
     for (i = 0; i < sbi->cpus; i++)
-        mutex_init(&sbi->ilist_locks[i]);
+        spin_lock_init(&sbi->inode_forest_locks[i]);
 
-    sbi->ilist_init = kcalloc(sbi->cpus, sizeof(bool), GFP_KERNEL);
-    if (!sbi->ilist_init) {
+    sbi->inode_forest_init = kcalloc(sbi->cpus, sizeof(bool), GFP_KERNEL);
+    if (!sbi->inode_forest_init) {
         ret = -ENOMEM;
         goto err3;
     }
     for (i = 0; i < sbi->cpus; i++)
-        sbi->ilist_init[i] = false;
-
-    sbi->irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
-    if (!sbi->irange_locks) {
-        ret = -ENOMEM;
-        goto err4;
-    }
-    for (i = 0; i < sbi->cpus; i++)
-        mutex_init(&sbi->irange_locks[i]);
+        sbi->inode_forest_init[i] = false;
 
 #ifdef CONFIG_CMT_BACKGROUND
     /* Background Commit Related */
     sbi->cq = hk_init_cmt_queue(HK_CMT_WORKER_NUM);
     if (!sbi->cq) {
         ret = -ENOMEM;
-        goto err5;
+        goto err4;
     }
 #endif
 
@@ -577,14 +569,12 @@ static int hk_super_dram_init(struct hk_sb_info *sbi)
 
     return 0;
 
-err5:
-    kfree(sbi->irange_locks);
 err4:
-    kfree(sbi->ilist_init);
+    kfree(sbi->inode_forest_init);
 err3:
-    kfree(sbi->ilist_locks);
+    kfree(sbi->inode_forest_locks);
 err2:
-    kfree(sbi->ilists);
+    kfree(sbi->inode_forest);
 err1:
     return ret;
 }
@@ -870,14 +860,11 @@ static void hk_put_super(struct super_block *sb)
     /* destroy inode list */
     int cpuid;
     for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
-        hk_range_free_all(&sbi->ilists[cpuid]);
+        hk_range_free_all(&sbi->inode_forest[cpuid]);
     }
 
     /* destroy layouts in DRAM */
     hk_layouts_free(sbi);
-
-    /* destroy range lock */
-    kfree(sbi->irange_locks);
 
     hk_dbgmask = 0;
 

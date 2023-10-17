@@ -11,7 +11,7 @@ obj-m += hunter.o
 
 hunter-y := super.o balloc.o bbuild.o dir.o file.o inode.o ioctl.o \
 			namei.o rebuild.o super.o symlink.o sysfs.o \
-			linix.o meta.o stats.o mlist.o cmt.o generic_cachep.o
+			linix.o meta.o stats.o rnglist.o cmt.o generic_cachep.o
 
 EXTRA_CFLAGS += -DHK_ENABLE_LFS=$(HK_ENABLE_LFS) \
 				-DHK_ENABLE_ASYNC=$(HK_ENABLE_ASYNC) \

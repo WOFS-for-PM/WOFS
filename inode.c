@@ -33,17 +33,17 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
     end_ino = start_ino + inums_percore - 1;
 
     if (is_init) {
-        hk_range_insert_range(sb, &sbi->ilists[cpuid], start_ino, end_ino);
+        hk_range_insert_range(&sbi->inode_forest[cpuid], start_ino, end_ino);
     } else {
         for (i = end_ino; i >= start_ino; i--) {
             pi = hk_get_pi_by_ino(sb, i);
             if (!pi->valid) {
-                hk_range_insert_value(sb, &sbi->ilists[cpuid], i);
+                hk_range_insert_range(&sbi->inode_forest[cpuid], i, i);
             }
         }
     }
 
-    sbi->ilist_init[cpuid] = true;
+    sbi->inode_forest_init[cpuid] = true;
 
     return 0;
 }
@@ -129,9 +129,9 @@ int hk_free_ino(struct super_block *sb, u64 ino)
 
     cpuid = hk_get_cpuid_by_ino(sb, ino);
 
-    mutex_lock(&sbi->ilist_locks[cpuid]);
-    err = hk_range_insert_value(sb, &sbi->ilists[cpuid], ino);
-    mutex_unlock(&sbi->ilist_locks[cpuid]);
+    spin_lock(&sbi->inode_forest_locks[cpuid]);
+    err = hk_range_insert_range(&sbi->inode_forest[cpuid], ino, ino);
+    spin_unlock(&sbi->inode_forest_locks[cpuid]);
 
     HK_END_TIMING(free_inode_t, free_time);
     return err;
@@ -388,6 +388,7 @@ u64 hk_alloc_ino(struct super_block *sb)
 {
     u64 ino = (u64)-1;
     struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long req_ino_num = 1;
     INIT_TIMING(new_hk_ino_time);
 
     HK_START_TIMING(new_HK_inode_t, new_hk_ino_time);
@@ -398,16 +399,18 @@ u64 hk_alloc_ino(struct super_block *sb)
     start_cpuid = cpuid;
 
     do {
-        mutex_lock(&sbi->ilist_locks[cpuid]);
-        if (unlikely(sbi->ilist_init[cpuid] == false)) {
+        spin_lock(&sbi->inode_forest_locks[cpuid]);
+        if (unlikely(sbi->inode_forest_init[cpuid] == false)) {
             hk_init_free_inode_list_percore(sb, cpuid, false);
         }
-        if (!list_empty(&sbi->ilists[cpuid])) {
-            ino = hk_range_pop(&sbi->ilists[cpuid]);
-            mutex_unlock(&sbi->ilist_locks[cpuid]);
+    
+        ino = hk_range_pop(&sbi->inode_forest[cpuid], &req_ino_num);
+        if (ino == 0) {
+            spin_unlock(&sbi->inode_forest_locks[cpuid]);
             break;
         }
-        mutex_unlock(&sbi->ilist_locks[cpuid]);
+    
+        spin_unlock(&sbi->inode_forest_locks[cpuid]);
         cpuid = (cpuid + 1) % sbi->cpus;
     } while (cpuid != start_cpuid);
 

@@ -122,8 +122,9 @@ extern int wprotect;
 
 /* ======================= ANCHOR: global struct ========================= */
 /* A node in the linked list representing a range of pages */
+/* Closed range [range_low, range_high] */
 struct hk_range_node {
-	struct list_head node;
+	struct rb_node rbnode;
 	/* Block, inode */
 	struct {
 		unsigned long range_low;
@@ -296,16 +297,9 @@ static inline u64 _round_up(u64 value, u64 align)
 }
 
 /* ======================= ANCHOR: mlist.c ========================= */
-void hk_range_trv(struct list_head *head);
-int hk_range_insert_range(struct super_block *sb, struct list_head *head, 
-                          unsigned long range_low, unsigned long range_high);
-int hk_range_insert_value(struct super_block *sb, struct list_head *head, unsigned long value);
-bool hk_range_find_value(struct super_block *sb, struct list_head *head, unsigned long value);
-unsigned long hk_range_pop(struct list_head *head);
-int hk_range_remove(struct super_block *sb, struct list_head *head, unsigned long value);
-int hk_range_remove_range(struct super_block *sb, struct list_head *head, 
-                          unsigned long range_low, unsigned long range_high);
-void hk_range_free_all(struct list_head *head);
+int hk_range_insert_range(struct rb_root_cached *tree, unsigned long range_low, unsigned long range_high);
+unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num);
+void hk_range_free_all(struct rb_root_cached *tree);
 
 /* ======================= ANCHOR: rebuild.c ========================= */
 void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih, 
@@ -552,18 +546,6 @@ static inline void unuse_journal(struct super_block *sb, int txid)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
 	mutex_unlock(&sbi->j_locks[txid]);
-}
-
-static inline void use_nvm_inode(struct super_block *sb, u64 ino)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_lock(&sbi->irange_locks[ino % sbi->cpus]);
-}
-
-static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
-{
-	struct hk_sb_info *sbi = HK_SB(sb);
-	mutex_unlock(&sbi->irange_locks[ino % sbi->cpus]);
 }
 
 static inline void hk_sync_super(struct super_block *sb)

@@ -94,6 +94,7 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid)
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_layout_info *layout = &sbi->layouts[cpuid];
     struct hk_header *hdr;
+    unsigned long req_blks = 1;
     u64 blk;
     u64 addr;
 
@@ -102,8 +103,10 @@ u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid)
         return 0;
     }
 
-    blk = hk_range_pop(&layout->gaps_list);
-    if (blk < 0) {
+    /* TODO: pop batched blocks */
+    req_blks = 1;
+    blk = hk_range_pop(&layout->gaps_tree, &req_blks);
+    if (blk == 0) {
         hk_info("%s: Wrong Gaps %llu\n", __func__, blk);
         BUG_ON(1);
     }
@@ -401,13 +404,11 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout->layout_blks = blks_per_layout;
         layout->layout_end = layout->layout_start + size_per_layout;
         layout->num_gaps_indram = 0;
-        // TODO: Handle Failure
-        INIT_LIST_HEAD(&layout->gaps_list);
+        layout->gaps_tree = RB_ROOT_CACHED;
         ind_init(sb, cpuid);
         mutex_init(&layout->layout_lock);
         hk_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
     }
-    sbi->max_invalid_blks_threshold = blks_per_layout;
     return 0;
 }
 
@@ -420,7 +421,7 @@ int hk_layouts_free(struct hk_sb_info *sbi)
         for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
             layout = &sbi->layouts[cpuid];
 
-            hk_range_free_all(&layout->gaps_list);
+            hk_range_free_all(&layout->gaps_tree);
         }
         kfree(sbi->layouts);
     }

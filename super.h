@@ -121,13 +121,10 @@ struct hk_sb_info {
     struct hk_cmt_queue *cq;
     struct task_struct *cmt_workers[HK_CMT_WORKER_NUM];
 
-    /* for inode management */
-    struct mutex *irange_locks; /* For In-NVMM Inode Lock */
-
-    struct mutex *ilist_locks;
-    struct list_head *ilists;
-    bool *ilist_init;
-    u64 max_invalid_blks_threshold;
+    /* inode management */
+    spinlock_t *inode_forest_locks;
+    struct rb_root_cached *inode_forest;
+    bool *inode_forest_init;
 
     /* for layout equalization */
     struct task_struct *layout_equalizer_thread;

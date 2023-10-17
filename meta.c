@@ -127,7 +127,7 @@ int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
     ind_update(&layout->ind, INVALIDATE_BLK, 1);
 
     blk = hk_get_dblk_by_addr(sbi, blk_addr);
-    hk_range_insert_value(sb, &layout->gaps_list, blk);
+    hk_range_insert_range(&layout->gaps_tree, blk, blk);
     layout->num_gaps_indram++;
 
     HK_END_TIMING(sm_delete_t, time);
@@ -164,7 +164,7 @@ int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
     ind_update(&layout->ind, INVALIDATE_BLK, 1);
 
     blk = hk_get_dblk_by_addr(sbi, blk_addr);
-    hk_range_insert_value(sb, &layout->gaps_list, blk);
+    hk_range_insert_range(&layout->gaps_tree, blk, blk);
     layout->num_gaps_indram++;
 
     HK_END_TIMING(sm_invalid_t, invalid_time);

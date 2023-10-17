@@ -403,7 +403,8 @@ u64 hk_alloc_ino(struct super_block *sb)
         if (unlikely(sbi->inode_forest_init[cpuid] == false)) {
             hk_init_free_inode_list_percore(sb, cpuid, false);
         }
-    
+
+        req_ino_num = 1;
         ino = hk_range_pop(&sbi->inode_forest[cpuid], &req_ino_num);
         if (req_ino_num != 0) {
             spin_unlock(&sbi->inode_forest_locks[cpuid]);
@@ -414,7 +415,7 @@ u64 hk_alloc_ino(struct super_block *sb)
         cpuid = (cpuid + 1) % sbi->cpus;
     } while (cpuid != start_cpuid);
 
-    if (ino == (u64)-1) {
+    if (req_ino_num == 0) {
         hk_info("No free inode\n");
         BUG_ON(1);
     }
@@ -515,7 +516,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
 #endif
 
     if (insert_inode_locked(inode) < 0) {
-        hk_err(sb, "hk_new_inode failed ino %lx\n", inode->i_ino);
+        hk_err(sb, "hk_new_inode failed ino %llu\n", inode->i_ino);
         errval = -EINVAL;
         goto fail1;
     }

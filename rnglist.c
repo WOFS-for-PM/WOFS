@@ -173,7 +173,7 @@ unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num)
 {
     struct rb_node *temp;
     struct hk_range_node *curr = NULL;
-    unsigned long range_low = 0;
+    unsigned long ret = 0;
     u64 allocated = 0;
 
     hk_traverse_tree(tree, temp, curr)
@@ -183,8 +183,8 @@ unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num)
     }
 
     if (curr) {
+        ret = curr->range_low;
         curr->range_low += allocated;
-        range_low = curr->range_low;
         *num = allocated;
         if (curr->range_low > curr->range_high) {
             rb_erase_cached(&curr->rbnode, tree);
@@ -194,7 +194,7 @@ unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num)
         *num = 0;
     }
 
-    return range_low;
+    return ret;
 }
 
 void hk_range_free_all(struct rb_root_cached *tree)

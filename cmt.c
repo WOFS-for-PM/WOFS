@@ -316,7 +316,7 @@ int hk_process_delete_info(struct super_block *sb, struct hk_cmt_node *cmt_node,
     HK_START_TIMING(process_delete_inode_info_t, time);
     hk_memunlock_pi(sb, pi, &irq_flags);
     pi->valid = 0;
-    hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+    hk_flush_buffer(pi, CACHELINE_SIZE, true);
     hk_memlock_pi(sb, pi, &irq_flags);
 
     // NOTE: Traverse is too slow. We delay the release of

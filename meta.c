@@ -97,6 +97,7 @@ int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
 }
 
 // invalid data without linking. This means, we do not intefere with inode.
+// Note the consistency of hdr is delayed to allocation and remount.
 int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
 {
     struct inode *inode;
@@ -111,15 +112,15 @@ int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
     HK_START_TIMING(sm_delete_t, time);
 
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
-    hdr->ofs_next = NULL;
-    hdr->ofs_prev = NULL;
+    // hdr->ofs_next = NULL;
+    // hdr->ofs_prev = NULL;
 
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
+    // hk_memunlock_hdr(sb, hdr, &irq_flags);
 
-    PERSISTENT_BARRIER();
-    hdr->valid = 0;
-    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
-    hk_memlock_hdr(sb, hdr, &irq_flags);
+    // PERSISTENT_BARRIER();
+    // hdr->valid = 0;
+    // hk_flush_buffer(hdr, sizeof(struct hk_header), true);
+    // hk_memlock_hdr(sb, hdr, &irq_flags);
 
     layout = sm_get_layout_by_hdr(sb, (u64)hdr);
 

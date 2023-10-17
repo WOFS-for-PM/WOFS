@@ -93,10 +93,15 @@ int hk_free_data_blks(struct super_block *sb, struct hk_inode_info_header *sih)
         }
         BUG_ON(blk_addr == 0);
 
+#ifdef CONFIG_CMT_BACKGROUND
+        struct hk_cmt_dbatch batch;
+        hk_init_and_inc_cmt_dbatch(&batch, blk_addr, i, 1);
+        hk_delegate_data_async(sb, inode, &batch, 0, CMT_DELETE_DATA);
+#else
         use_layout_for_addr(sb, blk_addr);
         sm_delete_data_sync(sb, blk_addr);
         unuse_layout_for_addr(sb, blk_addr);
-
+#endif
         freed += HK_PBLK_SZ;
     }
 
@@ -200,6 +205,7 @@ void hk_evict_inode(struct inode *inode)
 #ifdef CONFIG_CMT_BACKGROUND
         /* close -> flush the idr (inode data root) to persistent memory */
         hk_delegate_close_async(sb, inode);
+        hk_free_data_blks(sb, sih);
         /* delete -> I have a whole file view, and I can deallocate PM resource, including data and ino. */
         hk_delegate_delete_async(sb, inode);
         hk_free_dram_resource(sb, sih);

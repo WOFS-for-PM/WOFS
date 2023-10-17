@@ -58,6 +58,7 @@ void *__hk_generic_info_init(enum hk_cmt_info_type type)
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
     case CMT_UPDATE_DATA:
+    case CMT_DELETE_DATA:
         info = hk_alloc_hk_cmt_data_info();
         break;
     case CMT_NEW_INODE:
@@ -90,7 +91,7 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     struct hk_inode_info_header *sih = HK_IH(inode);
 
     BUG_ON(batch->addr_start == 0);
-    
+
     if (type == CMT_INVALID_DATA) {
         hk_dbgv("invalid data for %llu\n", inode->i_ino);
     }
@@ -174,6 +175,7 @@ void hk_cmt_info_destroy(void *cmt_info)
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
     case CMT_UPDATE_DATA:
+    case CMT_DELETE_DATA:
         hk_free_hk_cmt_data_info((struct hk_cmt_data_info *)info);
         break;
     case CMT_NEW_INODE:
@@ -211,7 +213,7 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
 
     HK_START_TIMING(process_data_info_t, time);
     use_layout(layout);
-    
+
     for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
         switch (data_info->type) {
@@ -229,6 +231,10 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
         }
         case CMT_UPDATE_DATA: {
             sm_update_data_sync(sb, addr, size);
+            break;
+        }
+        case CMT_DELETE_DATA: {
+            sm_delete_data_sync(sb, addr);
             break;
         }
         default:
@@ -313,18 +319,19 @@ int hk_process_delete_info(struct super_block *sb, struct hk_cmt_node *cmt_node,
     hk_flush_buffer(pi, sizeof(struct hk_inode), true);
     hk_memlock_pi(sb, pi, &irq_flags);
 
-    hk_dbgv("%s: start from pi->h_addr: %llx", __func__, pi->h_addr);
-
+    // NOTE: Traverse is too slow. We delay the release of
+    //       data blocks to the next mount and allocation.
+    // hk_dbgv("%s: start from pi->h_addr: %llx", __func__, pi->h_addr);
     // Tag data hdr as invalid, and release data asyncly
-    traverse_inode_hdr_safe(sbi, pi, hdr, n)
-    {
-        blk_addr = sm_get_addr_by_hdr(sb, hdr);
-        hk_dbgv("delete data blk %llu for %llu\n", hdr->f_blk, pi->ino);
-        use_layout_for_addr(sb, blk_addr);
-        sm_delete_data_sync(sb, blk_addr);
-        unuse_layout_for_addr(sb, blk_addr);
-        hk_dbgv("delete data blk %llu for %llu finished\n", hdr->f_blk, pi->ino);
-    }
+    // traverse_inode_hdr_safe(sbi, pi, hdr, n)
+    // {
+    //     blk_addr = sm_get_addr_by_hdr(sb, hdr);
+    //     hk_dbgv("delete data blk %llu for %llu\n", hdr->f_blk, pi->ino);
+    //     use_layout_for_addr(sb, blk_addr);
+    //     sm_delete_data_sync(sb, blk_addr);
+    //     unuse_layout_for_addr(sb, blk_addr);
+    //     hk_dbgv("delete data blk %llu for %llu finished\n", hdr->f_blk, pi->ino);
+    // }
 
     // Release ino asyncly
     hk_free_ino(sb, ino);
@@ -361,6 +368,7 @@ int hk_process_cmt_info(struct super_block *sb, struct hk_cmt_node *cmt_node, vo
     case CMT_VALID_DATA:
     case CMT_INVALID_DATA:
     case CMT_UPDATE_DATA:
+    case CMT_DELETE_DATA:
         hk_process_data_info(sb, cmt_node->ino, (struct hk_cmt_data_info *)info);
         break;
     case CMT_UNLINK_INODE:
@@ -722,7 +730,7 @@ static int hk_flush_worker_thread(void *arg)
     wake_up_interruptible(&flush_finish_wq);
 
     hk_info("flush workers %d finished\n", work_id);
-    
+
     return 0;
 }
 
@@ -763,7 +771,7 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
         hk_info("Start flushing all pending cmt with %d threads\n", num_cpus);
         params = kmalloc_array(num_cpus, sizeof(struct hk_flush_worker_param), GFP_KERNEL);
         BUG_ON(!params);
-        
+
         for (i = 0; i < num_cpus; i++) {
             params[i].sb = sb;
             params[i].work_id = i;
@@ -779,9 +787,9 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
                 BUG_ON(!cmt_node_wrpper);
                 INIT_LIST_HEAD(&cmt_node_wrpper->lnode);
                 cmt_node_wrpper->cmt_node = cmt_node;
-                
-                list_add_tail(&cmt_node_wrpper->lnode, &params[cnt % num_cpus].cmt_node_wrppers);   
-                cnt++;        
+
+                list_add_tail(&cmt_node_wrpper->lnode, &params[cnt % num_cpus].cmt_node_wrppers);
+                cnt++;
             }
         }
 
@@ -792,7 +800,7 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
             wake_up_process(flush_workers[i]);
             hk_info("start flush workers %d (%s)\n", i, "FUSE");
         }
-        
+
         wait_to_finish_flush(num_cpus);
 
         kfree(params);

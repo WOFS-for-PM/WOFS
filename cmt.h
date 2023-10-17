@@ -7,6 +7,7 @@ enum hk_cmt_info_type {
     CMT_VALID_DATA,
     CMT_INVALID_DATA,
     CMT_UPDATE_DATA,
+    CMT_DELETE_DATA,
     CMT_NEW_INODE,
     CMT_DELETE_INODE,
     CMT_UNLINK_INODE,

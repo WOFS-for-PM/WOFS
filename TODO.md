@@ -1,10 +1,16 @@
+# 2023/10/17
 
-# 2023/10/15 
+- [ ] Delay the persistent consistency of deallocation of data blocks to the next allocation of data blocks and remount (In doing so, we are not required to chase the link, and thus imporve deletion).
+- [ ] Rebuild gap list when remounting by scanning the summary headers.
+
+# 2023/10/15 -- 2023/10/16
 
 ~~- [ ] Before worker process data info, it should use a tree to check if the corresponding block (valid addr) can be invalidated by the latter invalidated block (invalid addr). By doing so, we reduce the number of updates of summary hdr.~~ (No, this might lead us miss some version).
 - [x] Async flush of inode for creation, How? By doing so, we enable the deletion of this inode without interacting with PM. 
 - [x] Change Data Queue to Operation Queue for better semantics. 
 - [x] Async for deallocation and Sync for allocation.
+- [x] Multi-threaded flush when umounting (TODO: Prof the best workers for flushing).
+- [x] Optimize partial append
 
 # 2023/10/13 -- 2023/10/14
 

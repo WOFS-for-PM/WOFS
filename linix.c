@@ -126,6 +126,7 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
     }
 
     ix->slots[index].blk_addr = TRANS_ADDR_TO_OFS(sbi, blk_addr);
+    
     HK_END_TIMING(linix_set_t, insert_time);
     return 0;
 }

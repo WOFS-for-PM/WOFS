@@ -43,7 +43,7 @@
 #define HK_ATTRLOG_ENTY_SLOTS (4)
 #define HK_LINIX_SLOTS        (1024 * 256) /* related to init size */
 #define HK_HISTORY_WINDOWS    (1)          /* for dynamic workloads */
-#define HK_NAME_LEN           255
+#define HK_NAME_LEN           99
 #define HK_HASH_BITS          6  /* for directory table */
 #define HK_CMT_QUEUE_BITS     10 /* for commit queue */
 #define HK_CMT_WORKER_NUM     4  /* for commit worker */
@@ -130,6 +130,10 @@ static inline void hk_flush_buffer(void *buf, uint32_t len, bool fence)
     len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
 
     HK_ASSERT(((unsigned long)(buf) & (CACHELINE_SIZE - 1)) == 0);
+    if (((unsigned long)(buf) & (CACHELINE_SIZE - 1)) != 0) {
+        dump_stack();
+        ssleep(1);
+    }
 
     if (support_clwb) {
         for (i = 0; i < len; i += CACHELINE_SIZE)

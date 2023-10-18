@@ -89,6 +89,7 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     struct hk_cmt_data_info *data_info;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info_header *sih = HK_IH(inode);
+    u64 prev_addr = 0, next_addr = 0;
 
     BUG_ON(batch->addr_start == 0);
 
@@ -97,6 +98,19 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     }
 
     data_info = __hk_generic_info_init(type);
+
+    // NOTE: it is safe since COW will not happen for a consecutive blocks commit
+    switch (type) {
+    case CMT_VALID_DATA:
+    case CMT_INVALID_DATA:
+        next_addr = sm_get_next_addr_by_dbatch(sb, sih, batch);
+        prev_addr = sm_get_prev_addr_by_dbatch(sb, sih, batch);
+        break;
+    default:
+        data_info->prev_addr = 0;
+        data_info->next_addr = 0;
+        break;
+    }
 
     data_info->addr_start = batch->addr_start;
     data_info->addr_end = batch->addr_end;
@@ -157,10 +171,12 @@ int hk_delegate_delete_async(struct super_block *sb, struct inode *inode)
 
 int hk_delegate_close_async(struct super_block *sb, struct inode *inode)
 {
+    struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_close_info *close_info;
     struct hk_inode_info_header *sih = HK_IH(inode);
 
     close_info = __hk_generic_info_init(CMT_CLOSE_INODE);
+    close_info->tail_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, 0));
 
     hk_request_cmt(sb, close_info, sih);
 
@@ -204,6 +220,8 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
     u64 addr_end = data_info->addr_end;
     u64 blk_start = data_info->blk_start;
     u64 size = data_info->size;
+    u64 prev_addr = data_info->prev_addr;
+    u64 next_addr = data_info->next_addr;
 
     INIT_TIMING(time);
 
@@ -217,12 +235,13 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
         hdr = sm_get_hdr_by_addr(sb, addr);
         switch (data_info->type) {
         case CMT_VALID_DATA: {
-            sm_valid_data_sync(sb, addr, ino, blk, data_info->tstamp, size, data_info->cmtime);
+            sm_valid_data_sync(sb, prev_addr, addr, next_addr, ino, blk,
+                               data_info->tstamp, size, data_info->cmtime);
             break;
         }
         case CMT_INVALID_DATA: {
             if (hdr->tstamp <= data_info->tstamp) {
-                sm_invalid_data_sync(sb, addr, ino);
+                sm_invalid_data_sync(sb, prev_addr, addr, ino);
             } else {
                 BUG_ON(1);
             }
@@ -240,6 +259,7 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
             break;
         }
         size += HK_PBLK_SZ;
+        next_addr = addr;
     }
     unuse_layout(layout);
     HK_END_TIMING(process_data_info_t, time);
@@ -345,18 +365,18 @@ int hk_process_close_info(struct super_block *sb, struct hk_cmt_node *cmt_node, 
     u64 ino = cmt_node->ino;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
+    u64 tail_addr = close_info->tail_addr;
+
     INIT_TIMING(time);
-    // Do not use this, this is a tag.
-    (void)close_info;
 
     HK_START_TIMING(process_close_inode_info_t, time);
     /* flush in-DRAM hdr address  */
-    if (cmt_node->h_addr != 0) {
-        if (cmt_node->h_addr != 0) {
-            ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, cmt_node->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, pi);
-        }
-        pi->h_addr = cmt_node->h_addr;
+    pi->root.ofs_next = cmt_node->root.ofs_next;
+    if (tail_addr) {
+        struct hk_header *tail_hdr = sm_get_hdr_by_addr(sb, tail_addr);
+        tail_hdr->node.ofs_next = TRANS_ADDR_TO_OFS(sbi, &pi->root);
     }
+
     HK_END_TIMING(process_close_inode_info_t, time);
     return 0;
 }
@@ -392,15 +412,16 @@ int hk_process_cmt_info(struct super_block *sb, struct hk_cmt_node *cmt_node, vo
 }
 
 /* ===== Low-level ===== */
-struct hk_cmt_node *hk_cmt_node_init(u64 ino)
+struct hk_cmt_node *hk_cmt_node_init(struct super_block *sb, u64 ino)
 {
     struct hk_cmt_node *node = hk_alloc_hk_cmt_node();
+    struct hk_sb_info *sbi = HK_SB(sb);
 
     hk_inf_queue_init(&node->op_q);
 
     node->ino = ino;
-    node->h_addr = 0;
     node->valid = 0;
+    node->root.ofs_next = TRANS_ADDR_TO_OFS(sbi, &node->root);
 
     mutex_init(&node->processing);
 

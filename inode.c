@@ -306,7 +306,8 @@ void hk_init_pi(struct super_block *sb, struct inode *inode, umode_t mode, u32 i
     unsigned long irq_flags = 0;
     u64 ino = inode->i_ino;
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
-
+    struct hk_sb_info *sbi = HK_SB(sb);
+    
     hk_memunlock_pi(sb, pi, &irq_flags);
     pi->i_flags = hk_mask_flags(mode, i_flags);
     pi->ino = ino;
@@ -321,7 +322,7 @@ void hk_init_pi(struct super_block *sb, struct inode *inode, umode_t mode, u32 i
     pi->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
     pi->i_generation = cpu_to_le32(inode->i_generation);
 
-    pi->h_addr = cpu_to_le64(0);
+    pi->root.ofs_next = TRANS_ADDR_TO_OFS(sbi, &pi->root);
     pi->tstamp = cpu_to_le64(get_version(HK_SB(inode->i_sb)));
 
     if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
@@ -506,7 +507,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
 
 #ifdef CONFIG_CMT_BACKGROUND
     struct hk_cmt_node *cmt_node, *exsit;
-    cmt_node = hk_cmt_node_init(ino);
+    cmt_node = hk_cmt_node_init(sb, ino);
     errval = hk_cmt_manage_node(sb, cmt_node, &exsit);
     if (errval == -EEXIST) {
         hk_cmt_node_destroy(cmt_node);
@@ -611,13 +612,13 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
         addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index));
         linix_delete(&sih->ix, index, index, true);
 
-#ifndef CONFIG_CMT_BACKGROUND
-        use_layout_for_addr(sb, addr);
-        sm_invalid_data_sync(sb, addr, sih->ino);
-        unuse_layout_for_addr(sb, addr);
-#else
         hk_init_and_inc_cmt_dbatch(&dbatch, addr, index, 1);
+#ifdef CONFIG_CMT_BACKGROUND
         hk_delegate_data_async(sb, inode, &dbatch, 0, CMT_INVALID_DATA);
+#else
+        use_layout_for_addr(sb, addr);
+        sm_invalid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch), addr, sih->ino);
+        unuse_layout_for_addr(sb, addr);
 #endif
         freed++;
     }

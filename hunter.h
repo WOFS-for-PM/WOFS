@@ -142,12 +142,12 @@ struct hk_range_node {
 #include "namei.h"
 #include "linix.h"
 #include "super.h"
+#include "meta.h"
 #include "inode.h"
 #include "cmt.h"
 #include "generic_cachep.h"
 #include "config.h"
 #include "balloc.h"
-#include "meta.h"
 #include "mprotect.h"
 
 /* blk_addr is the offset addr in NVMM */
@@ -393,12 +393,15 @@ u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr);
 struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
 struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
 
-int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
-int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr);
+int sm_remove_hdr(struct super_block *sb, struct hk_header *prev_hdr, struct hk_header *hdr);
+int sm_insert_hdr(struct super_block *sb, struct hk_header *prev_hdr, struct hk_header *hdr, struct hk_header *next_hdr);
+u64 sm_get_next_addr_by_dbatch(struct super_block *sb, struct hk_inode_info_header *sih, struct hk_cmt_dbatch *batch);
+u64 sm_get_prev_addr_by_dbatch(struct super_block *sb, struct hk_inode_info_header *sih, struct hk_cmt_dbatch *batch);
 
 int sm_delete_data_sync(struct super_block *sb, u64 blk_addr);
-int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino);
-int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime);
+int sm_invalid_data_sync(struct super_block *sb, u64 prev_addr, u64 blk_addr, u64 ino);
+int sm_valid_data_sync(struct super_block *sb, u64 prev_addr, u64 blk_addr, u64 next_addr,
+                       u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime);
 int sm_update_data_sync(struct super_block *sb, u64 blk_addr, u64 size);
 
 struct hk_journal* hk_get_journal_by_txid(struct super_block *sb, int txid);
@@ -409,7 +412,7 @@ int hk_finish_tx(struct super_block *sb, int txid);
 /* ======================= ANCHOR: cmt.c ========================= */
 #ifdef CONFIG_CMT_BACKGROUND
 
-struct hk_cmt_node* hk_cmt_node_init(u64 ino);
+struct hk_cmt_node *hk_cmt_node_init(struct super_block *sb, u64 ino);
 void hk_cmt_node_destroy(struct hk_cmt_node *node);
 int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node, struct hk_cmt_node **exist);
 struct hk_cmt_node *hk_cmt_search_node(struct super_block *sb, u64 ino);

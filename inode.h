@@ -13,24 +13,19 @@ enum hk_new_inode_type {
     TYPE_MKDIR
 };
 
-struct hk_inode_data_root {
-    u64 h_addr;
-};
-
 /*
  * Structure of an inode in PMEM
  */
 struct hk_inode {
-    __le64 h_addr;        /* Inode as the head of the files */
-
-    u8 valid;             /* Is this inode valid? */
-    __le32 i_flags;       /* Inode flags */
-    __le64 i_size;        /* Size of data in bytes */
-    __le32 i_ctime;       /* Inode modification time */
-    __le32 i_mtime;       /* Inode Linear Index Modification time */
-    __le32 i_atime;       /* Access time */
-    __le16 i_mode;        /* File mode */
-    __le16 i_links_count; /* Links count */
+    struct hk_header_node root; /* Data Header for this inode */
+    u8 valid;                  /* Is this inode valid? */
+    __le32 i_flags;            /* Inode flags */
+    __le64 i_size;             /* Size of data in bytes */
+    __le32 i_ctime;            /* Inode modification time */
+    __le32 i_mtime;            /* Inode Linear Index Modification time */
+    __le32 i_atime;            /* Access time */
+    __le16 i_mode;             /* File mode */
+    __le16 i_links_count;      /* Links count */
 
     __le64 i_xattr; /* Extended attribute block */
 
@@ -49,7 +44,7 @@ struct hk_inode {
     //! We don't need this for now
     __le32 csum; /* CRC32 checksum */
 
-    u8 paddings[43];
+    u8 padding[43]; /* Padding to 128 bytes */
 } __attribute((__packed__));
 
 static_assert(sizeof(struct hk_inode) == 128, "hk_inode size mismatch");
@@ -77,7 +72,6 @@ struct hk_inode_info_header {
     u64 last_dentry;      /* Last updated dentry */
 
     u64 tstamp; /* Time stamp for Version Control */
-    u64 h_addr; /* First blk logic offset */
 };
 
 // TODO: This could be jentry
@@ -113,7 +107,7 @@ static inline void hk_dump_inode(struct super_block *sb, struct hk_inode *pi)
     hk_info("i_size: %lu\n", pi->i_size);
     hk_info("i_flags: %u\n", pi->i_flags);
     hk_info("i_mode: %u\n", pi->i_mode);
-    hk_info("h_addr: @0x%llx\n", pi->h_addr);
+    hk_info("ofs_next: @0x%llx\n", pi->root.ofs_next);
     hk_info("tstamp: 0x%llx\n", pi->tstamp);
 }
 

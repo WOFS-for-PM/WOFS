@@ -134,6 +134,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
     struct hk_layout_prep tmp_prep;
     struct hk_dentry_info *di;
     struct hk_dentry *direntry;
+    struct hk_cmt_dbatch dbatch;
     u64 blk_addr;
     u64 blk_cur;
     u16 dentry_ix;
@@ -204,8 +205,10 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
     }
 
     if (is_alloc_new) {
+        hk_init_and_inc_cmt_dbatch(&dbatch, blk_addr, blk_cur, 1);
         use_layout_for_addr(sb, blk_addr);
-        sm_valid_data_sync(sb, blk_addr, dir->i_ino, blk_cur, get_version(sbi), 1, dir->i_ctime.tv_sec);
+        sm_valid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &dbatch), blk_addr, sm_get_next_addr_by_dbatch(sb, sih, &dbatch),
+                           dir->i_ino, blk_cur, get_version(sbi), 1, dir->i_ctime.tv_sec);
         unuse_layout_for_addr(sb, blk_addr);
 
         linix_insert(&sih->ix, blk_cur, blk_addr, true);
@@ -316,7 +319,7 @@ int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
 {
     int ret = 0;
     unsigned long irq_flags = 0;
-    
+
     /* make sure meta consistency */
     hk_evicting_attr_log_to_inode(sb, pi);
     ret = hk_start_tx(sb, UNLINK, pi, direntry, pidir);
@@ -326,7 +329,7 @@ int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
         pi->valid = 0;
         hk_memlock_pi(sb, pi, &irq_flags);
     }
-    
+
 out:
     return ret;
 }

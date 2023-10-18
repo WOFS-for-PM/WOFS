@@ -3,17 +3,20 @@
 
 #include "hunter.h"
 
+struct hk_header_node {
+    u64 ofs_next;
+};
+
 struct hk_header {
-    u64 ino;      // Indicate which inode it belongs to
-    u64 tstamp;   // Version control
-    u64 f_blk;    // Indicate which blk it resides in
-    u64 ofs_next; // Next addr relative to NVM start
-    u64 ofs_prev; // Prev addr relative to NVM start
+    struct hk_header_node node; // Next addr relative to NVM start
+    u64 ino;               // Indicate which inode it belongs to
+    u64 tstamp;            // Version control
+    u64 f_blk;             // Indicate which blk it resides in
     u64 size;
     u32 cmtime;
     u32 crc32;
-    u8 valid;       // 8B atomic persistence
-    u8 paddings[7]; // Padding to make it 64B
+    u8 valid;        // 8B atomic persistence
+    u8 paddings[15]; // Padding to make it 64B
 } __attribute((__packed__));
 
 static_assert(sizeof(struct hk_header) == 64, "hk_header size mismatch");
@@ -183,9 +186,9 @@ struct hk_tx_info {
     struct hk_jentry_info ji_pi_new;
 };
 
-#define traverse_inode_hdr(sbi, idr, hdr_traverse) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(idr->h_addr)); hdr_traverse != NULL; hdr_traverse = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)))
+#define traverse_inode_hdr(sbi, pi, hdr_traverse) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(pi->root.ofs_next)); hdr_traverse != &pi->root; hdr_traverse = TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->node.ofs_next)))
 
-#define traverse_inode_hdr_safe(sbi, idr, hdr_traverse, hdr_next) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(idr->h_addr)), hdr_next = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)); hdr_traverse != NULL; hdr_traverse = hdr_traverse == NULL ? NULL : hdr_next, hdr_next = hdr_traverse == NULL ? NULL : TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->ofs_next)))
+#define traverse_inode_hdr_safe(sbi, pi, hdr_traverse, hdr_next) for (hdr_traverse = TRANS_OFS_TO_ADDR(sbi, le64_to_cpu(pi->root.ofs_next)), hdr_next = TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->node.ofs_next)); hdr_traverse != &pi->root; hdr_traverse = hdr_next, hdr_next = TRANS_OFS_TO_ADDR(sbi, (((struct hk_header *)hdr_traverse)->node.ofs_next)))
 
 #define traverse_tx_info(ji, slotid, info) for (ji = &info->ji_pi, slotid = 0; slotid < HK_MAX_OBJ_INVOVED; slotid++, ji = hk_tx_get_ji_from_tx_info(info, slotid))
 

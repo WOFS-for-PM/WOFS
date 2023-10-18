@@ -15,6 +15,8 @@ struct hk_dentry {
 	u8	    name[HK_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
+static_assert(sizeof(struct hk_dentry) == 128, "sizeof(struct hk_dentry) != 128");
+
 struct hk_dentry_info {
 	struct hlist_node node;
 	unsigned long hash;

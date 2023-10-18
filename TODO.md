@@ -1,13 +1,13 @@
 # TODO
 
 - [ ] Rebuild gap list when remounting by scanning the summary headers.
-~~- [ ] Using single list to manage in-PM data blocks (No performance improvement)~~
 
 # 2023/10/17 -- 2023/10/18
 
 - [x] Delay the persistent consistency of deallocation of data blocks to the next allocation of data blocks and remount (In doing so, we are not required to chase the link, and thus imporve deletion).
 - [x] Using Gap Tree to manage the gap list.
 - [x] Fix misaligned data hdr. Prevent multiple flushes.
+- [x] Using single list to manage in-PM data blocks (~~No performance improvement.~~Imporve up to 1800MiB/s)
 
 # 2023/10/15 -- 2023/10/16
 

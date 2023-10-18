@@ -56,42 +56,37 @@ struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
     return &sbi->layouts[cpuid];
 }
 
-// idr: inode data root, might be in DRAM or PM
-int sm_remove_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
+u64 sm_get_next_addr_by_dbatch(struct super_block *sb, struct hk_inode_info_header *sih, struct hk_cmt_dbatch *batch)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode_data_root *idr = _idr;
+    return batch->blk_start < 1 ? 0 : TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, batch->blk_start - 1));
+}
 
-    if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev) == _idr) {
-        idr->h_addr = hdr->ofs_next;
-    } else {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev))->ofs_next = hdr->ofs_next;
-    }
+u64 sm_get_prev_addr_by_dbatch(struct super_block *sb, struct hk_inode_info_header *sih, struct hk_cmt_dbatch *batch)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
+    return batch->blk_end - 1 >= sih->ix.num_slots ? 0 : TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, batch->blk_end));
+}
 
-    if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next) != NULL) {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next))->ofs_prev = hdr->ofs_prev;
-    }
+int sm_remove_hdr(struct super_block *sb, struct hk_header *prev_hdr, struct hk_header *hdr)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
 
-    hdr->ofs_next = NULL;
-    hdr->ofs_prev = NULL;
+    prev_hdr->node.ofs_next = TRANS_ADDR_TO_OFS(sbi, TRANS_OFS_TO_ADDR(sbi, hdr->node.ofs_next));
 
     return 0;
 }
 
-// idr: inode data root, might be in DRAM or PM
-int sm_insert_hdr(struct super_block *sb, void *_idr, struct hk_header *hdr)
+// Hybrid link: Providing a consistent view in PM as DRAM
+int sm_insert_hdr(struct super_block *sb, struct hk_header *prev_hdr,
+                  struct hk_header *hdr, struct hk_header *next_hdr)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode_data_root *idr = _idr;
 
-    /* Write Hdr, then persist it */
-    /* Change the link */
-    hdr->ofs_prev = TRANS_ADDR_TO_OFS(sbi, _idr);
-    hdr->ofs_next = idr->h_addr;
-    if (idr->h_addr != 0) {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, idr->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
-    }
-    idr->h_addr = TRANS_ADDR_TO_OFS(sbi, hdr);
+    hdr->node.ofs_next = TRANS_ADDR_TO_OFS(sbi, next_hdr);
+
+    // prev_hdr might be in either DRAM or PM
+    prev_hdr->node.ofs_next = TRANS_ADDR_TO_OFS(sbi, hdr);
 
     return 0;
 }
@@ -134,11 +129,10 @@ int sm_delete_data_sync(struct super_block *sb, u64 blk_addr)
     return 0;
 }
 
-int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
+int sm_invalid_data_sync(struct super_block *sb, u64 prev_addr, u64 blk_addr, u64 ino)
 {
     /*! Note: Do not update tstamp in invalid process, since version control */
-    struct inode *inode;
-    struct hk_header *hdr;
+    struct hk_header *hdr, *prev_hdr = NULL;
     struct hk_layout_info *layout;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_cmt_node *cmt_node;
@@ -150,7 +144,9 @@ int sm_invalid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino)
     cmt_node = hk_cmt_search_node(sb, ino);
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
 
-    sm_remove_hdr(sb, (void *)cmt_node, hdr);
+    prev_hdr = prev_addr == 0 ? &cmt_node->root : sm_get_hdr_by_addr(sb, prev_addr);
+
+    sm_remove_hdr(sb, prev_hdr, hdr);
 
     hk_memunlock_hdr(sb, hdr, &irq_flags);
 
@@ -192,9 +188,10 @@ int sm_update_data_sync(struct super_block *sb, u64 blk_addr, u64 size)
     return 0;
 }
 
-int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime)
+int sm_valid_data_sync(struct super_block *sb, u64 prev_addr, u64 blk_addr, u64 next_addr,
+                       u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime)
 {
-    struct hk_header *hdr;
+    struct hk_header *hdr = NULL, *prev_hdr = NULL, *next_hdr = NULL;
     struct hk_layout_info *layout;
     struct hk_cmt_node *cmt_node;
     unsigned long irq_flags = 0;
@@ -206,6 +203,9 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
 
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
 
+    prev_hdr = prev_addr == 0 ? &cmt_node->root : sm_get_hdr_by_addr(sb, prev_addr);
+    next_hdr = next_addr == 0 ? &cmt_node->root : sm_get_hdr_by_addr(sb, next_addr);
+
     /* Write Hdr, then persist it */
     hk_memunlock_hdr(sb, (void *)hdr, &irq_flags);
     hdr->ino = ino;
@@ -214,7 +214,7 @@ int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk,
     hdr->cmtime = cmtime;
     hdr->size = size;
 
-    sm_insert_hdr(sb, (void *)cmt_node, hdr);
+    sm_insert_hdr(sb, prev_hdr, hdr, next_hdr);
 
     // Let's try fence once with crc32
     hdr->valid = 1;
@@ -557,7 +557,7 @@ int hk_commit_icp(struct super_block *sb, struct hk_cmt_icp *icp)
     pi->i_ctime = cpu_to_le32(icp->ctime);
     pi->i_mtime = cpu_to_le32(icp->mtime);
     pi->i_links_count = cpu_to_le16(icp->links_count);
-    pi->h_addr = 0;
+    pi->root.ofs_next = TRANS_ADDR_TO_OFS(HK_SB(sb), &pi->root);
     pi->i_generation = cpu_to_le32(icp->generation);
     pi->tstamp = icp->tstamp;
     pi->i_flags = cpu_to_le32(icp->flags);

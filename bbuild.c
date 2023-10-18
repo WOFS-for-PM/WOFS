@@ -165,32 +165,33 @@ int hk_failure_recovery(struct super_block *sb)
         layout->atomic_counter = (layout->layout_blks * HK_PBLK_SZ);
         ind_update(&layout->ind, PREP_LAYOUT_APPEND, layout->layout_blks);
 
-        traverse_layout_blks(addr, layout)
-        {
-            hdr = sm_get_hdr_by_addr(sb, addr);
-            if (hdr->valid) {
-                pi = hk_get_pi_by_ino(sb, hdr->ino);
-                /* Remove The Invalid Hdr */
-                if (!pi->valid || hdr->tstamp > pi->tstamp) {
-                    hk_memunlock_hdr(sb, hdr, &irq_flags);
-                    hdr->valid = 0;
-                    hk_memlock_hdr(sb, hdr, &irq_flags);
+        // TODO: We shall rebuilt link structure
+        // traverse_layout_blks(addr, layout)
+        // {
+        //     hdr = sm_get_hdr_by_addr(sb, addr);
+        //     if (hdr->valid) {
+        //         pi = hk_get_pi_by_ino(sb, hdr->ino);
+        //         /* Remove The Invalid Hdr */
+        //         if (!pi->valid || hdr->tstamp > pi->tstamp) {
+        //             hk_memunlock_hdr(sb, hdr, &irq_flags);
+        //             hdr->valid = 0;
+        //             hk_memlock_hdr(sb, hdr, &irq_flags);
 
-                    sm_remove_hdr(sb, (void *)pi, hdr);
-                    ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
-                } else { /* Re insert */
-                    sbi->tstamp = le64_to_cpu(pi->tstamp);
-                    not_free_blks = blk + 1;
+        //             sm_remove_hdr(sb, (void *)pi, hdr);
+        //             ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
+        //         } else { /* Re insert */
+        //             sbi->tstamp = le64_to_cpu(pi->tstamp);
+        //             not_free_blks = blk + 1;
 
-                    sm_remove_hdr(sb, (void *)pi, hdr);
-                    sm_insert_hdr(sb, (void *)pi, hdr);
-                    ind_update(&layout->ind, VALIDATE_BLK, 1);
-                }
-            } else {
-                ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
-            }
-            blk++;
-        }
+        //             sm_remove_hdr(sb, (void *)pi, hdr);
+        //             sm_insert_hdr(sb, (void *)pi, hdr);
+        //             ind_update(&layout->ind, VALIDATE_BLK, 1);
+        //         }
+        //     } else {
+        //         ind_update(&layout->ind, PREP_LAYOUT_REMOVE, 1);
+        //     }
+        //     blk++;
+        // }
         hk_release_layout(sb, cpuid, layout->layout_blks - not_free_blks, false);
         unuse_layout(layout);
     }

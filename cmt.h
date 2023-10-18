@@ -90,10 +90,9 @@ struct hk_cmt_data_info {
     u64 blk_start;
     u64 size;
     u32 cmtime;
-    u8 paddings[3];
-} __attribute__((packed));
-
-static_assert(sizeof(struct hk_cmt_data_info) == 64, "hk_cmt_data_info size is not 64");
+    u64 prev_addr;
+    u64 next_addr;
+};
 
 // TODO: Specific ICP for new inode, unlink inode
 struct hk_cmt_new_inode_info {
@@ -121,11 +120,13 @@ struct hk_cmt_delete_inode_info {
 struct hk_cmt_close_info {
     struct list_head lnode;
     u8 type;
+    u64 tail_addr;
 };
 
 /* Decouple from sih for async flush */
+// TODO: using a special node as root. Since it might occupy too many RAM
 struct hk_cmt_node {
-    u64 h_addr; /* h_addr in memory, same as hk_inode_data_root */
+    struct hk_header_node root;
 
     struct rb_node rnode; /* rb_node */
     u64 ino;
@@ -136,6 +137,8 @@ struct hk_cmt_node {
 
     struct hk_inf_queue op_q; /* Data queue for this inode */
 };
+
+static_assert(sizeof(struct hk_cmt_node) >= sizeof(struct hk_header), "hk_cmt_node should be larger as hk_hedaer");
 
 struct hk_cmt_queue {
     struct rb_root *cmt_forest;

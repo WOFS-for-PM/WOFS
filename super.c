@@ -400,7 +400,7 @@ static struct hk_inode *hk_init(struct super_block *sb,
     root_pi->i_atime = root_pi->i_mtime = root_pi->i_ctime = cpu_to_le32(get_seconds());
     root_pi->ino = cpu_to_le64(0);
     root_pi->valid = 1;
-    root_pi->h_addr = 0;
+    root_pi->root.ofs_next = TRANS_ADDR_TO_OFS(sbi, &root_pi->root);
     hk_memlock_pi(sb, root_pi, &irq_flags);
 
     /* We don't care the order */

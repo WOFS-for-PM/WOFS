@@ -100,7 +100,6 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
     sih->last_dentry = 0;
 
     sih->tstamp = 0;
-    sih->h_addr = 0;
 
     return 0;
 }
@@ -111,16 +110,11 @@ static int hk_rebuild_blks_start(struct super_block *sb,
 {
     int ret;
 
-    sih->h_addr = le64_to_cpu(pi->h_addr);
-
     ret = hk_init_inode_rebuild(sb, reb, pi);
     if (ret)
         return ret;
 
     sih->pi_addr = pi_addr;
-
-    hk_dbg_verbose("Blk Summary head 0x%llx\n",
-                   sih->h_addr);
 
     return ret;
 }
@@ -183,29 +177,10 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
     if (ret)
         goto out;
 
+    /* Inconsistency is fixed before */
     traverse_inode_hdr(sbi, pi, hdr)
     {
-        /* Hdr Conflict */
-        if (hdr->f_blk < sih->ix.num_slots && linix_get(&sih->ix, hdr->f_blk) != 0) {
-            conflict_hdr = sm_get_hdr_by_addr(sb, TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, hdr->f_blk)));
-            if (hdr->tstamp >= conflict_hdr->tstamp) { /* Insert New, Evict Old */
-                addr = sm_get_addr_by_hdr(sb, conflict_hdr);
-
-                use_layout_for_addr(sb, addr);
-                sm_invalid_data_sync(sb, addr, conflict_hdr->ino);
-                unuse_layout_for_addr(sb, addr);
-
-                linix_insert(&sih->ix, hdr->f_blk, sm_get_addr_by_hdr(sb, hdr), true);
-            } else { /* Not Insert */
-                addr = sm_get_addr_by_hdr(sb, hdr);
-
-                use_layout_for_addr(sb, addr);
-                sm_invalid_data_sync(sb, addr, hdr->ino);
-                unuse_layout_for_addr(sb, addr);
-            }
-        } else {
-            linix_insert(&sih->ix, hdr->f_blk, sm_get_addr_by_hdr(sb, hdr), true);
-        }
+        linix_insert(&sih->ix, hdr->f_blk, sm_get_addr_by_hdr(sb, hdr), true);
 
         switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
         case S_IFLNK:
@@ -278,13 +253,13 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, 
     }
 
     hk_dbgv("%s: inode %llu, addr 0x%llx, valid %d, head 0x%llx\n",
-            __func__, ino, sih->pi_addr, pi->valid, pi->h_addr);
+            __func__, ino, sih->pi_addr, pi->valid, pi->root.ofs_next);
 
     sih->ino = ino;
 
 #ifdef CONFIG_CMT_BACKGROUND
     if (!cmt_node) {
-        cmt_node = hk_cmt_node_init(ino);
+        cmt_node = hk_cmt_node_init(sb, ino);
 	    ret = hk_cmt_manage_node(sb, cmt_node, NULL);
         if (ret < 0) {
             hk_dbg("%s: hk_cmt_manage_node failed, ret %d\n", __func__, ret);

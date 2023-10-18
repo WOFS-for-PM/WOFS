@@ -161,7 +161,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
         return 0;
     }
 
-    pidir = hk_get_inode(sb, dir);
+    pidir = hk_get_pi_by_ino(sb, dir->i_ino);
 
     blk_cur = sih->i_num_dentrys / MAX_DENTRY_PER_BLK;
     dentry_ix = sih->i_num_dentrys % MAX_DENTRY_PER_BLK;
@@ -338,7 +338,7 @@ static int hk_start_tx_for_symlink(struct super_block *sb, u64 ino, struct hk_de
 
     int ret = 0;
 
-    pidir = hk_get_inode(sb, dir);
+    pidir = hk_get_pi_by_ino(sb, dir->i_ino);
     if (!pidir) {
         ret = -ENOENT;
         goto out;
@@ -517,7 +517,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     if (len + 1 > sb->s_blocksize)
         goto out;
 
-    pidir = hk_get_inode(sb, dir);
+    pidir = hk_get_pi_by_ino(sb, dir->i_ino);
     if (!pidir)
         goto out_fail;
 
@@ -541,7 +541,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     }
     hk_init_pi(sb, inode, S_IFLNK | 0777, dir->i_flags);
 
-    pi = hk_get_inode(sb, inode);
+    pi = hk_get_pi_by_ino(sb, inode->i_ino);
 
     si = HK_I(inode);
     sih = &si->header;
@@ -576,7 +576,6 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
 {
     struct super_block *sb = dir->i_sb;
     struct inode *inode = dest_dentry->d_inode;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
     struct hk_inode *pidir;
     struct hk_dentry *direntry;
     int err = -ENOMEM;
@@ -589,7 +588,7 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
         goto out;
     }
 
-    pidir = hk_get_inode(sb, dir);
+    pidir = hk_get_pi_by_ino(sb, dir->i_ino);
     if (!pidir) {
         err = -EINVAL;
         goto out;
@@ -633,7 +632,7 @@ static int hk_unlink(struct inode *dir, struct dentry *dentry)
     struct inode *inode = dentry->d_inode;
     struct super_block *sb = dir->i_sb;
     int retval = -ENOMEM;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
+    struct hk_inode *pi = hk_get_pi_by_ino(sb, inode->i_ino);
     struct hk_inode *pidir;
     struct hk_dentry *direntry;
     bool invalidate = false;
@@ -643,7 +642,7 @@ static int hk_unlink(struct inode *dir, struct dentry *dentry)
 
     HK_START_TIMING(unlink_t, unlink_time);
 
-    pidir = hk_get_inode(sb, dir);
+    pidir = hk_get_pi_by_ino(sb, dir->i_ino);
     if (!pidir)
         goto out_err;
 
@@ -764,10 +763,10 @@ static int hk_rename(struct inode *old_dir,
         }
     }
 
-    new_pidir = hk_get_inode(sb, new_dir);
-    old_pidir = hk_get_inode(sb, old_dir);
+    new_pidir = hk_get_pi_by_ino(sb, new_dir->i_ino);
+    old_pidir = hk_get_pi_by_ino(sb, old_dir->i_ino);
 
-    old_pi = hk_get_inode(sb, old_inode);
+    old_pi = hk_get_pi_by_ino(sb, old_inode->i_ino);
 
     old_inode->i_ctime = current_time(old_inode);
     err = hk_commit_linkchange(sb, old_inode);
@@ -800,7 +799,7 @@ static int hk_rename(struct inode *old_dir,
         drop_nlink(old_dir);
 
     if (new_inode) {
-        new_pi = hk_get_inode(sb, new_inode);
+        new_pi = hk_get_pi_by_ino(sb, new_inode->i_ino);
         new_inode->i_ctime = current_time(new_inode);
 
         if (S_ISDIR(old_inode->i_mode)) {

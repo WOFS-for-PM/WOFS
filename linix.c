@@ -25,19 +25,18 @@
 
 #include "hunter.h"
 
-int linix_init(struct linix *ix, u64 num_slots) 
+int linix_init(struct linix *ix, u64 num_slots)
 {
     ix->num_slots = num_slots;
     if (num_slots == 0) {
         ix->slots = NULL;
-    }
-    else {
+    } else {
         ix->slots = kvcalloc(ix->num_slots, sizeof(struct linslot), GFP_KERNEL);
     }
     return 0;
 }
 
-int linix_destroy(struct linix *ix) 
+int linix_destroy(struct linix *ix)
 {
     if (ix->slots) {
         kvfree(ix->slots);
@@ -45,7 +44,7 @@ int linix_destroy(struct linix *ix)
     return 0;
 }
 
-void * __must_check kvrealloc(void* old_ptr, size_t old_size, size_t new_size, gfp_t mode) 
+void *__must_check kvrealloc(void *old_ptr, size_t old_size, size_t new_size, gfp_t mode)
 {
     void *buf;
 
@@ -54,18 +53,17 @@ void * __must_check kvrealloc(void* old_ptr, size_t old_size, size_t new_size, g
         memcpy(buf, old_ptr, ((old_size < new_size) ? old_size : new_size));
         kvfree(old_ptr);
     }
-    
+
     return buf;
 }
 
 /* This should be changed to kvmalloc */
-int linix_extend(struct linix *ix) 
+int linix_extend(struct linix *ix)
 {
     struct linslot *new_slots;
     new_slots = kvrealloc(ix->slots, ix->num_slots * IX_SLOT_SZ, 2 * ix->num_slots * IX_SLOT_SZ, GFP_KERNEL);
 
-    if (new_slots == NULL)
-    {
+    if (new_slots == NULL) {
         return -1;
     }
     memset(new_slots + ix->num_slots, 0,
@@ -80,11 +78,10 @@ int linix_extend(struct linix *ix)
 int linix_shrink(struct linix *ix)
 {
     struct linslot *new_slots;
-    new_slots = kvrealloc(ix->slots, ix->num_slots * IX_SLOT_SZ, 
+    new_slots = kvrealloc(ix->slots, ix->num_slots * IX_SLOT_SZ,
                           ix->num_slots / 2 * IX_SLOT_SZ, GFP_KERNEL);
 
-    if (new_slots == NULL)
-    {
+    if (new_slots == NULL) {
         return -1;
     }
 
@@ -100,8 +97,7 @@ u64 linix_get(struct linix *ix, u64 index)
     u64 blk_addr;
     INIT_TIMING(index_time);
     HK_START_TIMING(linix_get_t, index_time);
-    if (index >= ix->num_slots)
-    {
+    if (index >= ix->num_slots) {
         return 0;
     }
     blk_addr = ix->slots[index].blk_addr;
@@ -110,12 +106,12 @@ u64 linix_get(struct linix *ix, u64 index)
 }
 
 /* Inode Lock must be held before linix insert, and blk_addr */
-int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend) 
+int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
 {
     struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info        *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block          *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info           *sbi = HK_SB(sb);
+    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
+    struct super_block *sb = si->vfs_inode.i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
     INIT_TIMING(insert_time);
     HK_START_TIMING(linix_set_t, insert_time);
 
@@ -135,15 +131,15 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
 }
 
 /* last_index is the last valid index determined by user */
-int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink) 
+int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink)
 {
     struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info        *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block          *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info           *sbi = HK_SB(sb);
+    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
+    struct super_block *sb = si->vfs_inode.i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
 
     ix->slots[index].blk_addr = 0;
-    
+
     if (shrink && ix->num_slots > HK_LINIX_SLOTS) {
         if (last_index + 1 <= ix->num_slots / 2) {
             linix_shrink(ix);

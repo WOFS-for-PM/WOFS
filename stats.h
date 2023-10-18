@@ -160,7 +160,7 @@ typedef struct timespec timing_t;
 #define HK_START_TIMING(name, start) \
     {                                \
         if (measure_timing) {        \
-            MFENCE();   \
+            MFENCE();                \
             getrawmonotonic(&start); \
         }                            \
     }
@@ -169,13 +169,13 @@ typedef struct timespec timing_t;
     {                                                                 \
         if (measure_timing) {                                         \
             INIT_TIMING(end);                                         \
-            MFENCE();                                    \
+            MFENCE();                                                 \
             getrawmonotonic(&end);                                    \
             __this_cpu_add(Timingstats_percpu[name],                  \
                            (end.tv_sec - start.tv_sec) * 1000000000 + \
                                (end.tv_nsec - start.tv_nsec));        \
+            __this_cpu_add(Countstats_percpu[name], 1);               \
         }                                                             \
-        __this_cpu_add(Countstats_percpu[name], 1);                   \
     }
 
 #define HK_STATS_ADD(name, value)                    \

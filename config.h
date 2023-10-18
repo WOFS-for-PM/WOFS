@@ -128,6 +128,9 @@ static inline void hk_flush_buffer(void *buf, uint32_t len, bool fence)
     uint32_t i;
 
     len = len + ((unsigned long)(buf) & (CACHELINE_SIZE - 1));
+
+    HK_ASSERT(((unsigned long)(buf) & (CACHELINE_SIZE - 1)) == 0);
+
     if (support_clwb) {
         for (i = 0; i < len; i += CACHELINE_SIZE)
             _mm_clwb(buf + i);

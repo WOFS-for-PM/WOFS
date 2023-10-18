@@ -101,7 +101,6 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
     data_info->addr_start = batch->addr_start;
     data_info->addr_end = batch->addr_end;
     data_info->blk_start = batch->blk_start;
-    data_info->blk_end = batch->blk_end;
     data_info->tstamp = get_version(sbi);
     if (type == CMT_INVALID_DATA)
         data_info->size = 0;

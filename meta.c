@@ -190,44 +190,35 @@ int sm_update_data_sync(struct super_block *sb, u64 blk_addr, u64 size)
 
     HK_END_TIMING(sm_update_t, time);
     return 0;
-} 
+}
 
 int sm_valid_data_sync(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp, u64 size, u32 cmtime)
 {
-    struct hk_inode *pi;
     struct hk_header *hdr;
     struct hk_layout_info *layout;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct inode *inode = NULL;
     struct hk_cmt_node *cmt_node;
-    u64 blk;
     unsigned long irq_flags = 0;
     INIT_TIMING(valid_time);
 
     HK_START_TIMING(sm_valid_t, valid_time);
 
     cmt_node = hk_cmt_search_node(sb, ino);
-    // pi = hk_get_pi_by_ino(sb, ino);
-    // if (!pi)
-    //     return -1;
 
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
-
-    // hk_info("hdr at: 0x%llx\n", (u64)hdr);
 
     /* Write Hdr, then persist it */
     hk_memunlock_hdr(sb, (void *)hdr, &irq_flags);
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
-    // TODO: pass cmtime and size
-    hdr->cmtime = size;
-    hdr->size = cmtime;
+    hdr->cmtime = cmtime;
+    hdr->size = size;
 
     sm_insert_hdr(sb, (void *)cmt_node, hdr);
 
-    PERSISTENT_BARRIER();
+    // Let's try fence once with crc32
     hdr->valid = 1;
+    hdr->crc32 = hk_crc32c(~0, (const u8 *)hdr, sizeof(struct hk_header));
     /* this might be relatively slow */
     hk_flush_buffer(hdr, sizeof(struct hk_header), true);
     hk_memlock_hdr(sb, hdr, &irq_flags);
@@ -466,7 +457,7 @@ int hk_commit_attrchange(struct super_block *sb, struct inode *inode)
 }
 
 int hk_commit_icp_attrchange(struct super_block *sb, struct hk_cmt_icp *icp)
-{ 
+{
     struct hk_al_entry entry;
     struct hk_setattr_entry *setattr;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -495,9 +486,6 @@ int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_
     struct hk_setattr_entry *setattr;
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info_header *sih = HK_IH(inode);
-    struct hk_inode *pi;
-
-    pi = hk_get_inode(sb, inode);
 
     setattr = &entry.entry.setattr;
     entry.type = SET_ATTR;
@@ -511,7 +499,7 @@ int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_
     setattr->size = cpu_to_le64(ia_size);
     setattr->tstamp = get_version(sbi);
 
-    hk_do_commit_al_entry(sb, pi->ino, &entry);
+    hk_do_commit_al_entry(sb, inode->i_ino, &entry);
 
     return 0;
 }
@@ -901,7 +889,7 @@ int hk_format_meta(struct super_block *sb)
         rg = hk_get_attr_log_by_alid(sb, alid);
         rg->evicting = 0;
         hk_reset_attr_log(sb, rg);
-        hk_flush_buffer((void *)rg, sizeof(struct hk_attr_log), false);
+        hk_flush_buffer((void *)rg, CACHELINE_SIZE, false);
     }
     hk_memlock_range(sb, (void *)sbi->al_addr, sbi->al_size, &irq_flags);
 

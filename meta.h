@@ -4,18 +4,19 @@
 #include "hunter.h"
 
 struct hk_header {
-    u8 valid;        // 8B atomic persistence
-    u64 ino;         // Indicate which inode it belongs to
-    u64 tstamp;      // Version control
-    u64 f_blk;       // Indicate which blk it resides in
-    u64 ofs_next;    // Next addr relative to NVM start
-    u64 ofs_prev;    // Prev addr relative to NVM start
+    u64 ino;      // Indicate which inode it belongs to
+    u64 tstamp;   // Version control
+    u64 f_blk;    // Indicate which blk it resides in
+    u64 ofs_next; // Next addr relative to NVM start
+    u64 ofs_prev; // Prev addr relative to NVM start
     u64 size;
     u32 cmtime;
-    u8 paddings[10]; // Padding to make it 64B
+    u32 crc32;
+    u8 valid;       // 8B atomic persistence
+    u8 paddings[7]; // Padding to make it 64B
 } __attribute((__packed__));
 
-static_assert(sizeof(struct hk_header) != 64, "hk_header size mismatch");
+static_assert(sizeof(struct hk_header) == 64, "hk_header size mismatch");
 
 struct hk_setattr_entry {
     __le16 mode;
@@ -53,7 +54,10 @@ struct hk_attr_log {
     u8 last_valid_linkchange;
     __le64 ino;
     struct hk_al_entry entries[HK_ATTRLOG_ENTY_SLOTS];
+    u8 paddings[256 - sizeof(u8) - sizeof(u8) - sizeof(u8) - sizeof(__le64) - sizeof(struct hk_al_entry) * HK_ATTRLOG_ENTY_SLOTS];
 } __attribute((__packed__));
+
+static_assert(sizeof(struct hk_attr_log) == 256, "hk_attr_log size mismatch");
 
 static inline void hk_dump_mentry(struct super_block *sb, struct hk_al_entry *entry)
 {

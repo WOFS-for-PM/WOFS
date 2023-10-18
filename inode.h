@@ -49,10 +49,10 @@ struct hk_inode {
     //! We don't need this for now
     __le32 csum; /* CRC32 checksum */
 
-    u8 paddings[PM_ACCESS_GRANU - 93];
+    u8 paddings[43];
 } __attribute((__packed__));
 
-static_assert(sizeof(struct hk_inode) != PM_ACCESS_GRANU, "hk_inode size mismatch");
+static_assert(sizeof(struct hk_inode) == 128, "hk_inode size mismatch");
 
 /*
  * hk-specific inode icp kept in DRAM

@@ -130,7 +130,7 @@ out:
     return copied ? copied : error;
 }
 
-bool hk_check_overlay(struct hk_inode_info *si, u64 index)
+static __always_inline bool hk_check_overlay(struct hk_inode_info *si, u64 index)
 {
     struct hk_inode_info_header *sih = &si->header;
     bool is_overlay = false;
@@ -142,10 +142,10 @@ bool hk_check_overlay(struct hk_inode_info *si, u64 index)
     return is_overlay;
 }
 
-bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
-                        u64 start_index, u64 end_index,
-                        loff_t *each_ofs, size_t *each_size,
-                        size_t len)
+static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
+                               u64 start_index, u64 end_index,
+                               loff_t *each_ofs, size_t *each_size,
+                               size_t len)
 {
     struct super_block *sb = si->vfs_inode.i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
@@ -199,10 +199,10 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
     return is_overlay;
 }
 
-int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
-                     loff_t ofs, size_t size, unsigned char *content,
-                     u64 index_cur, u64 start_index, u64 end_index,
-                     size_t *out_size)
+static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
+                            loff_t ofs, size_t size, unsigned char *content,
+                            u64 index_cur, u64 start_index, u64 end_index,
+                            size_t *out_size)
 {
     u64 i;
     size_t each_blks, each_size;
@@ -214,8 +214,7 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = &si->header;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
-    struct hk_header *hdr, *hdr_start;
+    struct hk_header *hdr;
     struct hk_cmt_dbatch batch;
     unsigned long irq_flags = 0;
     u64 _size = 0;
@@ -223,7 +222,6 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     INIT_TIMING(memcpy_time);
 
     addr = prep->target_addr;
-    hdr_start = sm_get_hdr_by_addr(sb, addr);
     *out_size = 0;
 
     for (i = 0; i < prep->blks_prepared; i++) {
@@ -360,9 +358,10 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+        _size = ofs + each_size;
 #ifndef CONFIG_CMT_BACKGROUND
         use_layout_for_addr(sb, addr);
-        sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), each_size, inode->i_ctime.tv_sec);
+        sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
         unuse_layout_for_addr(sb, addr);
         /* flush header */
         hk_flush_buffer(addr + HK_LBLK_SZ, CACHELINE_SIZE, true);
@@ -475,8 +474,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = &si->header;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
-
     pgoff_t index, start_index, end_index, i;
     unsigned long blks;
     loff_t isize, pos;
@@ -596,17 +593,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     }
 
 out:
-    /* All of these have been done */
-    /* FIXME: add h_addr to setattr entry */
-    /* TODO: Commit with background commit thread, remove from critical path */
-    /* FIXME: In the later experiment, we omit the code below since we think it's committed by background thread  */
-#ifdef CONFIG_CMT_BACKGROUND
-    // Optimizing for write. Size and Time can be recalculated by background thread.
-    // hk_delegate_attr_async(sb, inode);
-#else
-    hk_commit_attrchange(sb, inode);
-#endif
-
     HK_END_TIMING(write_t, write_time);
     return written ? written : error;
 }

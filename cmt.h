@@ -88,10 +88,12 @@ struct hk_cmt_data_info {
     u64 addr_start;
     u64 addr_end;
     u64 blk_start;
-    u64 blk_end;
     u64 size;
     u32 cmtime;
-};
+    u8 paddings[3];
+} __attribute__((packed));
+
+static_assert(sizeof(struct hk_cmt_data_info) == 64, "hk_cmt_data_info size is not 64");
 
 // TODO: Specific ICP for new inode, unlink inode
 struct hk_cmt_new_inode_info {

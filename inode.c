@@ -455,7 +455,7 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
     inode->i_generation = atomic_add_return(1, &sbi->next_generation);
     inode->i_size = size;
 
-    diri = hk_get_inode(sb, dir);
+    diri = hk_get_pi_by_ino(sb, dir->i_ino);
     if (!diri) {
         errval = -EACCES;
         goto fail1;
@@ -586,7 +586,6 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
 {
     struct super_block *sb = inode->i_sb;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode *pi = hk_get_inode(sb, inode);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = &si->header;
     struct hk_cmt_dbatch dbatch;
@@ -597,9 +596,6 @@ static void hk_truncate_file_blocks(struct inode *inode, loff_t start, loff_t en
 
     // TODO: We're not handle holes in the file
     inode->i_mtime = inode->i_ctime = current_time(inode);
-
-    hk_dbg_verbose("truncate: pi %p iblocks %lx %llx %llx %llx\n", pi,
-                   sih->i_blocks, start, end, pi->i_size);
 
     start_index = (start + (1UL << data_bits) - 1) >> data_bits;
 

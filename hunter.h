@@ -141,6 +141,7 @@ struct hk_range_node {
 #include "dw.h"
 #include "namei.h"
 #include "linix.h"
+#include "bbuild.h"
 #include "super.h"
 #include "meta.h"
 #include "inode.h"
@@ -298,6 +299,7 @@ static inline u64 _round_up(u64 value, u64 align)
 
 /* ======================= ANCHOR: mlist.c ========================= */
 int hk_range_insert_range(struct rb_root_cached *tree, unsigned long range_low, unsigned long range_high);
+int hk_range_delete_range_node(struct rb_root_cached *tree, struct hk_range_node *node);
 unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num);
 void hk_range_free_all(struct rb_root_cached *tree);
 

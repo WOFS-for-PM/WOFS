@@ -16,6 +16,7 @@ enum hk_cmt_info_type {
 };
 
 /* commit data */
+// [blk_start, blk_end)
 struct hk_cmt_dbatch {
     u64 addr_start;
     u64 addr_end;

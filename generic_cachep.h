@@ -69,4 +69,6 @@ DECLARE_GENERIC_CACHEP(hk_cmt_close_info, GFP_ATOMIC);
 
 DECLARE_GENERIC_CACHEP(hk_cmt_node, GFP_ATOMIC);
 
+DECLARE_GENERIC_CACHEP(hk_recovery_node, GFP_KERNEL);
+
 #endif

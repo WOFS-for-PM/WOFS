@@ -32,3 +32,5 @@ DEFINE_GENERIC_CACHEP(hk_cmt_close_info);
 
 DEFINE_GENERIC_CACHEP(hk_cmt_node);
 
+DEFINE_GENERIC_CACHEP(hk_recovery_node)
+

@@ -1,6 +1,10 @@
 # TODO
+- [ ] Failure Recovery
+  - [ ] Undo Journal 
+- [ ] Debug Failure Reocvery
 
-- [ ] Rebuild gap list when remounting by scanning the summary headers.
+# 2023/10/21
+- [x] Rebuild gap list when remounting by scanning the summary headers.
 
 # 2023/10/17 -- 2023/10/18
 

@@ -8,6 +8,13 @@ static inline int hk_rbtree_compare_range_node(struct hk_range_node *curr, unsig
     return key < curr->range_low ? -1 : (key == curr->range_low ? 0 : 1);
 }
 
+int hk_range_delete_range_node(struct rb_root_cached *tree, struct hk_range_node *node)
+{
+    rb_erase_cached(&node->rbnode, tree);
+    hk_free_hk_range_node(node);
+    return 0;
+}
+
 int hk_range_insert_range_node(struct rb_root_cached *tree, struct hk_range_node *new_node)
 {
     struct hk_range_node *curr;
@@ -167,7 +174,7 @@ int hk_range_insert_range(struct rb_root_cached *tree, unsigned long range_low, 
 
     return ret;
 }
- 
+
 // num is the request number passed in and the allocated number returned
 unsigned long hk_range_pop(struct rb_root_cached *tree, unsigned long *num)
 {

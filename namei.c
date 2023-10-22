@@ -282,13 +282,14 @@ struct dentry *hk_get_parent(struct dentry *child)
 int hk_start_tx_for_new_inode(struct super_block *sb, u64 ino, struct hk_dentry *direntry,
                               u64 dir_ino, umode_t mode)
 {
-    struct hk_inode *pidir = NULL;
-    struct hk_inode *pi;
+    struct hk_inode *pidir = NULL, *pi;
     unsigned long irq_flags = 0;
     int ret = 0;
 
     pidir = hk_get_pi_by_ino(sb, dir_ino);
     pi = hk_get_pi_by_ino(sb, ino);
+
+    hk_create_al_snapshot(sb, pidir);
 
     switch (mode & S_IFMT) {
     case S_IFDIR:
@@ -321,7 +322,9 @@ int hk_start_tx_for_unlink(struct super_block *sb, struct hk_inode *pi,
     unsigned long irq_flags = 0;
 
     /* make sure meta consistency */
-    hk_evicting_attr_log_to_inode(sb, pi);
+    hk_create_al_snapshot(sb, pidir);
+    hk_create_al_snapshot(sb, pi);
+
     ret = hk_start_tx(sb, UNLINK, pi, direntry, pidir);
 
     if (invalidate) {
@@ -364,7 +367,8 @@ static int hk_start_tx_for_rename(struct super_block *sb, struct hk_inode *pi,
     u64 ino = le64_to_cpu(pi->ino);
 
     /* make sure meta consistency */
-    hk_evicting_attr_log_to_inode(sb, pi);
+    hk_create_al_snapshot(sb, pi_par);
+    hk_create_al_snapshot(sb, pi_new);
 
     ret = hk_start_tx(sb, RENAME, pi, pd, pd_new, pi_par, pi_new);
 out:

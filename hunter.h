@@ -377,9 +377,10 @@ void hk_destory_dir_table(struct super_block *sb, struct hk_inode_info_header *s
 
 /* ======================= ANCHOR: meta.c ========================= */
 int hk_format_meta(struct super_block *sb);
-bool hk_get_cur_commit_al_entry(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, 
-					   struct hk_al_entry *entry);
 struct hk_attr_log *hk_get_attr_log_by_alid(struct super_block *sb, int alid);
+struct hk_attr_log *hk_get_attr_log_by_ino(struct super_block *sb, u64 ino);
+void hk_create_al_snapshot(struct super_block *sb, struct hk_inode *pi);
+int hk_reset_attr_log(struct super_block *sb, struct hk_attr_log *al);
 int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al);
 int hk_evicting_attr_log_to_inode(struct super_block *sb, struct hk_inode *pi);
 

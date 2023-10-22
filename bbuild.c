@@ -75,37 +75,27 @@ int hk_save_regions(struct super_block *sb)
     return 0;
 }
 
-static int hk_inode_recovery_from_jentry(struct super_block *sb, struct hk_jentry *je)
+static void hk_revert_al_snapshot(struct super_block *sb, struct hk_inode *pi)
 {
-    struct hk_inode *pi;
-
-    // TODO: Fine-grain inode recovery
-    return 0;
-}
-
-static int hk_inode_recovery(struct super_block *sb, struct hk_inode *pi, struct hk_jentry *je_pi,
-                             bool create, bool invalidate)
-{
+    struct hk_al_entry *attr_entry, *link_change_entry;
     struct hk_sb_info *sbi = HK_SB(sb);
-    unsigned long irq_flags = 0;
+    struct hk_attr_log *al;
+    int slotid;
 
-    // TODO: Fine-grain inode recovery
-    return 0;
+    attr_entry = TRANS_OFS_TO_ADDR(sbi, pi->tx_attr_entry);
+    link_change_entry = TRANS_OFS_TO_ADDR(sbi, pi->tx_link_change_entry);
+
+    al = hk_get_attr_log_by_ino(sb, pi->ino);
+    for (slotid = 0; slotid < HK_ATTRLOG_ENTY_SLOTS; slotid++) {
+        if (attr_entry == &al->entries[slotid]) {
+            al->last_valid_setattr = slotid;
+        } else if (link_change_entry == &al->entries[slotid]) {
+            al->last_valid_linkchange = slotid;
+        }
+    }
 }
 
-static int hk_dentry_recovery(struct super_block *sb, u64 dir_ino, struct hk_jentry *je_pd, bool invalidate)
-{
-    struct inode *dir;
-    const char *name;
-    int name_len;
-    u64 ino;
-    u16 link_change = 0;
-
-    // TODO: Fine-grain dentry recovery
-    return 0;
-}
-
-/* Re-do Recovery (Redo Journal) */
+/* Undo Recovery (Undo Journal) */
 static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journal *jnl)
 {
     int ret = 0;
@@ -115,17 +105,108 @@ static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journ
     struct hk_jentry *je_pd_new;
     struct hk_jentry *je_pi_par;
     struct hk_jentry *je_pi_new;
-    struct hk_jentry *je_pd_sym; /* only for symlink */
 
-    struct hk_inode *pi;
+    struct hk_inode *pi, *pi_par, *pi_new;
+    struct hk_dentry *pd, *pd_new;
 
-    struct inode *dir, *inode;
-    const char *symname;
-    int symlen;
+    struct hk_attr_log *al;
+
     unsigned long irq_flags = 0;
     u8 jtype = jnl->jhdr.jtype;
 
-    // TODO: Fine-grain journal recovery
+    hk_memunlock_all(sb, &irq_flags);
+    switch (jtype) {
+    case IDLE:
+        goto out;
+    case CREATE:
+    case MKDIR:
+    case LINK:
+    case SYMLINK:
+        /* fall thru */
+        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);
+        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);
+        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 2);
+
+        /* clear pi */
+        pi = TRANS_OFS_TO_ADDR(sbi, je_pi->data);
+        if (jtype != LINK) {
+            pi->valid = 0;
+        }
+
+        /* clear dentry */
+        pd = TRANS_OFS_TO_ADDR(sbi, je_pd->data);
+        pd->valid = 0;
+
+        /* clear pi_par's attr log, since we've apply before transaction start */
+        pi_par = TRANS_OFS_TO_ADDR(sbi, je_pi_par->data);
+        al = hk_get_attr_log_by_ino(sb, pi_par->ino);
+        if (al->ino == pi_par->ino) {
+            hk_revert_al_snapshot(sb, pi_par);
+        }
+
+        /* if this is a symlink, we clear its data block for symname later */
+        break;
+    case UNLINK:
+        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);
+        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);
+        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 2);
+
+        /* validate inode */
+        pi = TRANS_OFS_TO_ADDR(sbi, je_pi->data);
+        pi->valid = 1;
+        al = hk_get_attr_log_by_ino(sb, pi->ino);
+        if (al->ino == pi->ino) {
+            hk_revert_al_snapshot(sb, pi);
+        }
+
+        /* valid dentry */
+        pd = TRANS_OFS_TO_ADDR(sbi, je_pd->data);
+        pd->valid = 1;
+
+        /* 3. invalid blks belongs to inode, we don't need invalidators */
+        pi_par = TRANS_OFS_TO_ADDR(sbi, je_pi_par->data);
+        al = hk_get_attr_log_by_ino(sb, pi_par->ino);
+        if (al->ino == pi_par->ino) {
+            hk_revert_al_snapshot(sb, pi_par);
+        }
+        break;
+    case RENAME:
+        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);     /* self */
+        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);     /* self-dentry */
+        je_pd_new = hk_get_jentry_by_slotid(sb, txid, 2); /* new-dentry */
+        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 3); /* parent */
+        je_pi_new = hk_get_jentry_by_slotid(sb, txid, 4); /* new-parent */
+
+        /* revert to rename non happen */
+        pi = TRANS_OFS_TO_ADDR(sbi, je_pi->data);
+        al = hk_get_attr_log_by_ino(sb, pi->ino);
+        if (al->ino == pi->ino) {
+            hk_revert_al_snapshot(sb, pi);
+        }
+
+        pd = TRANS_OFS_TO_ADDR(sbi, je_pd->data);
+        pd->valid = 1;
+
+        pd_new = TRANS_OFS_TO_ADDR(sbi, je_pd_new->data);
+        pd->valid = 0;
+
+        pi_par = TRANS_OFS_TO_ADDR(sbi, je_pi_par->data);
+        al = hk_get_attr_log_by_ino(sb, pi_par->ino);
+        if (al->ino == pi_par->ino) {
+            hk_revert_al_snapshot(sb, pi_par);
+        }
+
+        pi_new = TRANS_OFS_TO_ADDR(sbi, je_pi_new->data);
+        al = hk_get_attr_log_by_ino(sb, pi_new->ino);
+        if (al->ino == pi_new->ino) {
+            hk_revert_al_snapshot(sb, pi_new);
+        }
+
+        break;
+    default:
+        break;
+    }
+    hk_memlock_all(sb, &irq_flags);
 
     hk_finish_tx(sb, txid);
 out:
@@ -241,19 +322,19 @@ int hk_failure_recovery(struct super_block *sb)
     struct hk_range_node *node;
     int ret = 0;
 
-    /* Step 1: Undo Attr Log */
-    for (alid = 0; alid < sbi->al_slots; alid++) {
-        al = hk_get_attr_log_by_alid(sb, alid);
-        if (al->evicting || le64_to_cpu(al->ino) != (u64)-1) {
-            hk_evicting_attr_log(sb, al);
-        }
-    }
-
-    /* Step 2: Undo Journal Here */
+    /* Step 1: Undo Transactions */
     for (txid = 0; txid < sbi->j_slots; txid++) {
         jnl = hk_get_journal_by_txid(sb, txid);
         if (jnl->jhdr.jofs_head != jnl->jhdr.jofs_tail) {
             hk_journal_recovery(sb, txid, jnl);
+        }
+    }
+
+    /* Step 2: Redo Attr Log, pi's metadata is now consistent at pi->tstamp */
+    for (alid = 0; alid < sbi->al_slots; alid++) {
+        al = hk_get_attr_log_by_alid(sb, alid);
+        if (al->evicting || le64_to_cpu(al->ino) != (u64)-1) {
+            hk_evicting_attr_log(sb, al);
         }
     }
 
@@ -276,8 +357,6 @@ int hk_failure_recovery(struct super_block *sb)
         layout->num_gaps_indram = 0;
         ind_update(&layout->ind, PREP_LAYOUT_APPEND, layout->layout_blks);
 
-        // TODO: We shall rebuilt link structure
-        // NOTE: Do not trust layout
         traverse_layout_blks(addr, layout)
         {
             hdr = sm_get_hdr_by_addr(sb, addr);
@@ -402,6 +481,8 @@ static bool hk_try_normal_recovery(struct super_block *sb)
     struct hk_super_block *super = sbi->hk_sb;
     struct hk_layout_info *layout;
     bool is_failure = false;
+    u64 blk = 0, addr = 0;
+    struct hk_header *hdr;
     int cpuid;
 
     if (le32_to_cpu(super->s_valid_umount) == HK_VALID_UMOUNT) {
@@ -416,6 +497,17 @@ static bool hk_try_normal_recovery(struct super_block *sb)
             layout->ind.prep_blks = le64_to_cpu(super->s_layout->s_ind.prep_blks);
             layout->ind.valid_blks = le64_to_cpu(super->s_layout->s_ind.valid_blks);
             layout->ind.total_blks = le64_to_cpu(super->s_layout->s_ind.total_blks);
+
+            /* Rebuilding Gap Tree */
+            traverse_layout_blks(addr, layout)
+            {
+                hdr = sm_get_hdr_by_addr(sb, addr);
+                if (!hdr->valid) {
+                    blk = hk_get_dblk_by_addr(sbi, addr);
+                    hk_range_insert_range(&layout->gaps_tree, blk, blk);
+                    layout->num_gaps_indram++;
+                }
+            }
         }
         goto out;
     } else {

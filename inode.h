@@ -18,14 +18,14 @@ enum hk_new_inode_type {
  */
 struct hk_inode {
     struct hk_header_node root; /* Data Header for this inode */
-    u8 valid;                  /* Is this inode valid? */
-    __le32 i_flags;            /* Inode flags */
-    __le64 i_size;             /* Size of data in bytes */
-    __le32 i_ctime;            /* Inode modification time */
-    __le32 i_mtime;            /* Inode Linear Index Modification time */
-    __le32 i_atime;            /* Access time */
-    __le16 i_mode;             /* File mode */
-    __le16 i_links_count;      /* Links count */
+    u8 valid;                   /* Is this inode valid? */
+    __le32 i_flags;             /* Inode flags */
+    __le64 i_size;              /* Size of data in bytes */
+    __le32 i_ctime;             /* Inode modification time */
+    __le32 i_mtime;             /* Inode Linear Index Modification time */
+    __le32 i_atime;             /* Access time */
+    __le16 i_mode;              /* File mode */
+    __le16 i_links_count;       /* Links count */
 
     __le64 i_xattr; /* Extended attribute block */
 
@@ -40,11 +40,13 @@ struct hk_inode {
     struct {
         __le32 rdev; /* major/minor # */
     } dev;           /* device inode */
+    
+    __le64 tx_attr_entry; /* Used attr entry slot for transcation */
+    __le64 tx_link_change_entry; /* Used linkchanged entry slot for transcation */
 
     //! We don't need this for now
     __le32 csum; /* CRC32 checksum */
-
-    u8 padding[43]; /* Padding to 128 bytes */
+    u8 padding[27]; /* Padding to 128 bytes */
 } __attribute((__packed__));
 
 static_assert(sizeof(struct hk_inode) == 128, "hk_inode size mismatch");

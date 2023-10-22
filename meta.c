@@ -344,20 +344,50 @@ int hk_evicting_attr_log(struct super_block *sb, struct hk_attr_log *al)
     return 0;
 }
 
+/* cur_commit is returned at @entry */
+bool hk_get_cur_commit_al_entry(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, struct hk_al_entry **entry)
+{
+    bool commit_found = false;
+    struct hk_attr_log *al;
+
+    al = hk_get_attr_log_by_ino(sb, pi->ino);
+    if (al->ino == pi->ino) /* Cur Commit */
+    {
+        switch (type) {
+        case SET_ATTR:
+            if (al->last_valid_setattr != (u8)-1) {
+                *entry = &al->entries[al->last_valid_setattr];
+                commit_found = true;
+            }
+            break;
+        case LINK_CHANGE:
+            if (al->last_valid_linkchange != (u8)-1) {
+                *entry = &al->entries[al->last_valid_linkchange];
+                commit_found = true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    *entry = NULL;
+    return commit_found;
+}
+
 /* apply region to pi */
 int hk_evicting_attr_log_to_inode(struct super_block *sb, struct hk_inode *pi)
 {
-    struct hk_al_entry entry;
+    struct hk_al_entry *entry;
     bool commit_found = false;
 
     commit_found = hk_get_cur_commit_al_entry(sb, pi, SET_ATTR, &entry);
     if (commit_found) {
-        hk_evicting_al_entry_once(sb, pi, &entry);
+        hk_evicting_al_entry_once(sb, pi, entry);
     }
 
     commit_found = hk_get_cur_commit_al_entry(sb, pi, LINK_CHANGE, &entry);
     if (commit_found) {
-        hk_evicting_al_entry_once(sb, pi, &entry);
+        hk_evicting_al_entry_once(sb, pi, entry);
     }
 
     return 0;
@@ -403,34 +433,16 @@ int hk_do_commit_al_entry(struct super_block *sb, u64 ino, struct hk_al_entry *e
     return 0;
 }
 
-/* cur_commit is returned at @entry */
-bool hk_get_cur_commit_al_entry(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, struct hk_al_entry *entry)
+void hk_create_al_snapshot(struct super_block *sb, struct hk_inode *pi)
 {
-    bool commit_found = false;
-    struct hk_attr_log *rg;
+    struct hk_al_entry *attr_entry, *link_change_entry;
+    struct hk_sb_info *sbi = HK_SB(sb);
+    
+    hk_get_cur_commit_al_entry(sb, pi, SET_ATTR, &attr_entry);
+    hk_get_cur_commit_al_entry(sb, pi, LINK_CHANGE, &link_change_entry);
 
-    rg = hk_get_attr_log_by_ino(sb, pi->ino);
-    if (rg->ino == pi->ino) /* Cur Commit */
-    {
-        switch (type) {
-        case SET_ATTR:
-            if (rg->last_valid_setattr != (u8)-1) {
-                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_setattr], sizeof(struct hk_al_entry));
-                commit_found = true;
-            }
-            break;
-        case LINK_CHANGE:
-            if (rg->last_valid_linkchange != (u8)-1) {
-                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_linkchange], sizeof(struct hk_al_entry));
-                commit_found = true;
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
-    return commit_found;
+    pi->tx_link_change_entry = link_change_entry == NULL ? (u8)-1 : TRANS_ADDR_TO_OFS(sbi, link_change_entry);
+    pi->tx_attr_entry = attr_entry == NULL ? (u8)-1 : TRANS_ADDR_TO_OFS(sbi, attr_entry);
 }
 
 /* ======================= ANCHOR: commit newattr ========================= */
@@ -708,6 +720,7 @@ int do_start_tx(struct super_block *sb, int txid, struct hk_tx_info *info)
     jtail = jcur;
 
     /* commit */
+    PERSISTENT_BARRIER();
     jnl->jhdr.jofs_tail = TRANS_ADDR_TO_OFS(sbi, jtail);
     hk_flush_buffer(&jnl->jhdr, sizeof(struct hk_jheader), true);
 
@@ -850,7 +863,7 @@ int hk_format_meta(struct super_block *sb)
     struct hk_sb_info *sbi = HK_SB(sb);
     unsigned long irq_flags = 0;
     struct hk_header *hdr;
-    struct hk_attr_log *rg;
+    struct hk_attr_log *al;
     struct hk_journal *jnl;
     unsigned long bid, alid, txid;
 
@@ -886,10 +899,10 @@ int hk_format_meta(struct super_block *sb)
     /* Step 4: Format Attr Logs */
     hk_memunlock_range(sb, (void *)sbi->al_addr, sbi->al_size, &irq_flags);
     for (alid = 0; alid < sbi->al_slots; alid++) {
-        rg = hk_get_attr_log_by_alid(sb, alid);
-        rg->evicting = 0;
-        hk_reset_attr_log(sb, rg);
-        hk_flush_buffer((void *)rg, CACHELINE_SIZE, false);
+        al = hk_get_attr_log_by_alid(sb, alid);
+        al->evicting = 0;
+        hk_reset_attr_log(sb, al);
+        hk_flush_buffer((void *)al, CACHELINE_SIZE, false);
     }
     hk_memlock_range(sb, (void *)sbi->al_addr, sbi->al_size, &irq_flags);
 

@@ -38,7 +38,7 @@
  */
 #define HK_PBLK_SZ            PAGE_SIZE
 #define HK_LBLK_SZ            PAGE_SIZE /* logic block size */
-#define HK_NUM_INO            (1024 * 1024)
+#define HK_NUM_INO            (2 * 1024 * 1024) /* extend to 2M files */
 #define HK_ATTRLOG_SLOTS      HK_NUM_INO /* one-to-one mapping */
 #define HK_ATTRLOG_ENTY_SLOTS (4)
 #define HK_LINIX_SLOTS        (1024 * 256) /* related to init size */

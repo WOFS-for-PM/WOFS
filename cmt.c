@@ -302,11 +302,12 @@ int hk_process_unlink_info(struct super_block *sb, u64 ino, struct hk_cmt_unlink
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode *pi = hk_get_pi_by_ino(sb, ino);
     u64 pidir_ino = unlink_info->dir_inode_cp.ino;
+    struct hk_inode *pidir = hk_get_pi_by_ino(sb, pidir_ino);
     int txid = 0;
     INIT_TIMING(time);
 
     HK_START_TIMING(process_unlink_inode_info_t, time);
-    txid = hk_start_tx_for_unlink(sb, pi, unlink_info->direntry, pidir_ino, unlink_info->invalidate);
+    txid = hk_start_tx_for_unlink(sb, pi, unlink_info->direntry, pidir, unlink_info->invalidate);
     if (txid < 0) {
         hk_dbgv("hk_start_tx_for_unlink failed\n");
         return txid;

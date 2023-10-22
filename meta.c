@@ -437,12 +437,12 @@ void hk_create_al_snapshot(struct super_block *sb, struct hk_inode *pi)
 {
     struct hk_al_entry *attr_entry, *link_change_entry;
     struct hk_sb_info *sbi = HK_SB(sb);
-    
+
     hk_get_cur_commit_al_entry(sb, pi, SET_ATTR, &attr_entry);
     hk_get_cur_commit_al_entry(sb, pi, LINK_CHANGE, &link_change_entry);
 
-    pi->tx_link_change_entry = link_change_entry == NULL ? (u8)-1 : TRANS_ADDR_TO_OFS(sbi, link_change_entry);
-    pi->tx_attr_entry = attr_entry == NULL ? (u8)-1 : TRANS_ADDR_TO_OFS(sbi, attr_entry);
+    pi->tx_link_change_entry = TRANS_ADDR_TO_OFS(sbi, link_change_entry);
+    pi->tx_attr_entry = TRANS_ADDR_TO_OFS(sbi, attr_entry);
 }
 
 /* ======================= ANCHOR: commit newattr ========================= */

@@ -109,6 +109,7 @@ enum timing_category {
     process_unlink_inode_info_t,
     process_delete_inode_info_t,
     process_close_inode_info_t,
+    flush_cmt_t,
 
     /* Linix */
     linix_title_t,

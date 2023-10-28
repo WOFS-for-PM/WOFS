@@ -766,6 +766,9 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
     bool use_mt = true;
     u64 cnt = 0;
     int i = 0, cmt_work_id = 0, flush_work_id = 0;
+    INIT_TIMING(time);
+
+    HK_START_TIMING(flush_cmt_t, time);
 
     init_waitqueue_head(&flush_finish_wq);
 
@@ -837,6 +840,7 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
         }
     }
 
+    HK_END_TIMING(flush_cmt_t, time);
     hk_info("All cmts flushed\n");
 }
 

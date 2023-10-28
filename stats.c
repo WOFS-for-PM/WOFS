@@ -85,6 +85,7 @@ const char *Timingstring[TIMING_NUM] = {
     "process_unlink_inode_info",
     "process_delete_inode_info",
     "process_close_inode_info",
+    "flush_cmt",
 
     /* Linear index */
     "=================== LinIX ===================",

@@ -74,6 +74,7 @@ struct hk_cmt_info {
 struct hk_cmt_queue {
     DEFINE_CHASHTABLE(table, HK_CMT_QUEUE_BITS);
     spinlock_t locks[1 << HK_CMT_QUEUE_BITS];
+    spinlock_t flush_locks[1 << HK_CMT_QUEUE_BITS];
     u64 nitems[1 << HK_CMT_QUEUE_BITS];
     void *fetchers;
     int nfetchers

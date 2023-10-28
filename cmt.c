@@ -446,12 +446,21 @@ static int hk_cmt_worker_thread(void *arg)
             /* NOTE: single lock-free consumer: make sure the number
                      items is more than per process pass */
             if (hk_get_nitems_in_cq_roughly(sbi->cq, key) >= HK_CMT_WAKEUP_THRESHOLD) {
-                while ((info = hk_grab_cmt_info(sb, key)) != NULL) {
+                while (true) {
+                    spin_lock(&sbi->cq->flush_locks[key]);
+                    info = hk_grab_cmt_info(sb, key);
+                    if (info == NULL) {
+                        spin_unlock(&sbi->cq->flush_locks[key]);
+                        goto again;
+                    }
+
                     hk_process_single_cmt_info(sb, info);
                     batch++;
                     if (batch >= HK_CMT_MAX_PROCESS_BATCH) {
+                        spin_unlock(&sbi->cq->flush_locks[key]);
                         goto again;
                     }
+                    spin_unlock(&sbi->cq->flush_locks[key]);
                     schedule();
                 }
             }
@@ -512,6 +521,7 @@ void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino)
     key = hash_min(ino, HK_CMT_QUEUE_BITS);
 
     spin_lock(&cq->locks[key]);
+    spin_lock(&cq->flush_locks[key]);
     slot = chash_last(cq->table, key);
     while (!chash_is_sentinal(cq->table, key, slot)) {
         info = chlist_entry(slot, struct hk_cmt_info, slot);
@@ -522,6 +532,7 @@ void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino)
         }
         slot = slot_prev;
     }
+    spin_unlock(&cq->flush_locks[key]);
     spin_unlock(&cq->locks[key]);
 }
 
@@ -608,6 +619,7 @@ struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers)
 
     for (i = 0; i < (1 << HK_CMT_QUEUE_BITS); i++) {
         spin_lock_init(&cq->locks[i]);
+        spin_lock_init(&cq->flush_locks[i]);
         cq->nitems[i] = 0;
     }
     

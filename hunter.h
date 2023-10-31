@@ -72,11 +72,11 @@
 #endif
 
 /* #define hk_dbg(s, args...)		pr_debug(s, ## args) */
-#define hk_dbg(s, args ...)		    pr_info("%s: " s, __func__, ## args)
+#define hk_dbg(s, args ...)		    pr_info("cpu-%d, %s: " s, smp_processor_id(), __func__, ## args)
 #define hk_dbg1(s, args ...)
 #define hk_err(sb, s, args ...)	    hk_error_mng(sb, s, ## args)
-#define hk_warn(s, args ...)		pr_warn("%s: " s, __func__, ## args)
-#define hk_info(s, args ...)		pr_info("%s: " s, __func__, ## args)
+#define hk_warn(s, args ...)		pr_warn("cpu-%d, %s: " s, smp_processor_id(), __func__, ## args)
+#define hk_info(s, args ...)		pr_info("cpu-%d, %s: " s, smp_processor_id(), __func__, ## args)
 
 extern unsigned int hk_dbgmask;
 #define HK_DBGMASK_MMAPHUGE	        (0x00000001)

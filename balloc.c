@@ -83,7 +83,9 @@ int ind_update(struct hk_indicator *ind, enum hk_ind_upt_type type, u64 blks)
 
     if (ind->prep_blks & 0x1000000000000000) {
         hk_info("Prep Blks Overflow!\n");
-        BUG_ON(1);
+        hk_dump_layout_info(layout);
+        hk_print_timing();
+        // BUG_ON(1);
     }
 
     return 0;

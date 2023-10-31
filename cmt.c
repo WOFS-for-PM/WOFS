@@ -99,6 +99,29 @@ int hk_delegate_data_async(struct super_block *sb, struct inode *inode, struct h
 
     data_info = __hk_generic_info_init(type);
 
+    INIT_TIMING(time);
+    switch (type)
+    {
+    case CMT_VALID_DATA:
+        HK_START_TIMING(delegate_data_valid_t, time);
+        HK_END_TIMING(delegate_data_valid_t, time);
+        break;
+    case CMT_INVALID_DATA:
+        HK_START_TIMING(delegate_data_invalid_t, time);
+        HK_END_TIMING(delegate_data_invalid_t, time);
+        break;
+    case CMT_UPDATE_DATA:
+        HK_START_TIMING(delegate_data_update_t, time);
+        HK_END_TIMING(delegate_data_update_t, time);
+        break;
+    case CMT_DELETE_DATA:
+        HK_START_TIMING(delegate_data_delete_t, time);
+        HK_END_TIMING(delegate_data_delete_t, time);
+        break;
+    default:
+        break;
+    }
+
     // NOTE: it is safe since COW will not happen for a consecutive blocks commit
     switch (type) {
     case CMT_VALID_DATA:
@@ -225,14 +248,13 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
 
     INIT_TIMING(time);
 
-    hdr = sm_get_hdr_by_addr(sb, addr_start);
-    layout = sm_get_layout_by_hdr(sb, hdr);
-
     HK_START_TIMING(process_data_info_t, time);
-    use_layout(layout);
 
     for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ, blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
+        layout = sm_get_layout_by_hdr(sb, hdr);
+
+        use_layout(layout);
         switch (data_info->type) {
         case CMT_VALID_DATA: {
             sm_valid_data_sync(sb, prev_addr, addr, next_addr, ino, blk,
@@ -260,8 +282,8 @@ int hk_process_data_info(struct super_block *sb, u64 ino, struct hk_cmt_data_inf
         }
         size += HK_PBLK_SZ;
         next_addr = addr;
+        unuse_layout(layout);
     }
-    unuse_layout(layout);
     HK_END_TIMING(process_data_info_t, time);
 }
 
@@ -615,40 +637,40 @@ static int hk_cmt_worker_thread(void *arg)
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
 
-        rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
-        {
-            INIT_LIST_HEAD(&info_head);
+        // rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
+        // {
+        //     INIT_LIST_HEAD(&info_head);
 
-            // fsync should hold this. Two situations:
-            // 1. Worker is not processing this node. Then main thread can process this node with lock held.
-            // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
+        //     // fsync should hold this. Two situations:
+        //     // 1. Worker is not processing this node. Then main thread can process this node with lock held.
+        //     // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
 
-            mutex_lock(&cmt_node->processing);
+        //     mutex_lock(&cmt_node->processing);
 
-            if (!cmt_node->valid) {
-                hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
-                mutex_unlock(&cmt_node->processing);
-                continue;
-            }
+        //     if (!cmt_node->valid) {
+        //         hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
+        //         mutex_unlock(&cmt_node->processing);
+        //         continue;
+        //     }
 
-            if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
-                mutex_unlock(&cmt_node->processing);
-                continue;
-            }
+        //     if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
+        //         mutex_unlock(&cmt_node->processing);
+        //         continue;
+        //     }
 
-            /* Do some preprocess here */
-            ///// TODO: we might check merge info here
+        //     /* Do some preprocess here */
+        //     ///// TODO: we might check merge info here
 
-            list_for_each_entry_safe(info, info_next, &info_head, lnode)
-            {
-                list_del(&info->lnode);
-                hk_process_cmt_info(sb, cmt_node, info, info->type);
-            }
+        //     list_for_each_entry_safe(info, info_next, &info_head, lnode)
+        //     {
+        //         list_del(&info->lnode);
+        //         hk_process_cmt_info(sb, cmt_node, info, info->type);
+        //     }
 
-            mutex_unlock(&cmt_node->processing);
+        //     mutex_unlock(&cmt_node->processing);
 
-            schedule();
-        }
+        //     schedule();
+        // }
     }
 
     if (arg)

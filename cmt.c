@@ -637,40 +637,40 @@ static int hk_cmt_worker_thread(void *arg)
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
 
-        // rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
-        // {
-        //     INIT_LIST_HEAD(&info_head);
+        rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
+        {
+            INIT_LIST_HEAD(&info_head);
 
-        //     // fsync should hold this. Two situations:
-        //     // 1. Worker is not processing this node. Then main thread can process this node with lock held.
-        //     // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
+            // fsync should hold this. Two situations:
+            // 1. Worker is not processing this node. Then main thread can process this node with lock held.
+            // 2. Worker is processing this node. Then main thread will wait for worker to finish, and then process this node.
 
-        //     mutex_lock(&cmt_node->processing);
+            mutex_lock(&cmt_node->processing);
 
-        //     if (!cmt_node->valid) {
-        //         hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
-        //         mutex_unlock(&cmt_node->processing);
-        //         continue;
-        //     }
+            if (!cmt_node->valid) {
+                hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
+                mutex_unlock(&cmt_node->processing);
+                continue;
+            }
 
-        //     if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
-        //         mutex_unlock(&cmt_node->processing);
-        //         continue;
-        //     }
+            if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
+                mutex_unlock(&cmt_node->processing);
+                continue;
+            }
 
-        //     /* Do some preprocess here */
-        //     ///// TODO: we might check merge info here
+            /* Do some preprocess here */
+            ///// TODO: we might check merge info here
 
-        //     list_for_each_entry_safe(info, info_next, &info_head, lnode)
-        //     {
-        //         list_del(&info->lnode);
-        //         hk_process_cmt_info(sb, cmt_node, info, info->type);
-        //     }
+            list_for_each_entry_safe(info, info_next, &info_head, lnode)
+            {
+                list_del(&info->lnode);
+                hk_process_cmt_info(sb, cmt_node, info, info->type);
+            }
 
-        //     mutex_unlock(&cmt_node->processing);
+            mutex_unlock(&cmt_node->processing);
 
-        //     schedule();
-        // }
+            schedule();
+        }
     }
 
     if (arg)

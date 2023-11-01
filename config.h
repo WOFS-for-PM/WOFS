@@ -104,6 +104,13 @@ static inline void PERSISTENT_BARRIER(void)
                  :);
 }
 
+static inline void PERSISTENT_BARRIER2(void)
+{
+    asm volatile("mfence\n"
+                 :
+                 :);
+}
+
 static inline void hk_flush_small_buffer(void *buf, uint32_t len, bool fence)
 {
     uint32_t i;

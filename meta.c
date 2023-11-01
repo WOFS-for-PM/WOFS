@@ -410,7 +410,9 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     struct hk_mentry entry;
     struct hk_setattr_entry *setattr;
     struct hk_sb_info *sbi = HK_SB(sb);
+    INIT_TIMING(time);
 
+    HK_START_TIMING(attr_log_commit_t, time);
     setattr = &entry.entry.setattr;
 
     setattr->mode = cpu_to_le16(inode->i_mode);
@@ -425,6 +427,7 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     setattr->tstamp = get_version(sbi);
 
     hk_do_commit_inode(sb, inode->i_ino, &entry);
+    HK_END_TIMING(attr_log_commit_t, time);
 }
 
 /* automatically update attr based on whether the file (ino) is opened */

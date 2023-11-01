@@ -145,6 +145,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"=================== Meta ===================", 
 	"valid_summary_header",
 	"invalid_summary_header",
+	"attr_log_commit",
 	"request_valid_block",
 	"request_invalid_block",
 	"prepare_request",

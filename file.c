@@ -199,10 +199,10 @@ bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index,
     return is_overlay;
 }
 
-int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
-                     loff_t ofs, size_t size, unsigned char *content,
-                     u64 index_cur, u64 start_index, u64 end_index,
-                     size_t *out_size)
+static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
+                            loff_t ofs, size_t size, unsigned char *content,
+                            u64 index_cur, u64 start_index, u64 end_index,
+                            size_t *out_size)
 {
     u64 i;
     size_t each_blks, each_size;
@@ -214,16 +214,14 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = &si->header;
-    struct hk_inode *pi = hk_get_inode(sb, inode);
-    struct hk_header *hdr, *hdr_start;
-    struct hk_cmt_dbatch batch;
+    struct hk_header *hdr;
+    struct hk_cmt_dbatch batch, batch_tmp;
     unsigned long irq_flags = 0;
     u64 _size = 0;
 
     INIT_TIMING(memcpy_time);
 
     addr = prep->target_addr;
-    hdr_start = sm_get_hdr_by_addr(sb, addr);
     *out_size = 0;
 
     for (i = 0; i < prep->blks_prepared; i++) {
@@ -245,13 +243,14 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
             _size = ofs + each_size;
+            hk_init_and_inc_cmt_dbatch(&batch_tmp, addr, index_cur, 1);
 #ifndef CONFIG_CMT_BACKGROUND
             use_layout_for_addr(sb, addr);
-            sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
+            sm_valid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr, sm_get_next_addr_by_dbatch(sb, sih, &batch_tmp),
+                               sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
             unuse_layout_for_addr(sb, addr);
 #else
-            hk_init_and_inc_cmt_dbatch(&batch, addr, index_cur, 1);
-            hk_delegate_data_async(sb, inode, &batch, _size, CMT_VALID_DATA);
+            hk_delegate_data_async(sb, inode, &batch_tmp, _size, CMT_VALID_DATA);
 #endif
 
             if (is_overlay) {
@@ -263,15 +262,16 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                 /* invalid the old one */
                 use_layout_for_addr(sb, addr_overlayed);
-                sm_invalid_data_sync(sb, addr_overlayed, sih->ino); /* Then invalid the old */
+                hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+                sm_invalid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr_overlayed, sih->ino); /* Then invalid the old */
                 unuse_layout_for_addr(sb, addr_overlayed);
 
                 hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
-                hk_info("pos %llu, size %llu, index %llu, addr %llu\n", ofs, size, index_cur, addr);
+                hk_dbgv("pos %llu, size %llu, index %llu, addr %llu\n", ofs, size, index_cur, addr);
                 addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-                hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                hk_delegate_data_async(sb, inode, &batch, 0, CMT_INVALID_DATA);
+                hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+                hk_delegate_data_async(sb, inode, &batch_tmp, 0, CMT_INVALID_DATA);
 #endif
             }
 
@@ -305,7 +305,9 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
 #ifndef CONFIG_CMT_BACKGROUND
                 use_layout_for_addr(sb, addr);
-                sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
+                hk_init_and_inc_cmt_dbatch(&batch_tmp, addr, index_cur, 1);
+                sm_valid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr, sm_get_next_addr_by_dbatch(sb, sih, &batch_tmp),
+                                   sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
                 unuse_layout_for_addr(sb, addr);
 #endif
 
@@ -320,7 +322,8 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                     /* invalid the old one */
                     use_layout_for_addr(sb, addr_overlayed);
-                    sm_invalid_data_sync(sb, addr_overlayed, sih->ino); /* Then invalid the old */
+                    hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+                    sm_invalid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr_overlayed, sih->ino); /* Then invalid the old */
                     unuse_layout_for_addr(sb, addr_overlayed);
 
                     hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
@@ -329,8 +332,8 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     hk_next_cmt_dbatch(&batch);
 
                     addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-                    hk_init_and_inc_cmt_dbatch(&batch, addr_overlayed, index_cur, 1);
-                    hk_delegate_data_async(sb, inode, &batch, 0, CMT_INVALID_DATA);
+                    hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+                    hk_delegate_data_async(sb, inode, &batch_tmp, 0, CMT_INVALID_DATA);
 #endif
                 }
 
@@ -360,15 +363,17 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
+        _size = ofs + each_size;
+        hk_init_and_inc_cmt_dbatch(&batch_tmp, addr, index_cur, 1);
 #ifndef CONFIG_CMT_BACKGROUND
         use_layout_for_addr(sb, addr);
-        sm_valid_data_sync(sb, addr, sih->ino, index_cur, get_version(sbi), each_size, inode->i_ctime.tv_sec);
+        sm_valid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr, sm_get_next_addr_by_dbatch(sb, sih, &batch_tmp),
+                           sih->ino, index_cur, get_version(sbi), _size, inode->i_ctime.tv_sec);
         unuse_layout_for_addr(sb, addr);
         /* flush header */
         hk_flush_buffer(addr + HK_LBLK_SZ, CACHELINE_SIZE, true);
 #else
-        hk_init_and_inc_cmt_dbatch(&dbatch, addr, index_cur, 1);
-        hk_delegate_data_async(sb, inode, &dbatch, CMT_VALID_DATA);
+        hk_delegate_data_async(sb, inode, &dbatch_tmp, CMT_VALID_DATA);
 #endif
 
         if (is_overlay) {
@@ -380,13 +385,15 @@ int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
             /* invalid the old one */
             use_layout_for_addr(sb, addr_overlayed);
-            sm_invalid_data_sync(sb, addr_overlayed, sih->ino); /* Then invalid the old */
+            hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+            sm_invalid_data_sync(sb, sm_get_prev_addr_by_dbatch(sb, sih, &batch_tmp), addr_overlayed, sih->ino); /* Then invalid the old */
             unuse_layout_for_addr(sb, addr_overlayed);
 
             hk_dbgv("Invalid Blk %llu\n", hk_get_dblk_by_addr(sbi, addr_overlayed));
 #else
             addr_overlayed = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index_cur));
-            hk_invalid_operation_async(sb, inode, addr_overlayed, index_cur);
+            hk_init_and_inc_cmt_dbatch(&batch_tmp, addr_overlayed, index_cur, 1);
+            hk_delegate_data_async(sb, inode, &batch_tmp, 0, CMT_INVALID_DATA);
 #endif
         }
 

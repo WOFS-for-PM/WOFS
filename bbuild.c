@@ -542,7 +542,7 @@ int hk_recovery(struct super_block *sb)
     HK_START_TIMING(recovery_t, start);
 
     is_failure = hk_try_normal_recovery(sb);
-    is_failure = true;
+
     if (!is_failure) {
         hk_dbg("HUNTER: Normal shutdown\n");
     } else {

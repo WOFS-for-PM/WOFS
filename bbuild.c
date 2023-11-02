@@ -352,7 +352,7 @@ int hk_failure_recovery(struct super_block *sb)
         {
             HK_ASSERT(addr != 0);
             hdr = sm_get_hdr_by_addr(sb, addr);
-            if (hdr->valid) {
+            if (hdr->valid == 1) {
                 ino = le64_to_cpu(hdr->ino);
                 rn = hk_get_recovery_node(&recovery_table, ino);
                 if (!rn) {
@@ -417,7 +417,7 @@ int hk_failure_recovery(struct super_block *sb)
         // Pi is in valid state?
         pi = hk_get_pi_by_ino(sb, rn->ino);
         revert_by_rn = false;
-        if (pi->valid) {
+        if (pi->valid == 1) {
             if (pi->tstamp > rn->tstamp) {
                 // Regard pi as true
                 hk_dbgv("pi size %llu and rn size %llu\n", pi->i_size, rn->size);
@@ -516,7 +516,7 @@ static bool hk_try_normal_recovery(struct super_block *sb)
             traverse_layout_blks(addr, layout)
             {
                 hdr = sm_get_hdr_by_addr(sb, addr);
-                if (!hdr->valid) {
+                if (hdr->valid != 1) {
                     blk = hk_get_dblk_by_addr(sbi, addr);
                     hk_range_insert_range(&layout->gaps_tree, blk, blk);
                     layout->num_gaps_indram++;

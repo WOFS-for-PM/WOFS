@@ -69,21 +69,22 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
                     u16 i_mode)
 {
     int slots = HK_LINIX_SLOTS;
-
+    struct hk_sb_info *sbi = HK_SB(sb);
+    
     sih->i_size = 0;
     sih->ino = 0;
     sih->i_blocks = 0;
     sih->pi_addr = 0;
 
     if (S_ISPSEUDO(i_mode)) {
-        linix_init(&sih->ix, 0);
+        linix_init(sbi, &sih->ix, 0);
     } else if (!S_ISLNK(i_mode)) {
 #ifdef CONFIG_DYNAMIC_WORKLOAD
         slots = hk_guess_slots(sb);
 #endif
-        linix_init(&sih->ix, slots);
+        linix_init(sbi, &sih->ix, slots);
     } else { /* symlink only need one block */
-        linix_init(&sih->ix, 1);
+        linix_init(sbi, &sih->ix, 1);
     }
 
     if (S_ISDIR(i_mode)) {
@@ -187,6 +188,7 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
         case S_IFREG:
             break;
         case S_IFDIR:
+            hk_dbgv("hdr @ %llx, pi root @ %llx", hdr, &pi->root);
             hk_rebuild_dir_table_for_blk(sb, hdr->f_blk, sih, reb);
             break;
         default:

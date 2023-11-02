@@ -26,6 +26,12 @@
 #define DEFINE_GENERIC_CACHEP(type) \
     struct kmem_cache *type##_cachep;
 
+// Trace use the following code:
+//
+// if (strcmp(#type, "hk_recovery_node") == 0) {
+//      printk("%s: alloct recovery @ %llx", __func__, p);
+// }
+
 #define STRFY(x) #x
 #define DECLARE_GENERIC_CACHEP(type, alloc_flags)                                             \
     extern struct kmem_cache *type##_cachep;                                                  \

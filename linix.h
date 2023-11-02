@@ -13,6 +13,7 @@ struct linslot {
 
 struct linix {
     u64 num_slots;
+    struct hk_sb_info *sbi;
     struct linslot *slots;
 };
 

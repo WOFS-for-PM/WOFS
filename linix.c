@@ -25,9 +25,10 @@
 
 #include "hunter.h"
 
-int linix_init(struct linix *ix, u64 num_slots)
+int linix_init(struct hk_sb_info *sbi, struct linix *ix, u64 num_slots)
 {
     ix->num_slots = num_slots;
+    ix->sbi = sbi;
     if (num_slots == 0) {
         ix->slots = NULL;
     } else {
@@ -108,10 +109,7 @@ u64 linix_get(struct linix *ix, u64 index)
 /* Inode Lock must be held before linix insert, and blk_addr */
 int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
 {
-    struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_sb_info *sbi = ix->sbi;
     INIT_TIMING(insert_time);
     HK_START_TIMING(linix_set_t, insert_time);
 
@@ -134,10 +132,7 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
 /* last_index is the last valid index determined by user */
 int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink)
 {
-    struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
-    struct hk_inode_info *si = container_of(sih, struct hk_inode_info, header);
-    struct super_block *sb = si->vfs_inode.i_sb;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct hk_sb_info *sbi = ix->sbi;
 
     ix->slots[index].blk_addr = 0;
 

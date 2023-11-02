@@ -17,17 +17,16 @@ int up_version(struct hk_sb_info *sbi)
     return 0;
 }
 
-int ind_init(struct super_block *sb, int cpuid)
+int ind_init(struct super_block *sb, int cpuid, u64 layout_blks)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
     struct hk_layout_info *layout = &sbi->layouts[cpuid];
-    u64 total_blks = (layout->layout_end - layout->layout_start) / HK_PBLK_SZ;
 
     layout->ind.invalid_blks = 0;
     layout->ind.valid_blks = 0;
     layout->ind.prep_blks = 0;
-    layout->ind.free_blks = total_blks;
-    layout->ind.total_blks = total_blks;
+    layout->ind.free_blks = layout_blks;
+    layout->ind.total_blks = layout_blks;
 
     return 0;
 }
@@ -71,8 +70,9 @@ int ind_update(struct hk_indicator *ind, enum hk_ind_upt_type type, u64 blks)
         break;
     }
 
-    if (ind->invalid_blks + ind->valid_blks + ind->prep_blks != layout->atomic_counter / HK_PBLK_SZ || ind->free_blks + layout->atomic_counter / HK_PBLK_SZ != layout->layout_blks) {
+    if (ind->invalid_blks + ind->valid_blks + ind->prep_blks != layout->atomic_counter / HK_PBLK_SZ && ind->free_blks + layout->atomic_counter / HK_PBLK_SZ != layout->layout_blks) {
         hk_info("Wrong Calculations for Indicator %d!\n", layout->cpuid);
+        hk_dump_layout_info(layout);
         BUG_ON(1);
     }
 
@@ -354,7 +354,7 @@ int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all)
 
     if (rls_all) {
         layout->atomic_counter = 0;
-        ind_init(sb, cpuid);
+        ind_init(sb, cpuid, layout->layout_blks);
     } else {
         layout->atomic_counter -= (blks * HK_PBLK_SZ);
         ind_update(&layout->ind, FREE_LAYOUT, blks);
@@ -407,7 +407,7 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout->layout_end = layout->layout_start + size_per_layout;
         layout->num_gaps_indram = 0;
         layout->gaps_tree = RB_ROOT_CACHED;
-        ind_init(sb, cpuid);
+        ind_init(sb, cpuid, blks_per_layout);
         mutex_init(&layout->layout_lock);
         hk_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
     }

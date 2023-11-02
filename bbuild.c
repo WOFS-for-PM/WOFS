@@ -262,7 +262,7 @@ int hk_invalidate_data_blocks(struct super_block *sb, struct linix *ix, loff_t s
     start_index = (start + (1UL << PAGE_SHIFT) - 1) >> PAGE_SHIFT;
 
     if (end == 0)
-        return;
+        return -1;
     end_index = (end - 1) >> PAGE_SHIFT;
 
     if (start_index > end_index)
@@ -318,7 +318,6 @@ int hk_failure_recovery(struct super_block *sb)
     bool hdr_real_valid = false;
     struct rb_root recovery_table = RB_ROOT;
     struct hk_recovery_node *rn = NULL, *rn_next = NULL;
-    u64 *last_valid_blk_per_layout = NULL;
     struct hk_range_node *node;
     int ret = 0;
 
@@ -339,14 +338,6 @@ int hk_failure_recovery(struct super_block *sb)
     }
 
     /* Step 3: Recovery Layouts */
-    last_valid_blk_per_layout = kmalloc_array(sbi->num_layout, sizeof(u64), GFP_KERNEL);
-    if (!last_valid_blk_per_layout) {
-        hk_dbg("kmalloc last_valid_blk_per_layout failed\n");
-        return -ENOMEM;
-    }
-    for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-        last_valid_blk_per_layout[cpuid] = 0;
-    }
     init_hk_recovery_node_cache();
     for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
         layout = &sbi->layouts[cpuid];
@@ -359,6 +350,7 @@ int hk_failure_recovery(struct super_block *sb)
 
         traverse_layout_blks(addr, layout)
         {
+            HK_ASSERT(addr != 0);
             hdr = sm_get_hdr_by_addr(sb, addr);
             if (hdr->valid) {
                 ino = le64_to_cpu(hdr->ino);
@@ -369,12 +361,13 @@ int hk_failure_recovery(struct super_block *sb)
                     rn->tstamp = 0;
                     rn->size = 0;
                     rn->cmtime = 0;
-                    linix_init(&rn->ix, 1);
+                    linix_init(sbi, &rn->ix, 1);
                     hk_insert_recovery_node(&recovery_table, rn);
                 }
 
                 est_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&rn->ix, hdr->f_blk));
                 if (est_addr) {
+                    HK_ASSERT(est_addr != 0);
                     est_hdr = sm_get_hdr_by_addr(sb, est_addr);
                     if (est_hdr->tstamp < hdr->tstamp) {
                         hdr_real_valid = true;
@@ -383,15 +376,15 @@ int hk_failure_recovery(struct super_block *sb)
                     hdr_real_valid = true;
                 }
 
-                blk = hk_get_dblk_by_addr(sbi, addr);
                 if (hdr_real_valid) {
                     rn->size = hdr->size > rn->size ? hdr->size : rn->size;
                     rn->tstamp = hdr->tstamp > rn->tstamp ? hdr->tstamp : rn->tstamp;
                     rn->cmtime = hdr->cmtime > rn->cmtime ? hdr->cmtime : rn->cmtime;
-                    linix_insert(&rn->ix, hdr->f_blk, est_addr, true);
+                    HK_ASSERT(addr != 0);
+                    linix_insert(&rn->ix, hdr->f_blk, addr, true);
                     ind_update(&layout->ind, VALIDATE_BLK, 1);
-                    last_valid_blk_per_layout[cpuid] = blk;
                 } else {
+                    blk = hk_get_dblk_by_addr(sbi, addr);
                     hk_range_insert_range(&layout->gaps_tree, blk, blk);
                     layout->num_gaps_indram++;
                     ind_update(&layout->ind, INVALIDATE_BLK, 1);
@@ -412,17 +405,25 @@ int hk_failure_recovery(struct super_block *sb)
     u32 cmtime = 0;
     struct hk_header *prev_hdr, *next_hdr;
     u64 prev_addr = 0, next_addr = 0;
-    rbtree_postorder_for_each_entry_safe(rn, rn_next, &recovery_table, rbnode)
-    {
+    int count = 0;
+    struct rb_node *temp;
+
+    temp = rb_first(&recovery_table);
+    while (temp) {
+        rn = container_of(temp, struct hk_recovery_node, rbnode);
+        temp = rb_next(temp);
+
+        count++;
         // Pi is in valid state?
         pi = hk_get_pi_by_ino(sb, rn->ino);
         revert_by_rn = false;
         if (pi->valid) {
             if (pi->tstamp > rn->tstamp) {
                 // Regard pi as true
+                hk_dbgv("pi size %llu and rn size %llu\n", pi->i_size, rn->size);
                 ret = hk_invalidate_data_blocks(sb, &rn->ix, rn->size, pi->i_size);
                 if (ret < 0) {
-                    hk_info("pi size is larger than rn size, revert pi's state using rn\n");
+                    hk_dbgv("pi size %llu is larger than or equal to rn size %llu, revert pi's state using rn\n", pi->i_size, rn->size);
                     revert_by_rn = true;
                 }
                 size = rn->size = pi->i_size;
@@ -439,10 +440,17 @@ int hk_failure_recovery(struct super_block *sb)
                 cmtime = pi->i_ctime = rn->cmtime;
             }
 
-            for (blk = 0; blk < _round_up(size, BLOCK_SIZE); blk++) {
-                prev_addr = sm_get_next_addr_by_cur_index(sb, &rn->ix, blk);
-                next_addr = sm_get_prev_addr_by_cur_index(sb, &rn->ix, blk);
+            hk_dbgv("size: %llu, round blks: %llu", size, _round_up(size, PAGE_SIZE) / PAGE_SIZE);
+
+            for (blk = 0; blk < (_round_up(size, PAGE_SIZE) / PAGE_SIZE); blk++) {
+                next_addr = sm_get_next_addr_by_cur_index(sb, &rn->ix, blk);
+                prev_addr = sm_get_prev_addr_by_cur_index(sb, &rn->ix, blk);
                 addr = sm_get_cur_addr_by_cur_index(sb, &rn->ix, blk);
+
+                if (addr == 0) {
+                    hk_dbgv("hole blk %llu\n", blk);
+                    continue;
+                }
 
                 prev_hdr = prev_addr == 0 ? &pi->root : sm_get_hdr_by_addr(sb, prev_addr);
                 next_hdr = next_addr == 0 ? &pi->root : sm_get_hdr_by_addr(sb, next_addr);
@@ -459,7 +467,7 @@ int hk_failure_recovery(struct super_block *sb)
         linix_destroy(&rn->ix);
         hk_free_hk_recovery_node(rn);
     }
-
+    hk_info("recovery table count %d\n", count);
     destroy_hk_recovery_node_cache();
 
     /* Step 5: Restore Allocator */
@@ -467,10 +475,16 @@ int hk_failure_recovery(struct super_block *sb)
         layout = &sbi->layouts[cpuid];
         // the last gap blocks in gap_tree must be removed
         node = rb_entry_safe(rb_last(&layout->gaps_tree.rb_root), struct hk_range_node, rbnode);
-        hk_range_delete_range_node(&layout->gaps_tree, node);
-        hk_release_layout(sb, cpuid, node->range_high - node->range_low + 1, false);
+        if (node) {
+            use_layout(layout);
+            hk_release_layout(sb, cpuid, node->range_high - node->range_low + 1, false);
+            unuse_layout(layout);
+            hk_range_delete_range_node(&layout->gaps_tree, node);
+        }
     }
 
+    hk_info("Failure recovery done\n");
+    
     /* Now, HUNTER is OK to receive next requets */
     return 0;
 }
@@ -528,7 +542,7 @@ int hk_recovery(struct super_block *sb)
     HK_START_TIMING(recovery_t, start);
 
     is_failure = hk_try_normal_recovery(sb);
-
+    is_failure = true;
     if (!is_failure) {
         hk_dbg("HUNTER: Normal shutdown\n");
     } else {

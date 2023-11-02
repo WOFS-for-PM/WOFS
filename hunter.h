@@ -440,7 +440,7 @@ void hk_cmt_destory_forest(struct super_block *sb);
 int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u64 ino, bool build_blks);
 
 /* ======================= ANCHOR: linix.c ========================= */
-int linix_init(struct linix *ix, u64 num_slots);
+int linix_init(struct hk_sb_info *sbi, struct linix *ix, u64 num_slots);
 int linix_destroy(struct linix *ix);
 int linix_extend(struct linix *ix);
 u64 linix_get(struct linix *ix, u64 index);

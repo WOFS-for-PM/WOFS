@@ -443,7 +443,7 @@ struct hk_cmt_node *hk_cmt_node_init(struct super_block *sb, u64 ino)
     hk_inf_queue_init(&node->op_q);
 
     node->ino = ino;
-    node->valid = 0;
+    node->valid = true;
     node->root.ofs_next = TRANS_ADDR_TO_OFS(sbi, &node->root);
 
     mutex_init(&node->processing);
@@ -633,9 +633,12 @@ static int hk_cmt_worker_thread(void *arg)
     struct hk_cmt_node *cmt_node, *cmt_node_next;
     struct hk_cmt_info *info, *info_next;
     struct list_head info_head;
+    unsigned long batch = 0;
 
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
+
+        batch = HK_CMT_BATCH_NUM;
 
         rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[work_id], rnode)
         {
@@ -653,22 +656,25 @@ static int hk_cmt_worker_thread(void *arg)
                 continue;
             }
 
-            if (hk_grab_cmt_info(sb, cmt_node, &info_head, HK_CMT_BATCH_NUM) == 0) {
+            if (hk_grab_cmt_info(sb, cmt_node, &info_head, batch) == 0) {
                 mutex_unlock(&cmt_node->processing);
                 continue;
             }
-
-            /* Do some preprocess here */
-            ///// TODO: we might check merge info here
 
             list_for_each_entry_safe(info, info_next, &info_head, lnode)
             {
                 list_del(&info->lnode);
                 hk_process_cmt_info(sb, cmt_node, info, info->type);
+                batch--;
             }
 
             mutex_unlock(&cmt_node->processing);
 
+            if (kthread_should_stop() || batch == 0) {
+                hk_info("%ld cmt info processed\n", HK_CMT_BATCH_NUM - batch);
+                break;
+            }
+            
             schedule();
         }
     }

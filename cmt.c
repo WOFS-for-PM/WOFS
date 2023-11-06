@@ -484,19 +484,12 @@ int hk_cmt_manage_node(struct super_block *sb, struct hk_cmt_node *cmt_node, str
         } else if (compVal == 1) {
             temp = &((*temp)->rb_right);
         } else {
-            if (curr->valid == 1) {
-                hk_dbgv("cmt node for inode %llu already exists\n", cmt_node->ino);
-                mutex_unlock(lock);
-                return -EINVAL;
-            } else {
-                curr->valid = 1;
-                if (exist) {
-                    *exist = curr;
-                }
-                hk_dbg("find an invalidated slot for request %llu to reuse\n", cmt_node->ino);
-                mutex_unlock(lock);
-                return -EEXIST;
+            hk_dbgv("reuse cmt_inode for %llu\n", cmt_node->ino);
+            if (exist) {
+                *exist = curr;
             }
+            mutex_unlock(lock);
+            return -EEXIST;
         }
     }
 
@@ -609,14 +602,9 @@ struct hk_cmt_worker_param {
     int work_id;
 };
 
-struct __hk_cmt_node_wrapper {
-    struct list_head lnode;
-    struct hk_cmt_node *cmt_node;
-};
-
 struct hk_flush_worker_param {
     struct super_block *sb;
-    struct list_head cmt_node_wrppers;
+    struct list_head cmt_node_refs;
     int work_id;
 };
 
@@ -633,7 +621,7 @@ static int hk_cmt_worker_thread(void *arg)
     struct hk_cmt_node *cmt_node, *cmt_node_next;
     struct hk_cmt_info *info, *info_next;
     struct list_head info_head;
-    unsigned long batch = 0;
+    int batch = 0;
 
     while (!kthread_should_stop()) {
         ssleep_interruptible(HK_CMT_TIME_GAP);
@@ -651,6 +639,7 @@ static int hk_cmt_worker_thread(void *arg)
             mutex_lock(&cmt_node->processing);
 
             if (!cmt_node->valid) {
+                BUG_ON(1);
                 hk_dbgv("cmt node for inode %llu is invalid, delayed deletion of this node to umount\n", cmt_node->ino);
                 mutex_unlock(&cmt_node->processing);
                 continue;
@@ -670,7 +659,7 @@ static int hk_cmt_worker_thread(void *arg)
 
             mutex_unlock(&cmt_node->processing);
 
-            if (kthread_should_stop() || batch == 0) {
+            if (batch == 0) {
                 hk_info("%ld cmt info processed\n", HK_CMT_BATCH_NUM - batch);
                 break;
             }
@@ -763,16 +752,16 @@ static int hk_flush_worker_thread(void *arg)
     struct hk_flush_worker_param *param = (struct hk_flush_worker_param *)arg;
     struct super_block *sb = param->sb;
     struct hk_sb_info *sbi = HK_SB(sb);
-    struct __hk_cmt_node_wrapper *cmt_node_wrpper, *cmt_node_wrpper_next;
+    struct hk_cmt_node_ref *cmt_node_ref, *cmt_node_ref_next;
     struct hk_cmt_node *cmt_node;
     int work_id = param->work_id;
 
-    list_for_each_entry_safe(cmt_node_wrpper, cmt_node_wrpper_next, &param->cmt_node_wrppers, lnode)
+    list_for_each_entry_safe(cmt_node_ref, cmt_node_ref_next, &param->cmt_node_refs, lnode)
     {
-        cmt_node = cmt_node_wrpper->cmt_node;
-        list_del(&cmt_node_wrpper->lnode);
+        cmt_node = cmt_node_ref->cmt_node;
+        list_del(&cmt_node_ref->lnode);
         hk_flush_cmt_node_fast(sb, cmt_node);
-        kfree(cmt_node_wrpper);
+        hk_free_hk_cmt_node_ref(cmt_node_ref);
     }
 
     flush_finished[work_id] = 1;
@@ -827,7 +816,7 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
         for (i = 0; i < num_cpus; i++) {
             params[i].sb = sb;
             params[i].work_id = i;
-            INIT_LIST_HEAD(&params[i].cmt_node_wrppers);
+            INIT_LIST_HEAD(&params[i].cmt_node_refs);
         }
 
         cnt = 0;
@@ -835,12 +824,12 @@ void hk_flush_cmt_queue(struct super_block *sb, int num_cpus)
             rbtree_postorder_for_each_entry_safe(cmt_node, cmt_node_next, &cq->cmt_forest[cmt_work_id], rnode)
             {
                 /* Pass the ownership to worker */
-                struct __hk_cmt_node_wrapper *cmt_node_wrpper = kmalloc(sizeof(struct __hk_cmt_node_wrapper), GFP_KERNEL);
-                BUG_ON(!cmt_node_wrpper);
-                INIT_LIST_HEAD(&cmt_node_wrpper->lnode);
-                cmt_node_wrpper->cmt_node = cmt_node;
+                struct hk_cmt_node_ref *cmt_node_ref = hk_alloc_hk_cmt_node_ref();
+                BUG_ON(!cmt_node_ref);
+                INIT_LIST_HEAD(&cmt_node_ref->lnode);
+                cmt_node_ref->cmt_node = cmt_node;
 
-                list_add_tail(&cmt_node_wrpper->lnode, &params[cnt % num_cpus].cmt_node_wrppers);
+                list_add_tail(&cmt_node_ref->lnode, &params[cnt % num_cpus].cmt_node_refs);
                 cnt++;
             }
         }

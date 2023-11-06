@@ -50,7 +50,7 @@
 #define HK_JOURNAL_SIZE       (4 * 1024)
 #define HK_PERCORE_JSLOTS     (1) /* per core journal slots */
 #define HK_BLKS_SIZE(blks)    (((blks) << 12) + ((blks) << 6))
-#define HK_CMT_BATCH_NUM      (2 * 1024 * 1024L)
+#define HK_CMT_BATCH_NUM      (2 * 1024 * 1024)
 #define HK_CHECKPOINT_TIME_INTERNAL 3 /* seconds */
 
 /* ======================= Control by Makefile ======================= */

@@ -1056,13 +1056,19 @@ static int __init init_hk_fs(void)
     if (rc)
         goto out8;
 
-    rc = register_filesystem(&hk_fs_type);
+    rc = init_hk_cmt_node_ref_cache();
     if (rc)
         goto out9;
+
+    rc = register_filesystem(&hk_fs_type);
+    if (rc)
+        goto out10;
 
     HK_END_TIMING(init_t, init_time);
     return 0;
 
+out10:
+    destroy_hk_cmt_node_ref_cache();
 out9:
     destroy_hk_cmt_node_cache();
 out8:
@@ -1096,6 +1102,7 @@ static void __exit exit_hk_fs(void)
     destroy_hk_cmt_delete_inode_info_cache();
     destroy_hk_cmt_close_info_cache();
     destroy_hk_cmt_node_cache();
+    destroy_hk_cmt_node_ref_cache();
 }
 
 MODULE_AUTHOR("Yanqi Pan <deadpoolmine@qq.com>");

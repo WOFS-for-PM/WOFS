@@ -139,6 +139,11 @@ struct hk_cmt_node {
     struct hk_inf_queue op_q; /* Data queue for this inode */
 };
 
+struct hk_cmt_node_ref {
+    struct list_head lnode;
+    struct hk_cmt_node *cmt_node;
+};
+
 static_assert(sizeof(struct hk_cmt_node) >= sizeof(struct hk_header), "hk_cmt_node should be larger as hk_hedaer");
 
 struct hk_cmt_queue {

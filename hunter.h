@@ -232,6 +232,19 @@ static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
 	return ret;
 }
 
+extern long __copy_user_nocache_nofence(void *dst, const void __user *src,
+				unsigned size, int zerorest);
+
+static inline int memcpy_to_pmem_nocache_nofence(void *dst, const void *src,
+	unsigned int size)
+{
+	int ret;
+
+	ret = __copy_user_nocache_nofence(dst, src, size, 0);
+
+	return ret;
+}
+
 /* assumes the length to be 4-byte aligned */
 static inline void memset_nt(void *dest, uint32_t dword, size_t length)
 {

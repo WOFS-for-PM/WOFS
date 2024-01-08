@@ -69,6 +69,7 @@ struct hk_inode_info_header {
     struct list_head list;                  /* SB list of mmap sih */
     int num_vmas;
     unsigned short i_mode; /* Dir or file? */
+    off_t last_end;
     unsigned int i_flags;
     unsigned long i_size;
     unsigned long i_blocks;

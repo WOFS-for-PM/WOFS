@@ -88,6 +88,7 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
     sih->ino = 0;
     sih->i_blocks = 0;
     sih->norm_spec.pi_addr = 0;
+    sih->last_end = 0;
 
     if (S_ISPSEUDO(i_mode)) {
         linix_init(&sih->ix, 0);

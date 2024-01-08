@@ -254,6 +254,8 @@ static size_t hk_try_in_place_append_write(struct hk_inode_info *si, loff_t pos,
             if (overflow == false) {
                 update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE_FOR_APPEND, pos + out_size);
             }
+
+            sih->last_end = pos + out_size;
         } else {
             /* Not support now */
             BUG_ON(1);
@@ -399,6 +401,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     out_pkg_param_t out_param;
     unsigned long irq_flags = 0;
     char *buf;
+    int num_writers;
 
     INIT_TIMING(memcpy_time);
 
@@ -407,6 +410,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
     blks_prep_to_use = prep->blks_prep_to_use;
     *out_size = 0;
 
+    num_writers = atomic64_add_return_relaxed(1, &sbi->num_writers);
     if (ENABLE_META_PACK(sb)) {
         each_ofs = ofs & (HK_LBLK_SZ(sbi) - 1);
         each_size = blks_prep_to_use * HK_LBLK_SZ(sbi);
@@ -417,7 +421,34 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
         hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
         if (likely(each_size >= HK_LBLK_SZ(sbi))) {
-            memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+            if (num_writers > 1) {
+                // regulate only if this is a sequential write pattern
+                // since 3000 latency is for 4KiB sequential write
+                if (each_size == HK_LBLK_SZ(sbi)) {
+                    struct timespec ts, te;
+                    unsigned long threshold = 0;
+                    getrawmonotonic(&ts);
+                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    getrawmonotonic(&te);
+
+                    if (ofs == sih->last_end) {
+                        threshold = 3000;
+                    } else {
+                        threshold = 25000;
+                    }
+
+                    // too much pressure for PM (multi-thread)
+                    if (te.tv_nsec - ts.tv_nsec > threshold) {
+                        // hk_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
+                        usleep_range(10000, 12000);
+                    }
+                } else {
+                    // TODO: larger than 4-KiB
+                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                }
+            } else {
+                memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+            }
         } else {
             copy_from_user(addr + each_ofs, content, each_size);
             hk_flush_buffer(addr + each_ofs, each_size, false);
@@ -598,7 +629,8 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             *out_size += each_size;
         }
     }
-
+    sih->last_end = ofs + size;
+    atomic64_fetch_sub_relaxed(1, &sbi->num_writers);
     return 0;
 }
 

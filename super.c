@@ -686,6 +686,9 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     sbi->d_size = sbi->initsize - (sbi->d_addr - (u64)sbi->virt_addr);
     sbi->d_blks = sbi->d_size / HK_PBLK_SZ(sbi);
 
+    /* write control */
+    atomic64_set(&sbi->num_writers, 0);
+    
     /* read ahead mechanisms */
     sbi->ra_win = HK_READAHEAD_WINDOW;
     atomic64_set(&sbi->num_readers, 0);

@@ -160,6 +160,9 @@ struct hk_sb_info {
         } pack_layout;
     };
 
+    /* for write-control */
+    atomic64_t num_writers;
+
     /* for read-ahead */
     size_t ra_win;
     atomic64_t num_readers;

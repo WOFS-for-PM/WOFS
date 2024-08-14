@@ -1506,12 +1506,26 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     size_t size_after_write = offset + size > sih->i_size ? offset + size : sih->i_size;
     u64 blk = 0;
     int ret = 0;
+    u32 num_meta_blk = MTA_PKG_DATA_BLK;
     INIT_TIMING(time);
 
     HK_START_TIMING(new_data_trans_t, time);
     blk = get_pm_blk(sbi, data_addr);
 
-    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, MTA_PKG_DATA_BLK);
+    if (sbi->aging_pos > AGING_PHASE_2) {
+        if (sbi->aging_pos - 512 * 4096 < AGING_PHASE_2) {
+            hk_info("aging phase 2, half meta locality\n");
+        }
+        num_meta_blk = 128 >> HUNTER_MTA_SHIFT;
+    }
+
+    if (sbi->aging_pos > AGING_PHASE_3) {
+        if (sbi->aging_pos - 512 * 4096 < AGING_PHASE_3) {
+            hk_info("aging phase 4, no meta locality\n");
+        }
+        num_meta_blk = 256 >> HUNTER_MTA_SHIFT;
+    }
+    ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, num_meta_blk);
     if (ret) {
         goto out;
     }

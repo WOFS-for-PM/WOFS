@@ -182,6 +182,12 @@ struct hk_sb_info {
 
     /* for dynamic workload */
     struct hk_dym_wkld dw;
+
+#ifdef AGING_WORKLOAD_SIZE
+    size_t aging_pos;
+    size_t recover_blks;
+    size_t counter;
+#endif
 };
 
 static u64 inline hk_inc_and_get_vtail(struct hk_sb_info *sbi)

@@ -52,6 +52,12 @@
 #define ENABLE_META_PACK(sb)	test_opt(sb, META_PACK)
 #define ENABLE_HISTORY_W(sb)	test_opt(sb, HISTORY_W)
 
+#define AGING_WORKLOAD_SIZE		(32 * 1024L * 1024L * 1024L)
+#define AGING_PHASE_1			(AGING_WORKLOAD_SIZE / 3)
+#define AGING_PHASE_2			(AGING_WORKLOAD_SIZE / 3 * 2)
+#define AGING_PHASE_3			(AGING_WORKLOAD_SIZE / 6 * 5)
+#define RECOVER_PHASE			AGING_WORKLOAD_SIZE
+
 /*
  * hunter inode flags
  *

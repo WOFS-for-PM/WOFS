@@ -708,6 +708,31 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         append_like = true;
     }
 
+    if (pos > AGING_PHASE_1) {
+        if (pos - 4096 < AGING_PHASE_1) {
+            hk_info("start aging, no huge allocation\n");
+        }
+        append_like = false;
+        sbi->aging_pos = pos;
+    }
+
+    if (pos > RECOVER_PHASE) {
+        if (pos - 4096 < RECOVER_PHASE) {
+            hk_info("start recover, enable huge allocation\n");
+        }
+        append_like = true;
+        sbi->aging_pos = pos;
+        sbi->counter++;
+        // 4 stages
+        sbi->recover_blks = (sbi->counter >> 19)  > HK_EXTEND_NUM_BLOCKS ? HK_EXTEND_NUM_BLOCKS : (sbi->counter >> 19);
+        if (sbi->recover_blks == 0) {
+            sbi->recover_blks = 1;
+        }
+    } else {
+        sbi->counter = 0;
+        sbi->recover_blks = 0;
+    }
+
     error = file_remove_privs(filp);
     if (error)
         goto out;
@@ -729,10 +754,17 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     blks = blks_orig = (end_index - index + 1); /* Total blks to be written */
     blks_allocated = 0;
     if (append_like) {
-        /* try extend blks to be allocted */
-        if (blks < HK_EXTEND_NUM_BLOCKS) {
-            blks = HK_EXTEND_NUM_BLOCKS;
-            extend = true;
+        if (pos > RECOVER_PHASE) {
+            if (blks < sbi->recover_blks) {
+                blks = sbi->recover_blks;
+                extend = true;
+            }
+        } else {
+            /* try extend blks to be allocted */
+            if (blks < HK_EXTEND_NUM_BLOCKS) {
+                blks = HK_EXTEND_NUM_BLOCKS;
+                extend = true;
+            }
         }
     }
 

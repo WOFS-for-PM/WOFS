@@ -383,6 +383,9 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
 
 extern struct hk_mregion *hk_get_region_by_ino(struct super_block *sb, u64 ino);
 
+#define FIO_REGULATE 0
+#define FILESERVER_REGULATE 1
+
 static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                             loff_t ofs, size_t size, unsigned char *content,
                             u64 index_cur, u64 start_index, u64 end_index,
@@ -436,6 +439,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
                     getrawmonotonic(&te);
 
+#if FIO_REGULATE
                     if (ofs == sih->last_end) {
                         threshold = 3000;
                     } else {
@@ -447,9 +451,26 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                         // hk_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
                         usleep_range(10000, 12000);
                     }
+#elif FILESERVER_REGULATE
+                    if (num_writers > 4) {
+                        if (ofs == sih->last_end) {
+                            threshold = 10000;
+                        } else {
+                            threshold = 25000;
+                        }
+
+                        // hk_info("duration: %ld\n", te.tv_nsec - ts.tv_nsec);
+                        // too much pressure for PM (multi-thread)
+                        if (te.tv_nsec - ts.tv_nsec > threshold) {
+                            // hk_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
+                            usleep_range(5000, 7000);
+                        }
+                    }
+#endif
                 } else {
                     // TODO: larger than 4-KiB
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    __copy_from_user(addr + each_ofs, content, each_size);
+                    hk_flush_buffer(addr + each_ofs, each_size, true);
                 }
             } else {
                 if (out_size > 2 * HK_LBLK_SZ(sbi)) {

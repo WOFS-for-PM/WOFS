@@ -24,6 +24,7 @@
  */
 
 #include "hunter.h"
+#include "mt19937ar.h"
 
 static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
                                    size_t len, loff_t *ppos)
@@ -682,6 +683,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *pprep;
     size_t out_size = 0;
     bool append_like = false, extend = false;
+    int prob = 0;
     int ret = 0;
 
     INIT_TIMING(write_time);
@@ -708,30 +710,30 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         append_like = true;
     }
 
-    if (pos > AGING_PHASE_1) {
-        if (pos - 4096 < AGING_PHASE_1) {
-            hk_info("start aging, no huge allocation\n");
-        }
-        append_like = false;
-        sbi->aging_pos = pos;
-    }
+    // if (pos > AGING_PHASE_1) {
+    //     if (pos - 4096 < AGING_PHASE_1) {
+    //         hk_info("start aging, no huge allocation\n");
+    //     }
+    //     append_like = false;
+    //     sbi->aging_pos = pos;
+    // }
 
-    if (pos > RECOVER_PHASE) {
-        if (pos - 4096 < RECOVER_PHASE) {
-            hk_info("start recover, enable huge allocation\n");
-        }
-        append_like = true;
-        sbi->aging_pos = pos;
-        sbi->counter++;
-        // 4 stages
-        sbi->recover_blks = (sbi->counter >> 19)  > HK_EXTEND_NUM_BLOCKS ? HK_EXTEND_NUM_BLOCKS : (sbi->counter >> 19);
-        if (sbi->recover_blks == 0) {
-            sbi->recover_blks = 1;
-        }
-    } else {
-        sbi->counter = 0;
-        sbi->recover_blks = 0;
-    }
+    // if (pos > RECOVER_PHASE) {
+    //     if (pos - 4096 < RECOVER_PHASE) {
+    //         hk_info("start recover, enable huge allocation\n");
+    //     }
+    //     append_like = true;
+    //     sbi->aging_pos = pos;
+    //     sbi->counter++;
+    //     // 4 stages
+    //     sbi->recover_blks = (sbi->counter >> 19)  > HK_EXTEND_NUM_BLOCKS ? HK_EXTEND_NUM_BLOCKS : (sbi->counter >> 19);
+    //     if (sbi->recover_blks == 0) {
+    //         sbi->recover_blks = 1;
+    //     }
+    // } else {
+    //     sbi->counter = 0;
+    //     sbi->recover_blks = 0;
+    // }
 
     error = file_remove_privs(filp);
     if (error)
@@ -754,18 +756,36 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     blks = blks_orig = (end_index - index + 1); /* Total blks to be written */
     blks_allocated = 0;
     if (append_like) {
-        if (pos > RECOVER_PHASE) {
-            if (blks < sbi->recover_blks) {
-                blks = sbi->recover_blks;
+        // if (pos > RECOVER_PHASE) {
+        //     if (blks < sbi->recover_blks) {
+        //         blks = sbi->recover_blks;
+        //         extend = true;
+        //     }
+        // } else {
+        /* try extend blks to be allocted */
+        if (blks < HK_EXTEND_NUM_BLOCKS) {
+            prob = genrand_int32() % 100;
+            if (prob < 47) {
+                // 47% for 1 block
+                blks = 1;
+                extend = false;
+            } else if (prob < 47 + 15)
+            {
+                // 15% for 2 blocks
+                blks = 2;
                 extend = true;
-            }
-        } else {
-            /* try extend blks to be allocted */
-            if (blks < HK_EXTEND_NUM_BLOCKS) {
+            } else if (prob < 47 + 15 + 6)
+            {
+                // 6% for 4 blocks
+                blks = 4;
+                extend = true;
+            } else {
+                // 32% for others
                 blks = HK_EXTEND_NUM_BLOCKS;
                 extend = true;
             }
         }
+        // }
     }
 
     inode->i_ctime = inode->i_mtime = current_time(inode);

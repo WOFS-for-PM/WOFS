@@ -42,6 +42,7 @@
 #include <uapi/linux/mount.h>
 
 #include "hunter.h"
+#include "mt19937ar.h"
 
 int measure_timing;
 int wprotect;
@@ -943,6 +944,8 @@ setup_sb:
     sb->s_xattr = NULL;
     sb->s_flags |= MS_NOSEC;
 
+    init_genrand(0);
+   
     /* If the FS was not formatted on this mount, scan the meta-data after
      * truncate list has been processed
      */

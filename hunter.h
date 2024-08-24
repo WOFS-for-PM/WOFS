@@ -461,7 +461,7 @@ obj_ref_attr_t *ref_attr_create(u64 addr, u32 ino, u16 from_pkg, u64 dep_ofs);
 void ref_attr_destroy(obj_ref_attr_t *ref);
 obj_ref_dentry_t *ref_dentry_create(u64 addr, const char *name, u32 len, u32 ino, u32 parent_ino);
 void ref_dentry_destroy(obj_ref_dentry_t *ref);
-obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset);
+obj_ref_data_t *ref_data_create(struct hk_sb_info *sbi, u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset);
 void ref_data_destroy(obj_ref_data_t *ref);
 int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr);
 void obj_mgr_destroy(obj_mgr_t *mgr);

@@ -367,7 +367,7 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
                     pm_data_addr = get_pm_blk_addr(sbi, data->blk);
                     tl_build_restore_param(&param, data->blk, data->num, TL_BLK);
                     tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, pm_data_addr)), &param);
-                    ref_data = ref_data_create(get_pm_offset(sbi, in_pm_addr), data->ino, data->ofs, data->num, get_pm_offset(sbi, pm_data_addr));
+                    ref_data = ref_data_create(sbi, get_pm_offset(sbi, in_pm_addr), data->ino, data->ofs, data->num, get_pm_offset(sbi, pm_data_addr));
                     obj_mgr_load_dobj_control(sbi->pack_layout.obj_mgr, ref_data, OBJ_DATA);
 
                     try_insert_min_data_vtail_table(recovery_param, data->ino, data->hdr.vtail);

@@ -643,7 +643,11 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
         sbi->m_addr = sbi->pack_layout.bm_start = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
         sbi->pack_layout.tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
         sbi->m_size = sbi->pack_layout.bm_size = hk_get_bm_size(sb);
+        sbi->pack_layout.mempool_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
+        sbi->pack_layout.mempool_size = (_round_up(sbi->initsize, PAGE_SIZE) >> PAGE_SHIFT) * sizeof(struct obj_ref_data);
+        sbi->m_size += sbi->pack_layout.mempool_size;
         sbi->pack_layout.fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
+        sbi->pack_layout.cur_obj = 0;
     } else {
         sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct hk_header);
 

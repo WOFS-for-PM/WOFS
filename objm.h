@@ -210,10 +210,12 @@ typedef struct obj_ref_hdr {
 } obj_ref_hdr_t;
 
 /* I/O related reference */
-#define DATA_HOLE          0
-#define DATA_REF           1
-#define DATA_IS_HOLE(type) ((type) == DATA_HOLE)
-#define DATA_IS_REF(type)  ((type) == DATA_REF)
+#define DATA_HOLE          0x0
+#define DATA_REF           0x1
+#define DATA_IN_PM         0x2
+#define DATA_IS_HOLE(type) ((type) & DATA_HOLE)
+#define DATA_IS_REF(type)  ((type) & DATA_REF)
+#define DATA_IS_IN_PM(type) ((type) & DATA_IN_PM)
 
 typedef struct obj_ref_data {
     obj_ref_hdr_t hdr; /* in-pm entry hdr */

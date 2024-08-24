@@ -56,22 +56,43 @@ inline void ref_dentry_destroy(obj_ref_dentry_t *ref)
     }
 }
 
-inline obj_ref_data_t *ref_data_create(u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset)
+
+static int count = 0;
+
+#define WORKLOAD_SIZE (32 * 1024L * 1024L * 1024L) // a 32 GB workload
+#define MAX_OBJ_REF_DATA 0
+
+inline obj_ref_data_t *ref_data_create(struct hk_sb_info *sbi, u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset)
 {
-    obj_ref_data_t *ref = hk_alloc_obj_ref_data();
+    obj_ref_data_t *ref;
+    count++;
+    if (count > MAX_OBJ_REF_DATA) {
+        if (count == MAX_OBJ_REF_DATA + 1) {
+            hk_info("Max obj_ref_data reached, count %d\n", count);
+        }
+        ref = &((obj_ref_data_t *)sbi->pack_layout.mempool_start)[sbi->pack_layout.cur_obj++];
+        ref->type = DATA_REF | DATA_IN_PM;
+    } else {
+        ref = hk_alloc_obj_ref_data();
+        ref->type = DATA_REF;
+    }
+
     ref->hdr.ref = 1;
     ref->hdr.addr = addr;
     ref->hdr.ino = ino;
     ref->ofs = ofs;
     ref->num = num;
     ref->data_offset = data_offset;
-    ref->type = DATA_REF;
+
     return ref;
 }
 
 inline void ref_data_destroy(obj_ref_data_t *ref)
 {
     if (ref) {
+        if (DATA_IS_IN_PM(ref->type)) {
+            return;
+        }
         hk_free_obj_ref_data(ref);
     }
 }
@@ -701,7 +722,7 @@ int reclaim_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_upd
                 return ret;
             }
 
-            new_ref = ref_data_create(get_pm_offset(sbi, addr), sih->ino, new_ofs, behind_remained_blks, new_data_ofs);
+            new_ref = ref_data_create(sbi, get_pm_offset(sbi, addr), sih->ino, new_ofs, behind_remained_blks, new_data_ofs);
             for (blk = 0; blk < behind_remained_blks; blk++) {
                 linix_insert(&sih->ix, GET_ALIGNED_BLKNR(new_ofs) + blk, new_ref, false);
             }
@@ -808,7 +829,7 @@ int ur_dram_data(obj_mgr_t *mgr, struct hk_inode_info_header *sih, data_update_t
     HK_START_TIMING(data_claim_t, time);
     if (!update->build_from_exist) {
         /* handle data to obj mgr */
-        ref = ref_data_create(update->addr, sih->ino, update->ofs, update->num, get_pm_blk_offset(sbi, update->blk));
+        ref = ref_data_create(sbi, update->addr, sih->ino, update->ofs, update->num, get_pm_blk_offset(sbi, update->blk));
         obj_mgr_load_dobj_control(mgr, (void *)ref, OBJ_DATA);
     } else {
         ref = (obj_ref_data_t *)update->exist_ref;

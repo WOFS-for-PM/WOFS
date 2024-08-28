@@ -86,15 +86,25 @@
 #define hk_warn(s, args ...)		pr_warn(s, ## args)
 #define hk_info(s, args ...)		pr_info("cpu-%d: "s, smp_processor_id(), ## args)
 
-// extern ssize_t __kernel_write(struct file *, const void *, size_t, loff_t *);
-#define trace_hk_fun(sbi, s, args ...)  \
-	do { \
-		if (trace_enabled) { \
-			char buf[512] = {0}; \
-			snprintf(buf, 256, "%s, "s, __func__, ## args); \
-			__kernel_write(sbi->trace_fp, buf, strlen(buf), &sbi->trace_cur_pos); \
-		} \
-	} while (0)
+enum hk_trace_action {
+	HK_TRACE_CKPT,
+	HK_TRACE_IO,
+	HK_TRACE_FENCE,
+};
+
+#define HK_TRACE_MAX_KEYWORD_LEN 64
+#define HK_TRACE_KEYWORD __func__, strlen(__func__)
+#define HK_TRACE_IO_PARAM HK_TRACE_KEYWORD, HK_TRACE_IO
+#define HK_TRACE_FENCE_PARAM sbi, NULL, 0, 0, HK_TRACE_KEYWORD, HK_TRACE_FENCE
+#define HK_TRACE_CKPT_PARAM sbi, NULL, 0, 0, HK_TRACE_KEYWORD, HK_TRACE_CKPT
+
+struct hk_trace {
+	char keyword[HK_TRACE_MAX_KEYWORD_LEN];
+	char action;
+	u64 addr;
+	u64 size;
+	char body[0];
+} __attribute__((packed));
 
 extern unsigned int hk_dbgmask;
 #define HK_DBGMASK_MMAPHUGE	        (0x00000001)
@@ -171,6 +181,45 @@ struct hk_range_node {
 #include "dbg.h"
 #include "formater.h"
 
+
+static inline void trace_hk_fun(struct hk_sb_info *sbi, const char *buf, 
+								u64 addr, u64 size, 
+								char *keyword, u32 keyword_len, 
+								enum hk_trace_action action)
+{
+	struct hk_trace trace;
+
+	if (keyword_len > HK_TRACE_MAX_KEYWORD_LEN) {
+		hk_err(sbi->sb, "keyword too long\n");
+		return;
+	}
+
+	if (trace_enabled) {
+		memcpy(trace.keyword, keyword, keyword_len);
+		trace.action = action;
+
+		switch (action) {
+		case HK_TRACE_CKPT:
+		case HK_TRACE_FENCE:
+			trace.addr = 0;
+			trace.size = 0;
+			break;
+		case HK_TRACE_IO:
+			trace.addr = addr;
+			trace.size = size;
+			__kernel_write(sbi->trace_fp, &trace, sizeof(struct hk_trace), &sbi->trace_cur_pos);
+			if (buf) {
+				__kernel_write(sbi->trace_fp, buf, size, &sbi->trace_cur_pos);
+			} else {
+				char *zero = kzalloc(size, GFP_KERNEL);
+				__kernel_write(sbi->trace_fp, zero, size, &sbi->trace_cur_pos);
+				kfree(zero);
+			}
+			break;
+		}
+	}
+}
+
 static inline void prefetcht0(const void *x) {
 	asm volatile("prefetcht0 %0" : : "m" (*(const char* )x));
 }
@@ -240,15 +289,15 @@ static inline int memcpy_to_pmem_nocache(struct hk_sb_info *sbi, void *dst, cons
 {
 	int ret;
 
-	trace_hk_fun(sbi, "dst:0x%llx, len:%lu\n", (u64)dst - (u64)sbi->virt_addr, size);
-	
+	trace_hk_fun(sbi, src, (u64)dst - (u64)sbi->virt_addr, size, HK_TRACE_IO_PARAM);
+
 	// for tracing purpose
 	// simply grab __copy_user_nocache from kernel
 	// here we can obtain its source code
 
 	ret = __copy_user_nocache_w_fence(dst, src, size, 0);
 
-	trace_hk_fun(sbi, "sfence\n");
+	trace_hk_fun(HK_TRACE_FENCE_PARAM);
 
 	return ret;
 }
@@ -262,7 +311,7 @@ static inline void memset_nt(struct hk_sb_info *sbi, void *dest, uint32_t dword,
 	
 	BUG_ON(length > ((u64)1 << 32));
 
-	trace_hk_fun(sbi, "dst:0x%llx, len:%lu\n", (u64)dest - (u64)sbi->virt_addr, length);
+	trace_hk_fun(sbi, NULL, (u64)dest - (u64)sbi->virt_addr, length, HK_TRACE_IO_PARAM);
 	
 	asm volatile ("movl %%edx,%%ecx\n"
 		"andl $63,%%edx\n"

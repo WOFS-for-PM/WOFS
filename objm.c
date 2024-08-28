@@ -1158,8 +1158,8 @@ void commit_pkg(struct hk_sb_info *sbi, void *obj_start, u32 len, struct hk_obj_
     unsigned long flags = 0;
     INIT_TIMING(time);
 
-    trace_hk_fun(sbi, "obj_start:0x%llx, len:%lu\n", get_pm_offset(sbi, obj_start), len);
-    trace_hk_fun(sbi, "sfence\n");
+    trace_hk_fun(sbi, obj_start, get_pm_offset(sbi, obj_start), len, HK_TRACE_IO_PARAM);
+	trace_hk_fun(HK_TRACE_FENCE_PARAM);
 
     HK_START_TIMING(wr_once_t, time);
     hk_memunlock_range(sb, last_obj_hdr, sizeof(struct hk_obj_hdr), &flags);
@@ -1482,8 +1482,8 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
             /*       is valid. If valid, then this is a good package. Otherwise it */
             /*       can be discarded.*/
             data->hdr.reserved = value;
-            trace_hk_fun(sbi, "data:0x%llx, len:%lu\n", get_pm_offset(sbi, data), CACHELINE_SIZE);
-            trace_hk_fun(sbi, "sfence\n");
+            trace_hk_fun(sbi, (char *)&value, get_pm_offset(sbi, data->hdr.reserved), sizeof(u64), HK_TRACE_IO_PARAM);
+	        trace_hk_fun(HK_TRACE_FENCE_PARAM);
             hk_flush_buffer(data, CACHELINE_SIZE, true);
             break;
         default:

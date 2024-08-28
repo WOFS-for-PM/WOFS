@@ -1014,12 +1014,15 @@ int hk_notify_change(struct dentry *dentry, struct iattr *attr)
     struct hk_inode_info *si = HK_I(inode);
     struct hk_inode_info_header *sih = si->header;
     struct super_block *sb = inode->i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
     int ret;
     unsigned int ia_valid = attr->ia_valid, attr_mask;
     loff_t oldsize = inode->i_size;
     INIT_TIMING(setattr_time);
 
     HK_START_TIMING(setattr_t, setattr_time);
+    
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
 
     ret = setattr_prepare(dentry, attr);
     if (ret)

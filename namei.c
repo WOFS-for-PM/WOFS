@@ -784,8 +784,10 @@ static int hk_create(struct inode *dir, struct dentry *dentry, umode_t mode,
                      bool excl)
 {
     int err = 0;
+    struct hk_sb_info *sbi = HK_SB(dir->i_sb);
     INIT_TIMING(create_time);
     HK_START_TIMING(create_t, create_time);
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     err = __hk_create(dir, dentry, mode, excl, 0, TYPE_CREATE);
     HK_END_TIMING(create_t, create_time);
     return err;
@@ -795,8 +797,10 @@ static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
                     dev_t rdev)
 {
     int err = 0;
+    struct hk_sb_info *sbi = HK_SB(dir->i_sb);
     INIT_TIMING(mknod_time);
     HK_START_TIMING(mknod_t, mknod_time);
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     err = __hk_create(dir, dentry, mode, false, rdev, TYPE_MKNOD);
     HK_END_TIMING(mknod_t, mknod_time);
     return err;
@@ -805,8 +809,10 @@ static int hk_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 static int hk_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
     int err = 0;
+    struct hk_sb_info *sbi = HK_SB(dir->i_sb);
     INIT_TIMING(mkdir_time);
     HK_START_TIMING(mkdir_t, mkdir_time);
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     err = __hk_create(dir, dentry, S_IFDIR | mode, false, 0, TYPE_MKDIR);
     inc_nlink(dir);
     HK_END_TIMING(mkdir_t, mkdir_time);
@@ -827,6 +833,7 @@ static int hk_symlink(struct inode *dir, struct dentry *dentry,
     u32 ino;
     int txid;
 
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     INIT_TIMING(symlink_time);
 
     HK_START_TIMING(symlink_t, symlink_time);
@@ -944,6 +951,7 @@ static int hk_link(struct dentry *dest_dentry, struct inode *dir,
     int txid;
     INIT_TIMING(link_time);
 
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     HK_START_TIMING(link_t, link_time);
     if (inode->i_nlink >= HK_LINK_MAX) {
         err = -EMLINK;
@@ -1137,8 +1145,10 @@ out_err:
 static int hk_unlink(struct inode *dir, struct dentry *dentry)
 {
     int retval = -ENOMEM;
+    struct hk_sb_info *sbi = HK_SB(dir->i_sb);
     INIT_TIMING(unlink_time);
     HK_START_TIMING(unlink_t, unlink_time);
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     retval = __hk_remove(dir, dentry);
     HK_END_TIMING(unlink_t, unlink_time);
     return retval;
@@ -1165,8 +1175,9 @@ static bool hk_empty_dir(struct inode *inode)
 static int hk_rmdir(struct inode *dir, struct dentry *dentry)
 {
     struct inode *inode = dentry->d_inode;
+    struct hk_sb_info *sbi = HK_SB(dir->i_sb);
     int retval = -ENOTEMPTY;
-
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     if (hk_empty_dir(inode)) {
         retval = __hk_remove(dir, dentry);
     }
@@ -1186,7 +1197,7 @@ static int hk_rename(struct inode *old_dir,
     int err = 0;
     unsigned long irq_flags = 0;
     int txid;
-
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     INIT_TIMING(rename_time);
 
     hk_dbgv("%s: rename %s to %s,\n", __func__,

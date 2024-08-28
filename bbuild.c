@@ -39,6 +39,12 @@ void hk_set_bit(u32 bit, u8 *bm)
     bm[byte] |= (1 << bit_in_byte);
 }
 
+u8 hk_get_byte(u32 bit, u8 *bm)
+{
+    u32 byte = bit >> 3;
+    return bm[byte];
+}
+
 void hk_clear_bit(u32 bit, u8 *bm)
 {
     u32 byte = bit >> 3;
@@ -1065,6 +1071,7 @@ unsigned long hk_get_bm_size(struct super_block *sb)
 void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
 {
     u8 *bm;
+    u8 buf;
     unsigned long flags = 0;
     struct super_block *sb = sbi->sb;
     INIT_TIMING(time);
@@ -1075,9 +1082,11 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
 
     hk_memunlock_bm(sb, bmblk, &flags);
 
-    trace_hk_fun(sbi, "bm:0x%llx, len:%lu\n", get_pm_offset(sbi, bm + (blk >> 3)), CACHELINE_SIZE);
-
     hk_set_bit(blk, bm);
+
+    buf = hk_get_byte(blk, bm);
+    trace_hk_fun(sbi, &buf, bm + (blk >> 3), 1, HK_TRACE_IO_PARAM);
+
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
     hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
@@ -1089,6 +1098,7 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
 void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
 {
     u8 *bm;
+    u8 buf;
     unsigned long flags = 0;
     struct super_block *sb = sbi->sb;
     INIT_TIMING(time);
@@ -1100,7 +1110,9 @@ void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     hk_memunlock_bm(sb, bmblk, &flags);
     hk_clear_bit(blk, bm);
 
-    trace_hk_fun(sbi, "bm: 0x%llx, len: %lu\n", get_pm_offset(sbi, bm + (blk >> 3)), CACHELINE_SIZE);
+    buf = hk_get_byte(blk, bm);
+    trace_hk_fun(sbi, &buf, bm + (blk >> 3), 1, HK_TRACE_IO_PARAM);
+
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
     hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);

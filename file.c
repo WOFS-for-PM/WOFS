@@ -854,6 +854,8 @@ static ssize_t hk_dax_file_write(struct file *filp, const char __user *buf,
 {
     struct address_space *mapping = filp->f_mapping;
     struct inode *inode = mapping->host;
+    struct super_block *sb = inode->i_sb;
+    struct hk_sb_info *sbi = HK_SB(sb);
     int ret;
 
     if (len == 0)
@@ -862,6 +864,7 @@ static ssize_t hk_dax_file_write(struct file *filp, const char __user *buf,
     sb_start_write(inode->i_sb);
     inode_lock(inode);
 
+    trace_hk_fun(HK_TRACE_CKPT_PARAM);
     ret = do_hk_file_write(filp, buf, len, ppos);
 
     inode_unlock(inode);

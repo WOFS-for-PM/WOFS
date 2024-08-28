@@ -69,6 +69,10 @@
 #define HK_READAHEAD_WINDOW      (16 * 1024)
 #define HK_RESCUE_WORKERS        8  /* for failure recovery */
 
+#ifndef MAX_OBJ_REF_DATA
+#define MAX_OBJ_REF_DATA 0
+#endif
+
 /* ======================= Enhanced Configurations ========================= */
 #define CONFIG_CMT_BACKGROUND     /* enable background commit system */
 #define CONFIG_PERCORE_IALLOCATOR /* enable per core inode allocator */

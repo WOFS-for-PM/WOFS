@@ -440,6 +440,7 @@ static inline void hk_mount_over(struct super_block *sb)
     hk_sync_super(sb);
 
     hk_info("MAX_GAP_BLKS_PER_LAYOUT: %llu\n", HK_MAX_GAPS_INRAM);
+    hk_info("MAX_DATA_OBJ_REF: %llu\n", MAX_OBJ_REF_DATA);
 }
 
 static inline void hk_umount_over(struct super_block *sb)

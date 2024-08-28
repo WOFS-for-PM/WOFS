@@ -22,7 +22,14 @@ MNT_POINT=/mnt/pmem0
 
 # build project
 cd "$WORK_DIR" || exit
-sudo make -j"$(nproc)"
+
+if [ ! "$2" ]; then
+    max_mem_obj=0
+else 
+    max_mem_obj="$2"
+fi
+
+sudo make -j"$(nproc)" MAX_OBJ_REF_DATA="$max_mem_obj"
 sudo dmesg -C
 
 # parse config

@@ -59,9 +59,6 @@ inline void ref_dentry_destroy(obj_ref_dentry_t *ref)
 
 static int count = 0;
 
-#define WORKLOAD_SIZE (32 * 1024L * 1024L * 1024L) // a 32 GB workload
-#define MAX_OBJ_REF_DATA 0
-
 inline obj_ref_data_t *ref_data_create(struct hk_sb_info *sbi, u64 addr, u32 ino, u64 ofs, u32 num, u64 data_offset)
 {
     obj_ref_data_t *ref;

@@ -311,6 +311,7 @@ int hk_applying_region_to_inode(struct super_block *sb, struct hk_inode *pi)
 int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
 {
     struct hk_mregion *rg;
+    struct hk_sb_info *sbi = HK_SB(sb);
     unsigned long irq_flags = 0;
     int slotid;
 
@@ -325,7 +326,7 @@ int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
 
     for (slotid = 0; slotid < HK_RG_ENTY_SLOTS; slotid++) {
         if (slotid != rg->last_valid_linkchange && slotid != rg->last_valid_setattr) {
-            memcpy_to_pmem_nocache(&rg->entries[slotid], entry, sizeof(struct hk_mentry));
+            memcpy_to_pmem_nocache(sbi, &rg->entries[slotid], entry, sizeof(struct hk_mentry));
 
             /* Commit The Write */
             switch (entry->type) {
@@ -734,7 +735,7 @@ int do_start_tx(struct super_block *sb, int txid, struct hk_tx_info *info)
             if (jcur + sizeof(struct hk_jentry) > jend) {
                 jcur = jstart;
             }
-            memcpy_to_pmem_nocache((void *)jcur, je, sizeof(struct hk_jentry));
+            memcpy_to_pmem_nocache(sbi, (void *)jcur, je, sizeof(struct hk_jentry));
             jcur += sizeof(struct hk_jentry);
         }
     }

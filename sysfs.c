@@ -139,6 +139,41 @@ static const struct file_operations hk_seq_IO_fops = {
     .release = single_release,
 };
 
+ssize_t hk_seq_control_trace(struct file *filp, const char __user *buf,
+                           size_t len, loff_t *ppos)
+{
+    struct address_space *mapping = filp->f_mapping;
+    struct inode *inode = mapping->host;
+
+    if (len == 0)
+        return -EINVAL;
+
+    char *kbuf = kmalloc(len + 1, GFP_KERNEL);
+    if (!kbuf)
+        return -ENOMEM;
+    kbuf[len] = '\0';
+    
+    copy_from_user(kbuf, buf, len);
+
+    printk(KERN_INFO "hk_seq_control_trace: %s\n", kbuf);
+    printk(KERN_INFO "hk_seq_control_trace: %d\n", kbuf[0] == '1');
+
+    if (kbuf[0] == '1') {
+        trace_enabled = true;
+    } else {
+        trace_enabled = false;
+    }
+    
+    kfree(kbuf);
+
+    return len;
+}
+
+static const struct file_operations hk_seq_trace_fops = {
+    .owner = THIS_MODULE,
+    .write = hk_seq_control_trace,
+};
+
 /* ====================== Setup/teardown======================== */
 void hk_sysfs_init(struct super_block *sb)
 {
@@ -153,6 +188,8 @@ void hk_sysfs_init(struct super_block *sb)
                          &hk_seq_timing_fops, sb);
         proc_create_data("IO_stats", 0444, sbi->s_proc,
                          &hk_seq_IO_fops, sb);
+        proc_create_data("Enable_trace", 0444, sbi->s_proc,
+                         &hk_seq_trace_fops, sb);
     }
 }
 
@@ -163,6 +200,7 @@ void hk_sysfs_exit(struct super_block *sb)
     if (sbi->s_proc) {
         remove_proc_entry("timing_stats", sbi->s_proc);
         remove_proc_entry("IO_stats", sbi->s_proc);
+        remove_proc_entry("Enable_trace", sbi->s_proc);
         remove_proc_entry(sbi->s_bdev->bd_disk->disk_name,
                           hk_proc_root);
     }

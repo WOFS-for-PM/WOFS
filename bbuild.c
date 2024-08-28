@@ -981,7 +981,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
 
                                 /* partially overlapped */
                                 ref_data->num = num;
-                                memset_nt(get_pm_addr(sbi, ref_data->data_offset) + (attr->i_size - ref_data->ofs), 0, ref_data->num << PAGE_SHIFT - (attr->i_size - ref_data->ofs));
+                                memset_nt(sbi, get_pm_addr(sbi, ref_data->data_offset) + (attr->i_size - ref_data->ofs), 0, ref_data->num << PAGE_SHIFT - (attr->i_size - ref_data->ofs));
                             }
                         }
                     }
@@ -1074,6 +1074,9 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     bm = __hk_get_bm_addr(sbi, NULL, bmblk);
 
     hk_memunlock_bm(sb, bmblk, &flags);
+
+    trace_hk_fun(sbi, "bm:0x%llx, len:%lu\n", get_pm_offset(sbi, bm + (blk >> 3)), CACHELINE_SIZE);
+
     hk_set_bit(blk, bm);
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
@@ -1096,6 +1099,8 @@ void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
 
     hk_memunlock_bm(sb, bmblk, &flags);
     hk_clear_bit(blk, bm);
+
+    trace_hk_fun(sbi, "bm: 0x%llx, len: %lu\n", get_pm_offset(sbi, bm + (blk >> 3)), CACHELINE_SIZE);
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
     hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
@@ -1747,10 +1752,10 @@ static int hk_rescue_bm(struct super_block *sb)
     wait_to_finish(rescuer_num);
 
     /* aggregate bm buffers to pm */
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(sbi, __hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(sbi, __hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(sbi, __hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(sbi, __hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
 
 out:
     kfree(finished);

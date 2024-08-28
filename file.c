@@ -249,7 +249,7 @@ static size_t hk_try_in_place_append_write(struct hk_inode_info *si, loff_t pos,
                 __copy_from_user(target, content, out_size);
                 hk_flush_buffer(target, out_size, true);
             } else {
-                memcpy_to_pmem_nocache(target, content, out_size);
+                memcpy_to_pmem_nocache(sbi, target, content, out_size);
             }
             hk_memlock_range(sb, target, out_size, &irq_flags);
             HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
@@ -295,7 +295,7 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
                     ref = (obj_ref_data_t *)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
+                    memcpy_to_pmem_nocache(sbi, cur_addr, blk_addr, each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                     *each_size -= each_ofs;
                 }
@@ -312,11 +312,11 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
                     if (ref) {
                         blk_addr = get_pm_addr_by_data_ref(sbi, ref, offset + len);
                         hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                        memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
+                        memcpy_to_pmem_nocache(sbi, cur_addr + each_ofs, blk_addr, HK_LBLK_SZ(sbi) - each_ofs);
                         hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     } else {
                         hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                        memset_nt(cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
+                        memset_nt(sbi, cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
                         hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     }
                     *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
@@ -325,7 +325,7 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
         } else {
             if (index == start_index && each_ofs != 0) {
                 hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                memset_nt(cur_addr, 0, each_ofs);
+                memset_nt(sbi, cur_addr, 0, each_ofs);
                 hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                 *each_size -= each_ofs;
             }
@@ -337,7 +337,7 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
                 each_ofs = (offset + len) & (HK_LBLK_SZ(sbi) - 1);
                 if (each_ofs) {
                     hk_memunlock_range(sb, cur_addr + each_ofs, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    memset_nt(cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
+                    memset_nt(sbi, cur_addr + each_ofs, 0, HK_LBLK_SZ(sbi) - each_ofs);
                     hk_memlock_range(sb, cur_addr, HK_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     *each_size -= (HK_LBLK_SZ(sbi) - each_ofs);
                 }
@@ -350,14 +350,14 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
                     blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
                     hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr, hk_get_block(sb, blk_addr), each_ofs);
+                    memcpy_to_pmem_nocache(sbi, cur_addr, hk_get_block(sb, blk_addr), each_ofs);
                     hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                 }
                 if (index == end_index && len < HK_LBLK_SZ(sbi)) {
                     blk_addr = (u64)hk_inode_get_slot(sih, (index << PAGE_SHIFT));
                     *each_size = len;
                     hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
+                    memcpy_to_pmem_nocache(sbi, cur_addr + (len + each_ofs), hk_get_block(sb, blk_addr) + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs));
                     hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
                 }
             }
@@ -365,13 +365,13 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
             if (index == start_index && each_ofs != 0) {
                 *each_size = min(HK_LBLK_SZ(sbi) - each_ofs, len);
                 hk_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                memset_nt(cur_addr, 0, each_ofs);
+                memset_nt(sbi, cur_addr, 0, each_ofs);
                 hk_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
             }
             if (index == end_index && len < HK_LBLK_SZ(sbi)) {
                 *each_size = len;
                 hk_memunlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                memset_nt(cur_addr + (len + each_ofs), 0, HK_LBLK_SZ(sbi) - (len + each_ofs));
+                memset_nt(sbi, cur_addr + (len + each_ofs), 0, HK_LBLK_SZ(sbi) - (len + each_ofs));
                 hk_memlock_range(sb, cur_addr + (len + each_ofs), HK_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
             }
         }
@@ -436,7 +436,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     struct timespec ts, te;
                     unsigned long threshold = 0;
                     getrawmonotonic(&ts);
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    memcpy_to_pmem_nocache(sbi, addr + each_ofs, content, each_size);
                     getrawmonotonic(&te);
 
 #if FIO_REGULATE
@@ -477,7 +477,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     __copy_from_user(addr + each_ofs, content, each_size);
                     hk_flush_buffer(addr + each_ofs, each_size, true);
                 } else {
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    memcpy_to_pmem_nocache(sbi, addr + each_ofs, content, each_size);
                 }
             }
         } else {
@@ -515,7 +515,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                     HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
                     hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
                     /* Make sure Align 64 */
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    memcpy_to_pmem_nocache(sbi, addr + each_ofs, content, each_size);
                     hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
                     HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
@@ -558,7 +558,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                     HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
                     hk_memunlock_range(sb, addr, each_size, &irq_flags);
-                    memcpy_to_pmem_nocache(addr, content, each_size);
+                    memcpy_to_pmem_nocache(sbi, addr, content, each_size);
                     hk_memlock_range(sb, addr, each_size, &irq_flags);
                     HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
@@ -620,7 +620,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
 
                 HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
                 hk_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                memcpy_to_pmem_nocache(sbi, addr + each_ofs, content, each_size);
                 hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
                 HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 

@@ -1158,6 +1158,9 @@ void commit_pkg(struct hk_sb_info *sbi, void *obj_start, u32 len, struct hk_obj_
     unsigned long flags = 0;
     INIT_TIMING(time);
 
+    trace_hk_fun(sbi, "obj_start:0x%llx, len:%lu\n", get_pm_offset(sbi, obj_start), len);
+    trace_hk_fun(sbi, "sfence\n");
+
     HK_START_TIMING(wr_once_t, time);
     hk_memunlock_range(sb, last_obj_hdr, sizeof(struct hk_obj_hdr), &flags);
     /* fence-once */
@@ -1294,7 +1297,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     pkg_hdr->hdr.crc32 = hk_crc32c(~0, (const char *)pkg_buf, MTA_PKG_CREATE_SIZE);
     hk_memunlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
     /* fence-once */
-    memcpy_to_pmem_nocache((void *)out_param->addr, pkg_buf, MTA_PKG_CREATE_SIZE);
+    memcpy_to_pmem_nocache(sbi, (void *)out_param->addr, pkg_buf, MTA_PKG_CREATE_SIZE);
     hk_memlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
 
     /* address re-assignment */
@@ -1479,6 +1482,8 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
             /*       is valid. If valid, then this is a good package. Otherwise it */
             /*       can be discarded.*/
             data->hdr.reserved = value;
+            trace_hk_fun(sbi, "data:0x%llx, len:%lu\n", get_pm_offset(sbi, data), CACHELINE_SIZE);
+            trace_hk_fun(sbi, "sfence\n");
             hk_flush_buffer(data, CACHELINE_SIZE, true);
             break;
         default:

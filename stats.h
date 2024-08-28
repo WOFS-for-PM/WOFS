@@ -186,6 +186,7 @@ extern u64 Countstats[TIMING_NUM];
 DECLARE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 extern u64 IOstats[STATS_NUM];
 DECLARE_PER_CPU(u64[STATS_NUM], IOstats_percpu);
+extern bool trace_enabled;
 
 typedef struct timespec timing_t;
 

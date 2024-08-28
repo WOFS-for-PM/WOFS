@@ -468,12 +468,12 @@ static int hk_format_hunter(struct super_block *sb)
     
     super = hk_get_super(sb, HUNTER_FIRST_SUPER_BLK);
     hk_memunlock_super(sb, HUNTER_FIRST_SUPER_BLK, &irq_flags);
-    memset_nt((void *)super, 0, HK_SB_SIZE(sbi));
+    memset_nt(sbi, (void *)super, 0, HK_SB_SIZE(sbi));
     hk_memlock_super(sb, HUNTER_FIRST_SUPER_BLK, &irq_flags);
 
     super_redund = hk_get_super(sb, HUNTER_SECOND_SUPER_BLK);
     hk_memunlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
-    memset_nt((void *)super_redund, 0, HK_SB_SIZE(sbi));
+    memset_nt(sbi, (void *)super_redund, 0, HK_SB_SIZE(sbi));
     hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
 
     hk_format_meta(sb);
@@ -638,6 +638,14 @@ static int hk_super_constants_init(struct hk_sb_info *sbi)
     int i;
     
     sbi->lblk_sz = PAGE_SIZE;
+    sbi->trace_fp = filp_open("/tmp/killer-trace", O_RDWR | O_CREAT | O_TRUNC, 0);
+    if (IS_ERR(sbi->trace_fp)) {
+        hk_err(sb, "Failed to open trace file\n");
+        return PTR_ERR(sbi->trace_fp);
+    }
+    sbi->trace_cur_pos = 0;
+    trace_enabled = false;
+
     if (ENABLE_META_PACK(sb)) {
         sbi->pblk_sz = PAGE_SIZE;
         sbi->m_addr = sbi->pack_layout.bm_start = _round_up((u64)sbi->virt_addr + HUNTER_SUPER_BLKS * HK_SB_SIZE(sbi), PAGE_SIZE);
@@ -819,7 +827,7 @@ void hk_backup_super(struct hk_sb_info *sbi, u32 orig_super_blk, u32 back_super_
     struct hk_super_block *super, *bak_super;
     super = sbi->virt_addr + (orig_super_blk * HK_SB_SIZE(sbi));
     bak_super = sbi->virt_addr + (back_super_blk * HK_SB_SIZE(sbi));
-    memcpy_to_pmem_nocache(bak_super, super, HK_SB_SIZE(sbi));
+    memcpy_to_pmem_nocache(sbi, bak_super, super, HK_SB_SIZE(sbi));
 }
 
 static int hk_fill_super(struct super_block *sb, void *data, int silent)
@@ -1090,6 +1098,9 @@ static void hk_put_super(struct super_block *sb)
         hk_free_cmt_queue(sbi->cq);
         hk_stablisze_meta(sb);
     }
+
+    if (sbi->trace_fp)
+        filp_close(sbi->trace_fp, NULL);
 
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {

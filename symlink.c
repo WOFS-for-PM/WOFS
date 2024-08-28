@@ -37,7 +37,7 @@ int hk_block_symlink(struct super_block *sb, struct inode *inode,
 
     /* the block is zeroed already */
     hk_memunlock_block(sb, (void *)blk_addr, &irq_flags);
-    memcpy_to_pmem_nocache((void *)blk_addr, symname, len);
+    memcpy_to_pmem_nocache(sbi, (void *)blk_addr, symname, len);
     hk_memlock_block(sb, (void *)blk_addr, &irq_flags);
 
     if (ENABLE_META_PACK(sb)) {

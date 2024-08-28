@@ -95,6 +95,10 @@ struct hk_sb_info {
     /* inode tracking */
     unsigned long s_inodes_used_count;
 
+    /* kernel file */
+    struct file *trace_fp;
+    loff_t trace_cur_pos;
+
     struct mutex s_lock; /* protects the SB's buffer-head */
 
     int cpus;

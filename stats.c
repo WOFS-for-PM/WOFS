@@ -129,6 +129,8 @@ DEFINE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 u64 IOstats[STATS_NUM];
 DEFINE_PER_CPU(u64[STATS_NUM], IOstats_percpu);
 
+bool trace_enabled;
+
 void hk_get_timing_stats(void)
 {
 	int i;

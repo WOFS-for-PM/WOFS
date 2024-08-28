@@ -5,6 +5,7 @@
 *.mod.c
 *.o.cmd
 *.ko.cmd
+*.asm
 Module.symvers
 modules.order
 patter

@@ -151,7 +151,7 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
 
     if (zero) {
         hk_memunlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
-        memset_nt((void *)target_addr, 0, blks * HK_PBLK_SZ(sbi));
+        memset_nt(sbi, (void *)target_addr, 0, blks * HK_PBLK_SZ(sbi));
         hk_memlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
     }
 

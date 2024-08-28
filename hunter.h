@@ -86,6 +86,16 @@
 #define hk_warn(s, args ...)		pr_warn(s, ## args)
 #define hk_info(s, args ...)		pr_info("cpu-%d: "s, smp_processor_id(), ## args)
 
+// extern ssize_t __kernel_write(struct file *, const void *, size_t, loff_t *);
+#define trace_hk_fun(sbi, s, args ...)  \
+	do { \
+		if (trace_enabled) { \
+			char buf[512] = {0}; \
+			snprintf(buf, 256, "%s, "s, __func__, ## args); \
+			__kernel_write(sbi->trace_fp, buf, strlen(buf), &sbi->trace_cur_pos); \
+		} \
+	} while (0)
+
 extern unsigned int hk_dbgmask;
 #define HK_DBGMASK_MMAPHUGE	        (0x00000001)
 #define HK_DBGMASK_MMAP4K	        (0x00000002)
@@ -222,36 +232,37 @@ static inline __le32 hk_mask_flags(umode_t mode, __le32 flags)
 }
 
 /* ======================= ANCHOR: pmem specific function ========================= */
-static inline int memcpy_to_pmem_nocache(void *dst, const void *src,
-	unsigned int size)
-{
-	int ret;
-
-	ret = __copy_from_user_inatomic_nocache(dst, src, size);
-
-	return ret;
-}
-
-extern long __copy_user_nocache_nofence(void *dst, const void __user *src,
+extern long __copy_user_nocache_w_fence(void *dst, const void __user *src,
 				unsigned size, int zerorest);
 
-static inline int memcpy_to_pmem_nocache_nofence(void *dst, const void *src,
+static inline int memcpy_to_pmem_nocache(struct hk_sb_info *sbi, void *dst, const void *src,
 	unsigned int size)
 {
 	int ret;
 
-	ret = __copy_user_nocache_nofence(dst, src, size, 0);
+	trace_hk_fun(sbi, "dst:0x%llx, len:%lu\n", (u64)dst - (u64)sbi->virt_addr, size);
+	
+	// for tracing purpose
+	// simply grab __copy_user_nocache from kernel
+	// here we can obtain its source code
+
+	ret = __copy_user_nocache_w_fence(dst, src, size, 0);
+
+	trace_hk_fun(sbi, "sfence\n");
 
 	return ret;
 }
 
+
 /* assumes the length to be 4-byte aligned */
-static inline void memset_nt(void *dest, uint32_t dword, size_t length)
+static inline void memset_nt(struct hk_sb_info *sbi, void *dest, uint32_t dword, size_t length)
 {
 	uint64_t dummy1, dummy2;
 	uint64_t qword = ((uint64_t)dword << 32) | dword;
 	
 	BUG_ON(length > ((u64)1 << 32));
+
+	trace_hk_fun(sbi, "dst:0x%llx, len:%lu\n", (u64)dest - (u64)sbi->virt_addr, length);
 	
 	asm volatile ("movl %%edx,%%ecx\n"
 		"andl $63,%%edx\n"
@@ -710,13 +721,13 @@ static inline void hk_sync_super(struct super_block *sb)
 	unsigned long 		  irq_flags = 0;
 
 	hk_memunlock_super(sb, HUNTER_FIRST_SUPER_BLK, &irq_flags);
-	memcpy_to_pmem_nocache((void *)super, (void *)sbi->hk_sb,
+	memcpy_to_pmem_nocache(sbi, (void *)super, (void *)sbi->hk_sb,
 							HK_SB_SIZE(sbi));
 	hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
 	PERSISTENT_BARRIER();
 	
 	hk_memunlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
-	memcpy_to_pmem_nocache((void *)super_redund, (void *)sbi->hk_sb,
+	memcpy_to_pmem_nocache(sbi, (void *)super_redund, (void *)sbi->hk_sb,
 							HK_SB_SIZE(sbi));
 	hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
 	PERSISTENT_BARRIER();

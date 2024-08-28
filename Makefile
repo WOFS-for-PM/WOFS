@@ -13,3 +13,6 @@ all:
 
 clean:
 	$(MAKE) -C /lib/modules/$(shell uname -r)/build M=`pwd` clean
+
+asm:
+	objdump -S hunter.ko > hunter.asm

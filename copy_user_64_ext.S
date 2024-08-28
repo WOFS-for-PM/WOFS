@@ -17,7 +17,7 @@
  *  - Require 8-byte alignment when size is 8 bytes or larger.
  *  - Require 4-byte alignment when size is 4 bytes.
  */
-ENTRY(__copy_user_nocache_nofence)
+ENTRY(__copy_user_nocache_w_fence)
 	ASM_STAC
 
 	/* If size is less than 8 bytes, go to 4-byte copy */
@@ -113,7 +113,7 @@ ENTRY(__copy_user_nocache_nofence)
 .L_finish_copy:
 	xorl %eax,%eax
 	ASM_CLAC
-	# sfence
+	sfence
 	ret
 
 	.section .fixup,"ax"
@@ -130,7 +130,7 @@ ENTRY(__copy_user_nocache_nofence)
 .L_fixup_1b_copy:
 	movl %ecx,%edx
 .L_fixup_handle_tail:
-	# sfence
+	sfence
 	jmp copy_user_handle_tail
 	.previous
 
@@ -156,5 +156,5 @@ ENTRY(__copy_user_nocache_nofence)
 	_ASM_EXTABLE_UA(31b, .L_fixup_4b_copy)
 	_ASM_EXTABLE_UA(40b, .L_fixup_1b_copy)
 	_ASM_EXTABLE_UA(41b, .L_fixup_1b_copy)
-ENDPROC(__copy_user_nocache_nofence)
-EXPORT_SYMBOL(__copy_user_nocache_nofence)
+ENDPROC(__copy_user_nocache_w_fence)
+EXPORT_SYMBOL(__copy_user_nocache_w_fence)

@@ -901,7 +901,7 @@ void hk_prepare_truncate(struct super_block *sb,
         return;
 
     hk_memunlock_range(sb, addr + offset, length, &irq_flags);
-    memset_nt(addr + offset, 0, length);
+    memset_nt(sbi, addr + offset, 0, length);
     hk_memlock_range(sb, addr + offset, length, &irq_flags);
 }
 

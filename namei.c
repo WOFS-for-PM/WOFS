@@ -261,7 +261,7 @@ int hk_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char
     hk_memunlock_dentry(sb, direntry, &irq_flags);
     direntry->ino = cpu_to_le64(ino);
     direntry->name_len = namelen;
-    memcpy_to_pmem_nocache(direntry->name, name, direntry->name_len);
+    memcpy_to_pmem_nocache(sbi, direntry->name, name, direntry->name_len);
     direntry->name[namelen] = '\0';
     direntry->mtime = cpu_to_le32(dir->i_mtime.tv_sec);
     direntry->links_count = cpu_to_le16(link_change);

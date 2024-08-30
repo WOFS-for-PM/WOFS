@@ -195,6 +195,7 @@ static inline void trace_hk_fun(struct hk_sb_info *sbi, const char *buf,
 	}
 
 	if (trace_enabled) {
+		memset(&trace, 0, sizeof(struct hk_trace));
 		memcpy(trace.keyword, keyword, keyword_len);
 		trace.action = action;
 
@@ -203,6 +204,7 @@ static inline void trace_hk_fun(struct hk_sb_info *sbi, const char *buf,
 		case HK_TRACE_FENCE:
 			trace.addr = 0;
 			trace.size = 0;
+			__kernel_write(sbi->trace_fp, &trace, sizeof(struct hk_trace), &sbi->trace_cur_pos);
 			break;
 		case HK_TRACE_IO:
 			trace.addr = addr;
@@ -289,13 +291,13 @@ static inline int memcpy_to_pmem_nocache(struct hk_sb_info *sbi, void *dst, cons
 {
 	int ret;
 
-	trace_hk_fun(sbi, src, (u64)dst - (u64)sbi->virt_addr, size, HK_TRACE_IO_PARAM);
-
 	// for tracing purpose
 	// simply grab __copy_user_nocache from kernel
 	// here we can obtain its source code
 
 	ret = __copy_user_nocache_w_fence(dst, src, size, 0);
+
+	trace_hk_fun(sbi, dst, (u64)dst - (u64)sbi->virt_addr, size, HK_TRACE_IO_PARAM);
 
 	trace_hk_fun(HK_TRACE_FENCE_PARAM);
 

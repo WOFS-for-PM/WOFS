@@ -1482,7 +1482,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
             /*       is valid. If valid, then this is a good package. Otherwise it */
             /*       can be discarded.*/
             data->hdr.reserved = value;
-            trace_hk_fun(sbi, (char *)&value, get_pm_offset(sbi, data->hdr.reserved), sizeof(u64), HK_TRACE_IO_PARAM);
+            trace_hk_fun(sbi, (char *)&value, get_pm_offset(sbi, (u64)(&data->hdr.reserved)), sizeof(u64), HK_TRACE_IO_PARAM);
 	        trace_hk_fun(HK_TRACE_FENCE_PARAM);
             hk_flush_buffer(data, CACHELINE_SIZE, true);
             break;

@@ -1085,7 +1085,7 @@ void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     hk_set_bit(blk, bm);
 
     buf = hk_get_byte(blk, bm);
-    trace_hk_fun(sbi, &buf, bm + (blk >> 3), 1, HK_TRACE_IO_PARAM);
+    trace_hk_fun(sbi, &buf, get_pm_offset(sbi, bm + (blk >> 3)), 1, HK_TRACE_IO_PARAM);
 
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
@@ -1111,7 +1111,7 @@ void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
     hk_clear_bit(blk, bm);
 
     buf = hk_get_byte(blk, bm);
-    trace_hk_fun(sbi, &buf, bm + (blk >> 3), 1, HK_TRACE_IO_PARAM);
+    trace_hk_fun(sbi, &buf, get_pm_offset(sbi, bm + (blk >> 3)), 1, HK_TRACE_IO_PARAM);
 
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */

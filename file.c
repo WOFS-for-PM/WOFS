@@ -482,7 +482,10 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
             }
         } else {
             copy_from_user(addr + each_ofs, content, each_size);
-            hk_flush_buffer(addr + each_ofs, each_size, false);
+            hk_flush_buffer(addr + each_ofs, each_size, true);
+
+            trace_hk_fun(sbi, addr + each_ofs, get_pm_offset(sbi, addr + each_ofs), each_size, HK_TRACE_IO_PARAM);
+            trace_hk_fun(HK_TRACE_FENCE_PARAM);
         }
         hk_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);

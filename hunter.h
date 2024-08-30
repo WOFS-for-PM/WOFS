@@ -609,7 +609,8 @@ static inline int hk_get_cpuid(struct super_block *sb)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
 
-	return smp_processor_id() % sbi->cpus;
+	// for tracing purpose, do not write very far
+	return 0;
 }
 
 #define BITS32_TO_BITS64(hi, lo) (((u64)(hi) << 32) | (lo))

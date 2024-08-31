@@ -103,7 +103,4 @@ sleep 1
 echo "Mounting..."
 
 sudo mount -t HUNTER -o "$init_str" -o dax "$dev" "$MNT_POINT"
-echo "Mount with configs: "
-echo "$config_json" | jq
-echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END" 
 cd "$ORIGINAL" || exit

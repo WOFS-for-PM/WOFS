@@ -18,7 +18,6 @@ CLR_END="\033[0m"
 
 ORIGINAL=$PWD
 WORK_DIR=$(dirname "$0")
-MNT_POINT=/mnt/pmem0
 
 # build project
 cd "$WORK_DIR" || exit
@@ -36,6 +35,12 @@ if [ ! "$2" ]; then
     dev="/dev/pmem0"
 else
     dev="$2"
+fi
+
+if [ ! "$3" ]; then
+    MNT_POINT="/mnt/pmem0"
+else
+    MNT_POINT="$3"
 fi
 
 config_json=$(cat "$config_path")
@@ -83,7 +88,7 @@ fi
 
 # inserting
 echo "umounting..."
-sudo umount $MNT_POINT
+sudo umount "$MNT_POINT"
 
 echo "Removing the old kernel module..."
 sudo rmmod hunter > /dev/null 2>&1
@@ -97,7 +102,7 @@ sleep 1
 
 echo "Mounting..."
 
-sudo mount -t HUNTER -o "$init_str" -o dax "$dev" $MNT_POINT
+sudo mount -t HUNTER -o "$init_str" -o dax "$dev" "$MNT_POINT"
 echo "Mount with configs: "
 echo "$config_json" | jq
 echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END" 

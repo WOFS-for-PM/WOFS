@@ -1566,8 +1566,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
     remained_size = HK_PBLK_SZ(sbi);
     start_addr = cur_blk;
 
-    // hint = hk_probe_hint(sbi, cur_blk);
-    hint = KILLER_HINT_OCCPY_BLK;
+    hint = hk_probe_hint(sbi, cur_blk);
     if (hint == KILLER_HINT_EMPTY_BLK) {
         goto out;
     }

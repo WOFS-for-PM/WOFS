@@ -1566,7 +1566,8 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
     remained_size = HK_PBLK_SZ(sbi);
     start_addr = cur_blk;
 
-    hint = hk_probe_hint(sbi, cur_blk);
+    // hint = hk_probe_hint(sbi, cur_blk);
+    hint = KILLER_HINT_OCCPY_BLK;
     if (hint == KILLER_HINT_EMPTY_BLK) {
         goto out;
     }
@@ -1749,10 +1750,10 @@ static int hk_rescue_bm(struct super_block *sb)
     wait_to_finish(rescuer_num);
 
     /* aggregate bm buffers to pm */
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
+    // memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
+    // memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
+    // memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
+    // memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
 
 out:
     kfree(finished);
@@ -1779,7 +1780,7 @@ int hk_failure_recovery(struct super_block *sb)
 
     if (ENABLE_META_PACK(sb)) {
         ret = NEED_FORCE_NORMAL_RECOVERY;
-        // hk_rescue_bm(sb);
+        hk_rescue_bm(sb);
     } else {
         ret = NEED_NO_FURTHER_RECOVERY;
         /* Revisiting Meta Regions Here */

@@ -1416,6 +1416,8 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
     if (recovery_flags == NEED_NO_FURTHER_RECOVERY)
         return false;
 
+    is_failure = true;
+    
     if (le32_to_cpu(super->s_valid_umount) == HK_VALID_UMOUNT) {
         hk_dbg("Start normal recovery\n");
     } else {

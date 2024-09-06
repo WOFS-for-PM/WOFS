@@ -661,6 +661,9 @@ static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, 
     }
 }
 
+static int qjs_profile[4] = {47, 47+15, 47+15+6, 100};
+static int agrawal_profile[4] = {4, 4+5, 4+5+5, 100};
+
 ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                          size_t len, loff_t *ppos)
 {
@@ -683,6 +686,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *pprep;
     size_t out_size = 0;
     bool append_like = false, extend = false;
+    int *profile = agrawal_profile;
     int prob = 0;
     int ret = 0;
 
@@ -756,25 +760,19 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     blks = blks_orig = (end_index - index + 1); /* Total blks to be written */
     blks_allocated = 0;
     if (append_like) {
-        // if (pos > RECOVER_PHASE) {
-        //     if (blks < sbi->recover_blks) {
-        //         blks = sbi->recover_blks;
-        //         extend = true;
-        //     }
-        // } else {
         /* try extend blks to be allocted */
         if (blks < HK_EXTEND_NUM_BLOCKS) {
             prob = genrand_int32() % 100;
-            if (prob < 47) {
+            if (prob < profile[0]) {
                 // 47% for 1 block
                 blks = 1;
                 extend = false;
-            } else if (prob < 47 + 15)
+            } else if (prob < profile[1])
             {
                 // 15% for 2 blocks
                 blks = 2;
                 extend = true;
-            } else if (prob < 47 + 15 + 6)
+            } else if (prob < profile[2])
             {
                 // 6% for 4 blocks
                 blks = 4;
@@ -785,7 +783,6 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                 extend = true;
             }
         }
-        // }
     }
 
     inode->i_ctime = inode->i_mtime = current_time(inode);

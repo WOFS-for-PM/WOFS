@@ -46,6 +46,7 @@
 int measure_timing;
 int wprotect;
 int support_clwb;
+int support_avx;
 
 module_param(measure_timing, int, 0444);
 MODULE_PARM_DESC(measure_timing, "Timing measurement");
@@ -1261,9 +1262,13 @@ static int __init init_hk_fs(void)
     HK_START_TIMING(init_t, init_time);
     if (arch_has_clwb())
         support_clwb = 1;
+    if (arch_has_avx512())
+        support_avx = 1;
 
     hk_info("Arch new instructions support: CLWB %s\n",
             support_clwb ? "YES" : "NO");
+    hk_info("Arch new instructions support: AVX %s\n",
+            support_avx ? "YES" : "NO");
 
     hk_proc_root = proc_mkdir(proc_dirname, NULL);
     rc = hk_create_slab_caches();

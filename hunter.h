@@ -38,6 +38,7 @@
 #include <linux/hashtable.h>
 #include <linux/sched/signal.h>
 #include <linux/libnvdimm.h>
+#include "asm/fpu/api.h"
 
 #define TRANS_ADDR_TO_OFS(sbi, addr)  (addr == 0 ? 0 : ((u64)(addr) - (u64)(sbi)->virt_addr))   
 #define TRANS_OFS_TO_ADDR(sbi, ofs)   (ofs == 0 ? 0 : ((u64)(ofs) + (sbi)->virt_addr))
@@ -241,6 +242,61 @@ static inline int memcpy_to_pmem_nocache_nofence(void *dst, const void *src,
 	int ret;
 
 	ret = __copy_user_nocache_nofence(dst, src, size, 0);
+
+	return ret;
+}
+
+static inline int memcpy_to_pmem_avx_nocache(char *start_addr, __user const void *usrc,
+	unsigned int size)
+{
+	int ret;
+	
+	// check 64-byte alignment
+	if (((unsigned long)start_addr & 0x3f) == 0)
+	{
+		// allocate src_addr aligned to 64 bytes
+		char *src_addr = (char *)kmalloc(size + 64, GFP_KERNEL);
+		if (!src_addr)
+			return -ENOMEM;
+		// align src_addr to 64 bytes
+		src_addr = (char *)(((unsigned long)src_addr + 63) & ~0x3f);
+
+		size_t i;
+
+		copy_from_user(src_addr, usrc, size);
+		
+		kernel_fpu_begin();
+		// 每次处理 256 字节
+		for (i = 0; i + 256 <= size; i += 256)
+		{
+			asm volatile (
+				"vmovdqa64 (%[src]), %%zmm0 \n"   // 从 src_addr 加载 64 字节到 zmm0
+				"vmovdqa64 64(%[src]), %%zmm1 \n" // 从 src_addr + 64 加载 64 字节到 zmm1
+				"vmovdqa64 128(%[src]), %%zmm2 \n" // 从 src_addr + 128 加载 64 字节到 zmm2
+				"vmovdqa64 192(%[src]), %%zmm3 \n" // 从 src_addr + 192 加载 64 字节到 zmm3
+
+				"vmovntdq %%zmm0, (%[dst]) \n"   // 将 zmm0 中的数据非临时存储到 start_addr
+				"vmovntdq %%zmm1, 64(%[dst]) \n" // 将 zmm1 中的数据非临时存储到 start_addr + 64
+				"vmovntdq %%zmm2, 128(%[dst]) \n" // 将 zmm2 中的数据非临时存储到 start_addr + 128
+				"vmovntdq %%zmm3, 192(%[dst]) \n" // 将 zmm3 中的数据非临时存储到 start_addr + 192
+				:
+				: [src] "r" (src_addr + i), [dst] "r" (start_addr + i)
+				: "zmm0", "zmm1", "zmm2", "zmm3", "memory"
+			);
+		}
+		kernel_fpu_end();
+
+		// 处理剩余的数据
+		for (; i < size; ++i)
+		{
+			start_addr[i] = src_addr[i];
+		}
+		PERSISTENT_BARRIER();
+
+		kfree(src_addr);
+	} else {
+		ret = __copy_from_user_inatomic_nocache(start_addr, usrc, size);
+	}
 
 	return ret;
 }

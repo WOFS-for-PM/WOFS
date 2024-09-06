@@ -92,7 +92,18 @@ static inline bool arch_has_clwb(void)
     return static_cpu_has(X86_FEATURE_CLWB);
 }
 
+static inline bool arch_has_avx512(void)
+{
+	return boot_cpu_has(X86_FEATURE_AVX2) &&
+		boot_cpu_has(X86_FEATURE_AVX) &&
+		boot_cpu_has(X86_FEATURE_AVX512F) &&
+		boot_cpu_has(X86_FEATURE_AVX512BW) &&
+		boot_cpu_has(X86_FEATURE_AVX512VL) &&
+		boot_cpu_has(X86_FEATURE_AVX512DQ);
+}
+
 extern int support_clwb;
+extern int support_avx;
 
 #define _mm_clflush(addr)     \
     asm volatile("clflush %0" \

@@ -246,8 +246,9 @@ static size_t hk_try_in_place_append_write(struct hk_inode_info *si, loff_t pos,
             HK_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
             hk_memunlock_range(sb, target, out_size, &irq_flags);
             if (out_size > 2 * HK_LBLK_SZ(sbi)) {
-                __copy_from_user(target, content, out_size);
-                hk_flush_buffer(target, out_size, true);
+                // __copy_from_user(target, content, out_size);
+                // hk_flush_buffer(target, out_size, true);
+                memcpy_to_pmem_avx_nocache(target, content, out_size);
             } else {
                 memcpy_to_pmem_nocache(target, content, out_size);
             }

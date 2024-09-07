@@ -661,8 +661,11 @@ static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, 
     }
 }
 
-static int qjs_profile[4] = {47, 47+15, 47+15+6, 100};
-static int agrawal_profile[4] = {4, 4+5, 4+5+5, 100};
+// int extreme_profile[4] = {15, 15+23, 15+23+19, 100};
+// int extreme_profile_meta[4] = {86, 86+2, 86+5+2, 100};
+
+int agrawal_profile[4] = {4, 4+5, 4+5+5, 100};
+int agrawal_profile_meta[4] = {0, 0, 0, 100};
 
 ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                          size_t len, loff_t *ppos)
@@ -764,22 +767,24 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
         if (blks < HK_EXTEND_NUM_BLOCKS) {
             prob = genrand_int32() % 100;
             if (prob < profile[0]) {
-                // 47% for 1 block
+                // 4% for 1 block
                 blks = 1;
                 extend = false;
             } else if (prob < profile[1])
             {
-                // 15% for 2 blocks
+                // 5% for 2 blocks
                 blks = 2;
                 extend = true;
             } else if (prob < profile[2])
             {
-                // 6% for 4 blocks
+                // 5% for 4 blocks
                 blks = 4;
                 extend = true;
             } else {
-                // 32% for others
-                blks = HK_EXTEND_NUM_BLOCKS;
+                // 86% for others
+                // here 32 is the expected value of the number of blocks
+                // see tools/geriatrix/calc-expect-values.py
+                blks = 32;
                 extend = true;
             }
         }

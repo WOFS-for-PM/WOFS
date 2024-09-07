@@ -1494,6 +1494,9 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     return ret;
 }
 
+// extern int extreme_profile_meta[4];
+extern int agrawal_profile_meta[4];
+
 /* create data pkg for a new inode, `data_addr`: in-pm addr, `offset`: in-file offset, `size`: written data size */
 int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
                     u64 data_addr, off_t offset, size_t size, u64 num,
@@ -1507,6 +1510,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     size_t size_after_write = offset + size > sih->i_size ? offset + size : sih->i_size;
     u64 blk = 0;
     int ret = 0;
+    int *profile = agrawal_profile_meta, prob;
     u32 num_meta_blk = MTA_PKG_DATA_BLK;
     INIT_TIMING(time);
 
@@ -1526,8 +1530,23 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     //     }
     //     num_meta_blk = 256 >> HUNTER_MTA_SHIFT;
     // }
-
-    num_meta_blk = genrand_int32() % 4 + 1;
+    prob = genrand_int32() % 100;
+    if (prob < profile[0]) {
+        // 47% for 1 block
+        num_meta_blk = 1;
+    } else if (prob < profile[1])
+    {
+        // 15% for 2 blocks
+        num_meta_blk = 2;
+    } else if (prob < profile[2])
+    {
+        // 6% for 4 blocks
+        num_meta_blk = 3;
+    } else {
+        // 32% for others
+        num_meta_blk = 4;
+    }
+    // num_meta_blk = genrand_int32() % 4 + 1;
 
     ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, num_meta_blk);
     if (ret) {

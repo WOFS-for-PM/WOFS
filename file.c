@@ -661,8 +661,8 @@ static __always_inline void hk_use_prepared_blocks(struct hk_layout_prep *prep, 
     }
 }
 
-// int extreme_profile[4] = {15, 15+23, 15+23+19, 100};
-// int extreme_profile_meta[4] = {86, 86+2, 86+5+2, 100};
+int extreme_profile[4] = {15, 15+23, 15+23+19, 100};
+int extreme_profile_meta[4] = {86, 86+2, 86+5+2, 100};
 
 int agrawal_profile[4] = {4, 4+5, 4+5+5, 100};
 int agrawal_profile_meta[4] = {0, 0, 0, 100};

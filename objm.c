@@ -1494,7 +1494,7 @@ int update_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     return ret;
 }
 
-// extern int extreme_profile_meta[4];
+extern int extreme_profile_meta[4];
 extern int agrawal_profile_meta[4];
 
 /* create data pkg for a new inode, `data_addr`: in-pm addr, `offset`: in-file offset, `size`: written data size */

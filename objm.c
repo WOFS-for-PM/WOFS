@@ -1510,7 +1510,7 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     size_t size_after_write = offset + size > sih->i_size ? offset + size : sih->i_size;
     u64 blk = 0;
     int ret = 0;
-    int *profile = agrawal_profile_meta, prob;
+    int *profile = extreme_profile_meta, prob;
     u32 num_meta_blk = MTA_PKG_DATA_BLK;
     INIT_TIMING(time);
 

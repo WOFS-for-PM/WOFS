@@ -689,7 +689,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *pprep;
     size_t out_size = 0;
     bool append_like = false, extend = false;
-    int *profile = agrawal_profile;
+    int *profile = extreme_profile;
     int prob = 0;
     int ret = 0;
 
@@ -784,7 +784,11 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
                 // 86% for others
                 // here 32 is the expected value of the number of blocks
                 // see tools/geriatrix/calc-expect-values.py
-                blks = 32;
+                if (extreme_profile == profile) {
+                    blks = 8;
+                } else {
+                    blks = 32;
+                }
                 extend = true;
             }
         }

@@ -689,7 +689,7 @@ ssize_t do_hk_file_write(struct file *filp, const char __user *buf,
     struct hk_layout_prep *pprep;
     size_t out_size = 0;
     bool append_like = false, extend = false;
-    int *profile = extreme_profile;
+    int *profile = agrawal_profile;
     int prob = 0;
     int ret = 0;
 

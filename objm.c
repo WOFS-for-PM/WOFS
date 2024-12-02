@@ -1530,22 +1530,25 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     //     }
     //     num_meta_blk = 256 >> HUNTER_MTA_SHIFT;
     // }
-    prob = genrand_int32() % 100;
-    if (prob < profile[0]) {
-        // 47% for 1 block
-        num_meta_blk = 1;
-    } else if (prob < profile[1])
-    {
-        // 15% for 2 blocks
-        num_meta_blk = 2;
-    } else if (prob < profile[2])
-    {
-        // 6% for 4 blocks
-        num_meta_blk = 3;
-    } else {
-        // 32% for others
-        num_meta_blk = 4;
-    }
+    // prob = genrand_int32() % 100;
+
+    num_meta_blk = genrand_int32() % 4 + 1;
+
+    // if (prob < profile[0]) {
+    //     // 47% for 1 block
+    //     num_meta_blk = 1;
+    // } else if (prob < profile[1])
+    // {
+    //     // 15% for 2 blocks
+    //     num_meta_blk = 2;
+    // } else if (prob < profile[2])
+    // {
+    //     // 6% for 4 blocks
+    //     num_meta_blk = 3;
+    // } else {
+    //     // 32% for others
+    //     num_meta_blk = 4;
+    // }
     // num_meta_blk = genrand_int32() % 4 + 1;
 
     ret = reserve_pkg_space(obj_mgr, &out_param->addr, TL_MTA_PKG_DATA, num_meta_blk);

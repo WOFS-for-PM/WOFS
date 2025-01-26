@@ -159,7 +159,7 @@ void hk_print_meta_stats(struct super_block *sb) {
 		+ Countstats[new_inode_trans_t] + Countstats[new_unlink_trans_t]
 		+ Countstats[update_data_package_t] + Countstats[imm_set_bm_t] + Countstats[imm_clear_bm_t];
 
-	pr_info("=========== NOVA meta_trace stats ============\n");
+	pr_info("=========== KILLER meta_trace stats ============\n");
 	pr_info("meta_read: %llu\n", IOstats[meta_read]);
 	pr_info("meta_write: %llu\n", IOstats[meta_write]);
 	pr_info("data_read: %llu\n", IOstats[file_read]);
@@ -169,6 +169,8 @@ void hk_print_meta_stats(struct super_block *sb) {
 	pr_info("data_write_time: %llu\n", Timingstats[memcpy_w_nvmm_t]);
 	pr_info("data_read_time: %llu\n", Timingstats[memcpy_r_nvmm_t]);
 	pr_info("COW_time: %llu\n", Timingstats[write_t]);
+
+	pr_info("mem_usage: %llu\n", IOstats[mem_usage]);
 }
 
 void hk_print_timing_stats(struct super_block *sb)

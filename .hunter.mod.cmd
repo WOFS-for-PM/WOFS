@@ -1,0 +1,1 @@
+savedcmd_/home/deadpool/HUNTER-REPO/hunter-kernel/hunter.mod := printf '%s\n'   super.o balloc.o bbuild.o dir.o file.o inode.o ioctl.o namei.o rebuild.o super.o symlink.o sysfs.o linix.o meta.o stats.o mlist.o cmt.o tlalloc.o objm.o generic_cachep.o | awk '!x[$$0]++ { print("/home/deadpool/HUNTER-REPO/hunter-kernel/"$$0) }' > /home/deadpool/HUNTER-REPO/hunter-kernel/hunter.mod

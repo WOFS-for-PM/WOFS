@@ -28,6 +28,7 @@ int linix_init(struct linix *ix, u64 num_slots)
     }
     else {
         ix->slots = kvcalloc(ix->num_slots, sizeof(struct linslot), GFP_KERNEL);
+        HK_STATS_ADD(mem_usage, ix->num_slots * sizeof(struct linslot));
     }
     return 0;
 }
@@ -36,6 +37,7 @@ int linix_destroy(struct linix *ix)
 {
     if (ix->slots) {
         kvfree(ix->slots);
+        HK_STATS_ADD(mem_usage, -ix->num_slots * sizeof(struct linslot));
         ix->slots = NULL;
     } else {
         hk_warn("double free in linix_destroy\n");
@@ -53,6 +55,8 @@ void * __must_check kvrealloc(void* old_ptr, size_t old_size, size_t new_size, g
         memcpy(buf, old_ptr, ((old_size < new_size) ? old_size : new_size));
         kvfree(old_ptr);
     }
+
+    HK_STATS_ADD(mem_usage, (new_size - old_size));
     
     return buf;
 }

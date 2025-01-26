@@ -26,35 +26,48 @@
 #define DEFINE_GENERIC_CACHEP(type) \
     struct kmem_cache *type##_cachep;
 
+
+// FIXME: hash table will be modified in the future
+
 #define STRFY(x) #x
-#define DECLARE_GENERIC_CACHEP(type, alloc_flags)                                             \
-    extern struct kmem_cache *type##_cachep;                                                  \
-    static inline int __init init_##type##_cache(void)                                               \
-    {                                                                                         \
-        type##_cachep = kmem_cache_create(STRFY(type##_cachep),                               \
-                                          sizeof(struct type),                                \
-                                          0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL); \
-        if (type##_cachep == NULL)                                                            \
-            return -ENOMEM;                                                                   \
-        return 0;                                                                             \
-    }                                                                                         \
-    static inline void destroy_##type##_cache(void)                                                  \
-    {                                                                                         \
-        if (type##_cachep) {                                                                  \
-            kmem_cache_destroy(type##_cachep);                                                \
-            type##_cachep = NULL;                                                             \
-        }                                                                                     \
-    }                                                                                         \
-    static inline struct type *hk_alloc_##type(void)                                                            \
-    {                                                                                         \
-        struct type *p;                                                                       \
-        p = (struct type *)                                                                   \
-            kmem_cache_zalloc(type##_cachep, alloc_flags);                                    \
-        return p;                                                                             \
-    }                                                                                         \
-    static inline void hk_free_##type(struct type *node)                                                    \
-    {                                                                                         \
-        kmem_cache_free(type##_cachep, node);                                                 \
+#define DECLARE_GENERIC_CACHEP(type, alloc_flags)                                              \
+    extern struct kmem_cache *type##_cachep;                                                   \
+    static inline int __init init_##type##_cache(void)                                         \
+    {                                                                                          \
+        type##_cachep = kmem_cache_create(STRFY(type##_cachep),                                \
+                                          sizeof(struct type),                                 \
+                                          0, (SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD), NULL);  \
+        if (type##_cachep == NULL)                                                             \
+            return -ENOMEM;                                                                    \
+        return 0;                                                                              \
+    }                                                                                          \
+    static inline void destroy_##type##_cache(void)                                            \
+    {                                                                                          \
+        if (type##_cachep) {                                                                   \
+            kmem_cache_destroy(type##_cachep);                                                 \
+            type##_cachep = NULL;                                                              \
+        }                                                                                      \
+    }                                                                                          \
+    static inline struct type *hk_alloc_##type(void)                                           \
+    {                                                                                          \
+        struct type *p;                                                                        \
+        p = (struct type *)                                                                    \
+            kmem_cache_zalloc(type##_cachep, alloc_flags);                                     \
+        if (strcmp(STRFY(type##_cachep), "hk_inode_info_header_cachep") == 0) {                \
+            HK_STATS_ADD(mem_usage, sizeof(struct type) - 128 * sizeof(struct hlist_head));    \
+        } else {                                                                               \
+            HK_STATS_ADD(mem_usage, sizeof(struct type));                                      \
+        }                                                                                      \
+        return p;                                                                              \
+    }                                                                                          \
+    static inline void hk_free_##type(struct type *node)                                       \
+    {                                                                                          \
+        kmem_cache_free(type##_cachep, node);                                                  \
+        if (strcmp(STRFY(type##_cachep), "hk_inode_info_header_cachep") == 0) {                \
+            HK_STATS_ADD(mem_usage, -(sizeof(struct type) - 128 * sizeof(struct hlist_head))); \
+        } else {                                                                               \
+            HK_STATS_ADD(mem_usage, -sizeof(struct type));                                     \
+        }                                                                                      \
     }
 
 DECLARE_GENERIC_CACHEP(obj_ref_inode, GFP_ATOMIC);

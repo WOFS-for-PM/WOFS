@@ -1441,8 +1441,8 @@ out:
 void generate_packages(struct super_block *sb)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    // FIXME: assume use 16 threads for recovery for each pass
-    unsigned long num_blocks = sbi->num_blocks / 16;
+    // FIXME: assume use 8 threads for recovery for each pass
+    unsigned long num_blocks = sbi->num_blocks / 8;
     unsigned long ino, saved_ino;
     obj_ref_inode_t ref_inode;
     struct hk_inode_info_header fake_sih;

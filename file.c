@@ -488,6 +488,7 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
         HK_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
 
         in_param.bin = false;
+        in_param.private = NULL;
         ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), each_size, blks_prepared, &in_param, &out_param);
         if (ret) {
             return ret;

@@ -145,7 +145,7 @@ int __hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
         update.num = ((sih->i_size - 1) >> PAGE_SHIFT) + 1;
 
         hk_dbgv("free %d pages for ino %lu\n", update.num, sih->ino);
-        
+
         while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
             ;
         }
@@ -181,6 +181,9 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
     INIT_TIMING(free_time);
 
     HK_START_TIMING(free_inode_log_t, free_time);
+    
+    if (sih->ino == HK_ROOT_INO) /* We should not evict ROOT INO */
+        return 0;
 
     freed = __hk_free_inode_blks(sb, pi, sih);
 
@@ -261,7 +264,8 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
         obj_mgr_unload_imap_control(obj_mgr, sih);
     }
 
-    sih->si->header = NULL;
+    if (sih->si)
+        sih->si->header = NULL;
     /* Then we can free the inode */
     ret = hk_free_inode(sb, sih);
     if (ret)
@@ -859,6 +863,7 @@ static int hk_handle_setattr_operation(struct super_block *sb, struct inode *ino
         in_pkg_param_t param;
         out_pkg_param_t out_param;
 
+        param.private = NULL;
         ret = create_attr_pkg(sbi, sih, 0, attr->ia_size - inode->i_size,
                               &param, &out_param);
     } else {

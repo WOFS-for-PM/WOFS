@@ -590,6 +590,9 @@ static bool __list_check_entry_freed(struct list_head *entry)
     return entry->next == LIST_POISON1 && entry->prev == LIST_POISON2;
 }
 
+void tl_dump_data_mgr(data_mgr_t *data_mgr);
+void tl_dump_meta_mgr(meta_mgr_t *meta_mgr);
+
 void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
 {
     data_mgr_t *data_mgr = &alloc->data_manager;
@@ -699,7 +702,7 @@ static bool __tl_try_restore_data_blks(void *key, void *value, void *data)
         list_add_tail(&anode->list, &param->affected_nodes);
     }
 
-    if (param->blk > blk + num) {
+    if (param->blk + param->num < blk) {
         return true;
     }
 
@@ -729,7 +732,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
             }
         }
         spin_unlock(&data_mgr->spin);
-
+        
         /* traverse affected_nodes */
         list_for_each_safe(pos, n, &param->affected_nodes)
         {
@@ -739,7 +742,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
                 rb_erase_cached(&node->node, &data_mgr->free_tree);
                 tl_free_node(node);
             } else if (blk <= node->blk && blk + num < node->blk + node->dnode.num) {
-                node->dnode.num = node->blk + node->dnode.num - blk - num;
+                node->dnode.num = node->blk + node->dnode.num - (blk + num);
                 node->blk = blk + num;
             } else if (blk > node->blk && blk + num >= node->blk + node->dnode.num) {
                 node->dnode.num = blk - node->blk;
@@ -850,6 +853,16 @@ static bool __tl_dump_mnode(void *key, void *value, void *data)
     tl_node_t *node = value;
     hk_info("[mnode]: block %lu, alloc bitmap: 0x%lx\n", node->blk, node->mnode.bm);
     return false;
+}
+
+void tl_dump_allocator(tl_allocator_t *alloc)
+{
+    data_mgr_t *data_mgr = &alloc->data_manager;
+    meta_mgr_t *meta_mgr = &alloc->meta_manager;
+    int i;
+
+    tl_dump_data_mgr(data_mgr);
+    tl_dump_meta_mgr(meta_mgr);
 }
 
 void tl_dump_data_mgr(data_mgr_t *data_mgr)

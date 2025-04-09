@@ -265,7 +265,7 @@ typedef struct d_root {
 /* imap: key ino, value hk_inode_info_header */
 typedef struct imap {
     rng_lock_t rng_lock;
-    DECLARE_HASHTABLE(map, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(map, HK_HASH_BITS17);
 } imap_t;
 
 typedef struct pendtbl {
@@ -347,6 +347,7 @@ typedef struct in_pkg_param {
 #define CREATE_FOR_RENAME  1
 #define CREATE_FOR_LINK    2
 #define CREATE_FOR_SYMLINK 3
+#define CREATE_FOR_FAKE    5
 
 typedef struct in_create_pkg_param {
     int create_type; /* for rename/link/symlink */
@@ -354,6 +355,27 @@ typedef struct in_create_pkg_param {
     u32 rdev;
     u32 old_ino; /* for link */
 } in_create_pkg_param_t;
+
+#define UNLINK_FOR_NORMAL 0
+#define UNLINK_FOR_FAKE 1
+
+typedef struct in_unlink_pkg_param {
+    int unlink_type;
+} in_unlink_pkg_param_t;
+
+#define DATA_FOR_NORMAL 0
+#define DATA_FOR_FAKE   1
+
+typedef struct in_data_pkg_param {
+    int data_type; /* data type */
+} in_data_pkg_param_t;
+
+#define ATTR_FOR_NORMAL 0
+#define ATTR_FOR_FAKE   1
+
+typedef struct in_attr_pkg_param {
+    int attr_type; /* attr type */
+} in_attr_pkg_param_t;
 
 /* out param region */
 typedef struct out_pkg_param {

@@ -349,6 +349,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param);
 void tlfree(tl_allocator_t *alloc, tlfree_param_t *param);
 void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param);
 void tl_destory(tl_allocator_t *alloc);
+void tl_dump_allocator(tl_allocator_t *alloc);
 
 /* ======================= ANCHOR: rebuild.c ========================= */
 void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih, 
@@ -547,7 +548,9 @@ static inline int hk_get_cpuid(struct super_block *sb)
 {
 	struct hk_sb_info *sbi = HK_SB(sb);
 
-	return smp_processor_id() % sbi->cpus;
+	// return smp_processor_id() % sbi->cpus;
+	// always allocate from the first cpu
+	return 0;
 }
 
 #define BITS32_TO_BITS64(hi, lo) (((u64)(hi) << 32) | (lo))

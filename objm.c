@@ -541,6 +541,8 @@ int do_reclaim_dram_pkg(struct hk_sb_info *sbi, obj_mgr_t *mgr, u64 pkg_addr, u1
 
     entrynr = GET_ENTRYNR(pkg_ofs);
     blk = GET_ALIGNED_BLKNR(pkg_ofs);
+    // hk_info("%s: Reclaiming blk %llu\n", __func__, blk);
+    // hk_info("%s: Reclaiming entrynr %llu\n", __func__, entrynr);
     tl_build_free_param(&param, blk, (entrynr << 32) | num, TL_MTA | m_alloc_type);
     tlfree(&layout->allocator, &param);
 
@@ -594,6 +596,7 @@ int reclaim_dram_create(obj_mgr_t *mgr, struct hk_inode_info_header *sih, obj_re
         return ret;
     }
 
+    // hk_info("Reclaiming pkg_addr @%llx\n", pkg_addr);
     ret = do_reclaim_dram_pkg(sbi, mgr, pkg_addr, PKG_CREATE);
     if (ret == 0) {
         hk_dbg("%s: reclaim failed\n", __func__);
@@ -1221,6 +1224,7 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
         /* fall thru */
     case CREATE_FOR_SYMLINK:
     case CREATE_FOR_NORMAL:
+    case CREATE_FOR_FAKE:
         ino = ((in_create_pkg_param_t *)(in_param->private))->new_ino;
         break;
     default:
@@ -1297,6 +1301,11 @@ int create_new_inode_pkg(struct hk_sb_info *sbi, u16 mode, const char *name,
     memcpy_to_pmem_nocache((void *)out_param->addr, pkg_buf, MTA_PKG_CREATE_SIZE);
     hk_memlock_range(sbi->sb, (void *)out_param->addr, MTA_PKG_CREATE_SIZE, &flags);
 
+    if (create_type == CREATE_FOR_FAKE) {
+        HK_END_TIMING(new_inode_trans_t, time);
+        return ret;
+    }
+    
     /* address re-assignment */
     obj_dentry = (struct hk_obj_dentry *)(out_param->addr + OBJ_INODE_SIZE);
     pkg_hdr = (struct hk_pkg_hdr *)(out_param->addr + OBJ_INODE_SIZE + OBJ_DENTRY_SIZE);
@@ -1395,6 +1404,12 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     u64 cur_addr;
     u64 dep_ofs;
     int ret;
+    bool is_fake = false;
+
+    if (in_param->private) {
+        is_fake = true;
+    }
+
     INIT_TIMING(time);
 
     HK_START_TIMING(new_unlink_trans_t, time);
@@ -1427,8 +1442,14 @@ int create_unlink_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     __fill_pm_pkg_hdr(sbi, pkg_hdr, &fill_param);
     cur_addr += OBJ_PKGHDR_SIZE;
 
+    BUG_ON(sih->ino == 0);
+    
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), cur_addr - out_param->addr, &pkg_hdr->hdr);
+
+    if (is_fake) {
+        return 0;
+    }
 
     /* fill pseudo parent attr to prevent in-PM allocation */
     fill_attr_t attr_param = {
@@ -1536,6 +1557,11 @@ int create_data_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     /* flush + fence-once to commit the package */
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_DATA_SIZE, &data->hdr);
 
+    if (in_param->private) {
+        // fake
+        return 0;
+    }
+
     /* NOTE: prevent read after persist  */
     data_update.build_from_exist = false;
     data_update.exist_ref = NULL;
@@ -1581,6 +1607,11 @@ int create_attr_pkg(struct hk_sb_info *sbi, struct hk_inode_info_header *sih,
     __fill_pm_attr(sbi, attr, &fill_param);
     commit_pkg(sbi, (void *)(out_param->addr), OBJ_ATTR_SIZE, &attr->hdr);
 
+    if (in_param->private) {
+        // fake
+        return 0;
+    }
+
     attr_update.from_pkg = PKG_ATTR;
     ur_dram_latest_attr(obj_mgr, sih, &attr_update);
 
@@ -1615,6 +1646,7 @@ int create_rename_pkg(struct hk_sb_info *sbi, const char *new_name,
 
     in_param.cur_pkg_addr = pkg_unlink_addr;
     in_param.next_pkg_addr = pkg_create_addr;
+    in_param.private = NULL;
     create_unlink_pkg(sbi, sih, psih, ref, &in_param, unlink_out_param);
 
     obj_mgr_unload_imap_control(obj_mgr, sih);
@@ -1642,13 +1674,14 @@ int create_symlink_pkg(struct hk_sb_info *sbi, u16 mode, const char *name, const
 
     in_create_param.new_ino = ino;
     in_create_param.create_type = CREATE_FOR_SYMLINK;
-    in_param.private = &in_create_param;
 
     in_param.bin = 1;
     in_param.bin_type = PKG_SYMLINK;
     in_param.next_pkg_addr = 0;
+    in_param.private = NULL;
     create_data_pkg(sbi, sih, symaddr, 0, HK_LBLK_SZ(sbi), 1, &in_param, data_out_param);
-
+    
+    in_param.private = &in_create_param;
     in_param.next_pkg_addr = data_out_param->addr;
     create_new_inode_pkg(sbi, mode, name, sih, psih, &in_param, create_out_param);
 

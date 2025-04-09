@@ -1081,6 +1081,7 @@ static int __hk_remove(struct inode *dir, struct dentry *dentry)
 
         in_param.bin = false;
         in_param.cur_pkg_addr = 0;
+        in_param.private = NULL;
         create_unlink_pkg(sbi, sih, psih, ref, &in_param, &out_param);
 
         hk_free_obj_ref_dentry(ref);

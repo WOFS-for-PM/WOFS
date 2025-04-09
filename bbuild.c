@@ -356,6 +356,7 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
                 data = (struct hk_obj_data *)cur_data;
                 sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, data->ino);
                 if (sih) {
+                    BUG_ON(1);
                     /* restore data entry */
                     cur_addr = cur_data;
                     entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_addr));
@@ -460,7 +461,7 @@ static int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *in_pm_
         hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!sih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            hk_warn("1: Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, sih, vtail, true)) {
@@ -486,7 +487,7 @@ static int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *in_pm_
         hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!psih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            hk_warn("2: Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, psih, vtail, true)) {
@@ -527,7 +528,7 @@ static int __hk_recovery_attr_from_unlink_pkg(struct hk_sb_info *sbi, u8 *in_pm_
         hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!psih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            hk_warn("3: Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, psih, vtail, true)) {
@@ -623,10 +624,20 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
         }
     }
 
+    if ((in_pm_create & 0x00000000000FFFFF) == 0x00000000000fff00 && blk == 511) {
+        hk_info("entrynr %llu, num %lu, blk %u, in_pm_create %llx\n", entrynr, num, blk, in_pm_create);
+        tl_dump_allocator(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)));
+    }
+    
     entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_create));
     num = MTA_PKG_CREATE_BLK;
     tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_CREATE);
     tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)), &param);
+
+    if ((in_pm_create & 0x00000000000FFFFF) == 0x00000000000fff00 && blk == 511) {
+        hk_info("entrynr %llu, num %lu, blk %u, in_pm_create %llx\n", entrynr, num, blk, in_pm_create);
+        tl_dump_allocator(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)));
+    }
 
     /* control inode */
     sih = hk_alloc_hk_inode_info_header();
@@ -673,6 +684,7 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
     u32 blk;
     u8 *bm_buf = recovery_param->in_dram_bm_buf;
     u8 *blk_buf = recovery_param->in_dram_blk_buf;
+    u64 checked = 0;
 
     INIT_LIST_HEAD(&create_list);
 
@@ -695,6 +707,10 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
                 list_add_tail(&lnode->node, &create_list);
 
                 __hk_recovery_from_create_pkg(sbi, in_buf_create, in_pm_create, blk, max_vtail);
+                checked++;
+                if (checked % 10000 == 0) {
+                    hk_info("%llu pkgs have been checked\n", checked);
+                }
             }
 
             in_buf_create += MTA_PKG_CREATE_SIZE;
@@ -746,7 +762,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
     if (sih) {
         est_vtail = ((struct hk_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
         if (est_vtail < cur_vtail) {
-            hk_warn("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);
+            hk_dbgv("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);
             obj_mgr_unload_imap_control(sbi->pack_layout.obj_mgr, sih);
             for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
                 /* remove from parent */
@@ -926,13 +942,15 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
     u64 data_vtail;
     int ret = 0, cpuid;
 
+    attr = (struct hk_obj_attr *)in_buf_attr;
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
     if (!sih) {
-        hk_warn("Can't find inode %lu in imap\n", attr->ino);
+        hk_dbgv("4: Can't find inode %lu in imap\n", attr->ino);
         ret = -ENOENT;
         goto out;
     }
-
+    
+    BUG_ON(1);
     INIT_LIST_HEAD(&invalid_data_list);
 
     if (__check_should_update_attr(sbi, sih, attr->hdr.vtail, false)) {
@@ -1393,6 +1411,68 @@ out:
     return ret;
 }
 
+void generate_packages(struct super_block *sb)
+{
+    struct hk_sb_info *sbi = HK_SB(sb);
+    unsigned long num_blocks = sbi->num_blocks / sbi->cpus;
+    unsigned long ino, saved_ino;
+    obj_ref_inode_t ref_inode;
+    struct hk_inode_info_header fake_sih;
+    
+    // NOTE: we have generate root inode
+    char name_buf[HUNTER_MAX_NAME_LEN];
+    
+    hk_info("Generating packages...\n");
+    hk_init_header(sb, &fake_sih, S_IFPSEUDO);
+    for (ino = 1; ino < num_blocks; ino++) {
+        // generate fake inode
+        in_pkg_param_t create_param;
+        out_pkg_param_t out_param;
+        in_create_pkg_param_t in_create_param;
+        out_create_pkg_param_t out_create_param;
+        snprintf(name_buf, HUNTER_MAX_NAME_LEN, "test-%lu", ino);
+        in_create_param.create_type = CREATE_FOR_FAKE;
+        in_create_param.new_ino = ino;
+        create_param.private = &in_create_param;
+
+        out_param.private = &out_create_param;
+        create_param.cur_pkg_addr = 0;
+        create_param.bin = false;
+        create_new_inode_pkg(sbi, S_IFREG, name_buf, &fake_sih, sbi->pack_layout.rih, &create_param, &out_param);
+        ref_inode.hdr.addr = get_pm_offset(sbi, out_param.addr);
+        ref_inode.hdr.ino = ino;
+        fake_sih.pack_spec.latest_fop.latest_inode = &ref_inode;
+        fake_sih.ino = ino;
+
+        // generate data
+        in_pkg_param_t data_param;
+        out_pkg_param_t out_data_param;
+        
+        // NOTE: this data package should never be consulted
+        data_param.bin = false;
+        data_param.private = (void *)1;
+        create_data_pkg(sbi, &fake_sih, 0, 0, 0, 0, &data_param, &out_data_param);
+
+        // generate attr
+        in_pkg_param_t attr_param;
+        out_pkg_param_t out_attr_param;
+        
+        attr_param.private = (void *)1;
+        create_attr_pkg(sbi, &fake_sih, 0, 0, &attr_param, &out_attr_param);
+        
+        // generate unlink
+        in_pkg_param_t unlink_param;
+        out_pkg_param_t out_unlink_param;
+        
+        unlink_param.bin = false;
+        unlink_param.cur_pkg_addr = 0;
+        unlink_param.private = (void *)1;
+        
+        create_unlink_pkg(sbi, &fake_sih, sbi->pack_layout.rih, NULL, &unlink_param, &out_unlink_param);
+    }
+    hk_info("Generating done...\n");
+}
+
 #define NEED_NORMAL_RECOVERY       0
 #define NEED_FORCE_NORMAL_RECOVERY 1
 #define NEED_NO_FURTHER_RECOVERY   2
@@ -1429,13 +1509,19 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
             pd = (struct hk_pack_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
             hk_create_dram_bufs_normal(sbi);
             /* Traverse create pkg */
+            hk_info("Recover create pkgs\n");
             hk_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse unlink pkg */
+            hk_info("Recover unlink pkgs\n");
             hk_recovery_unlink_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse data pkg */
+            hk_info("Recover data pkgs\n");
             hk_recovery_data_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse attr pkg */
+            hk_info("Recover attr pkgs\n");
             hk_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
+            
+            hk_info("Done traversing pkgs\n");
 
             destroy_min_data_vtail_table(&recovery_param);
             hk_destroy_dram_bufs_normal();

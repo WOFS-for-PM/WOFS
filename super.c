@@ -476,8 +476,10 @@ static int hk_format_hunter(struct super_block *sb)
     memset_nt((void *)super_redund, 0, HK_SB_SIZE(sbi));
     hk_memlock_super(sb, HUNTER_SECOND_SUPER_BLK, &irq_flags);
 
-    hk_format_meta(sb);
+    hk_format_meta(sb);       
 }
+
+extern void generate_packages(struct super_block *sb);
 
 static struct hk_inode *hk_init(struct super_block *sb,
                                 unsigned long size)
@@ -544,6 +546,8 @@ static struct hk_inode *hk_init(struct super_block *sb,
             return ERR_PTR(ret);
         }
         hk_info("Root Inode is initialized at %lx\n", get_pm_offset(sbi, out_param.addr));
+    
+        generate_packages(sb);
     } else {
         root_pi = hk_get_inode_by_ino(sb, HK_ROOT_INO);
         hk_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);

@@ -288,7 +288,7 @@ typedef struct claim_req {
     u32 ino;
 } claim_req_t;
 
-#define PREALLOC_IMAPS_NUM (1 << HK_HASH_BITS7) 
+#define PREALLOC_IMAPS_NUM (1024) 
 
 /* build this in the mount time */
 typedef struct obj_mgr {

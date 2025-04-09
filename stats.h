@@ -146,6 +146,17 @@ enum timing_category {
     linix_set_t,
     linix_get_t,
 
+    /* Recovery */
+    rec_title_t,
+    rec_unlink_pkg_t,
+    rec_create_pkg_t,
+    rec_allocator_t,
+    rec_dobj_t,
+    rec_imap_t,
+    rec_unalloc_t,
+    rec_unload_imap_t,
+    rec_unload_dobj_t,
+
     /* Sentinel */
     TIMING_NUM,
 };

@@ -119,7 +119,17 @@ const char *Timingstring[TIMING_NUM] = {
 
 	"=================== LinIX ===================",
 	"linix_set",
-	"linix_get"
+	"linix_get",
+	
+	"=================== Recovery ===================",
+	"recover_unlink_pkgs",
+	"recover_create_pkgs",
+	"recover_allocator",
+	"recover_dobjects",
+	"recover_inode_map",
+	"recover_unalloc",
+    "recover_unload_inode_map",
+    "recover_unload_dobjects",
 };
 
 u64 Timingstats[TIMING_NUM];

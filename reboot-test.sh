@@ -108,7 +108,7 @@ sudo rmmod hunter > /dev/null 2>&1
 
 echo "Inserting the new kernel module..."
 sudo insmod hunter.ko \
-    measure_timing="$(get_modules_options measure_timing)" \
+    measure_timing="1" \
     wprotect="$(get_modules_options wprotect)" \
 
 sleep 1
@@ -136,8 +136,10 @@ if (( fs_wprotect == 1 )); then
     init_str+=",wprotect"
 fi
 
-sudo mount -t HUNTER -o "$init_str" -o dax /dev/pmem0 $MNT_POINT
+RECOVERY_TIME=$( (time mount -t HUNTER -o "$init_str" -o dax /dev/pmem0 $MNT_POINT) 2>&1 | grep real | awk '{print $2}' )
+
 echo "Remount done"
 echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END" 
+echo "$RECOVERY_TIME"
 cd "$ORIGINAL" || exit
 

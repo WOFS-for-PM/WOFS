@@ -571,7 +571,12 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
     struct super_block *sb = sbi->sb;
     u64 est_vtail;
     u64 cur_vtail;
+    INIT_TIMING(time);
+    INIT_TIMING(rec_alloc_time);
+    INIT_TIMING(rec_imap_time);
+    INIT_TIMING(rec_dobj_time);
 
+    HK_START_TIMING(rec_create_pkg_t, time);
     cur_addr = in_buf_create;
     get_pkg_hdr(cur_addr, PKG_CREATE, (u64 *)&pkg_hdr);
 
@@ -629,10 +634,12 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
         tl_dump_allocator(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)));
     }
     
+    HK_START_TIMING(rec_allocator_t, rec_alloc_time);
     entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_create));
     num = MTA_PKG_CREATE_BLK;
     tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_CREATE);
     tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)), &param);
+    HK_END_TIMING(rec_allocator_t, rec_alloc_time);
 
     if ((in_pm_create & 0x00000000000FFFFF) == 0x00000000000fff00 && blk == 511) {
         hk_info("entrynr %llu, num %lu, blk %u, in_pm_create %llx\n", entrynr, num, blk, in_pm_create);
@@ -649,16 +656,20 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
 
     /* init header */
     hk_init_header(sb, sih, pkg_hdr->create_hdr.attr.i_mode);
-
+    
+    HK_START_TIMING(rec_imap_t, rec_imap_time);
     __hk_build_inode_update_from_pm(sbi, (struct hk_obj_inode *)in_pm_create, &inode_update);
     ur_dram_latest_inode(sbi->pack_layout.obj_mgr, sih, &inode_update);
     obj_mgr_load_imap_control(sbi->pack_layout.obj_mgr, sih);
     cur_addr += OBJ_INODE_SIZE;
-
+    HK_END_TIMING(rec_imap_t, rec_imap_time);
+    
     /* control dentry */
+    HK_START_TIMING(rec_dobj_t, rec_dobj_time);
     obj_dentry = (struct hk_obj_dentry *)cur_addr;
     ref_dentry = ref_dentry_create(get_pm_offset(sbi, in_pm_create + OBJ_INODE_SIZE), obj_dentry->name, strlen(obj_dentry->name), obj_inode->ino, obj_dentry->parent_ino);
     obj_mgr_load_dobj_control(sbi->pack_layout.obj_mgr, ref_dentry, OBJ_DENTRY);
+    HK_END_TIMING(rec_dobj_t, rec_dobj_time);
 
     /* apply myself attr based on current create */
     __hk_recovery_attr_from_create_pkg(sbi, in_pm_create, false);
@@ -666,6 +677,7 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
     if (pkg_hdr->hdr.vtail > *max_vtail)
         *max_vtail = pkg_hdr->hdr.vtail;
 out:
+    HK_END_TIMING(rec_create_pkg_t, time);
     return ret;
 }
 
@@ -747,6 +759,12 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
     u32 dep_ino;
     int cpuid;
     bool need_free_sih = false;
+    INIT_TIMING(time);
+    INIT_TIMING(rec_unalloc_time);
+    INIT_TIMING(rec_unload_imap_time);
+    INIT_TIMING(rec_unload_dobj_time);
+
+    HK_START_TIMING(rec_unlink_pkg_t, time);
 
     get_pkg_hdr(in_buf_unlink, PKG_UNLINK, (u64 *)&pkg_hdr);
     cur_vtail = pkg_hdr->hdr.vtail;
@@ -763,7 +781,11 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
         est_vtail = ((struct hk_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
         if (est_vtail < cur_vtail) {
             hk_dbgv("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);
+            
+            HK_START_TIMING(rec_unload_imap_t, rec_unload_imap_time);
             obj_mgr_unload_imap_control(sbi->pack_layout.obj_mgr, sih);
+            HK_END_TIMING(rec_unload_imap_t, rec_unload_imap_time);
+
             for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
                 /* remove from parent */
                 obj_mgr_get_dobjs(sbi->pack_layout.obj_mgr, cpuid, pkg_hdr->unlink_hdr.parent_attr.ino, OBJ_DENTRY, (void *)&dentry_list);
@@ -772,7 +794,9 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                     {
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
+                            HK_START_TIMING(rec_unload_dobj_t, rec_unload_dobj_time);
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
+                            HK_END_TIMING(rec_unload_dobj_t, rec_unload_dobj_time);
                             hk_free_obj_ref_dentry(ref_dentry);
                             need_free_sih = true;
                             break;
@@ -813,11 +837,13 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                 goto out;
             }
         }
-
+        
+        HK_START_TIMING(rec_unalloc_t, rec_unalloc_time);
         entrynr = GET_ENTRYNR(get_pm_offset(sbi, in_pm_unlink));
         num = MTA_PKG_UNLINK_BLK;
         tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_UNLINK);
         tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_unlink)), &param);
+        HK_END_TIMING(rec_unalloc_t, rec_unalloc_time);
 
         __hk_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
 
@@ -834,6 +860,7 @@ out:
     if (pkg_hdr->hdr.vtail > *max_vtail)
         *max_vtail = pkg_hdr->hdr.vtail;
 
+    HK_END_TIMING(rec_unlink_pkg_t, time);
     return 0;
 }
 
@@ -1414,10 +1441,12 @@ out:
 void generate_packages(struct super_block *sb)
 {
     struct hk_sb_info *sbi = HK_SB(sb);
-    unsigned long num_blocks = sbi->num_blocks / sbi->cpus;
+    // FIXME: assume use 16 threads for recovery for each pass
+    unsigned long num_blocks = sbi->num_blocks / 16;
     unsigned long ino, saved_ino;
     obj_ref_inode_t ref_inode;
     struct hk_inode_info_header fake_sih;
+    u64 create_start_addr = 0, cur_create_addr;
     
     // NOTE: we have generate root inode
     char name_buf[HUNTER_MAX_NAME_LEN];
@@ -1439,7 +1468,15 @@ void generate_packages(struct super_block *sb)
         create_param.cur_pkg_addr = 0;
         create_param.bin = false;
         create_new_inode_pkg(sbi, S_IFREG, name_buf, &fake_sih, sbi->pack_layout.rih, &create_param, &out_param);
-        ref_inode.hdr.addr = get_pm_offset(sbi, out_param.addr);
+        
+        if (!create_start_addr) {
+            create_start_addr = out_param.addr;
+        }
+    }
+
+    cur_create_addr = create_start_addr;
+    for (ino = 1; ino < num_blocks; ino++) {
+        ref_inode.hdr.addr = get_pm_offset(sbi, cur_create_addr);
         ref_inode.hdr.ino = ino;
         fake_sih.pack_spec.latest_fop.latest_inode = &ref_inode;
         fake_sih.ino = ino;
@@ -1452,6 +1489,16 @@ void generate_packages(struct super_block *sb)
         data_param.bin = false;
         data_param.private = (void *)1;
         create_data_pkg(sbi, &fake_sih, 0, 0, 0, 0, &data_param, &out_data_param);
+        
+        cur_create_addr += MTA_PKG_CREATE_SIZE;
+    }
+
+    cur_create_addr = create_start_addr;
+    for (ino = 1; ino < num_blocks; ino++) {
+        ref_inode.hdr.addr = get_pm_offset(sbi, cur_create_addr);
+        ref_inode.hdr.ino = ino;
+        fake_sih.pack_spec.latest_fop.latest_inode = &ref_inode;
+        fake_sih.ino = ino;
 
         // generate attr
         in_pkg_param_t attr_param;
@@ -1459,6 +1506,16 @@ void generate_packages(struct super_block *sb)
         
         attr_param.private = (void *)1;
         create_attr_pkg(sbi, &fake_sih, 0, 0, &attr_param, &out_attr_param);
+
+        cur_create_addr += MTA_PKG_CREATE_SIZE;
+    }
+
+    cur_create_addr = create_start_addr;
+    for (ino = 1; ino < num_blocks; ino++) {
+        ref_inode.hdr.addr = get_pm_offset(sbi, cur_create_addr);
+        ref_inode.hdr.ino = ino;
+        fake_sih.pack_spec.latest_fop.latest_inode = &ref_inode;
+        fake_sih.ino = ino;
         
         // generate unlink
         in_pkg_param_t unlink_param;
@@ -1469,6 +1526,7 @@ void generate_packages(struct super_block *sb)
         unlink_param.private = (void *)1;
         
         create_unlink_pkg(sbi, &fake_sih, sbi->pack_layout.rih, NULL, &unlink_param, &out_unlink_param);
+        cur_create_addr += MTA_PKG_CREATE_SIZE;
     }
     hk_info("Generating done...\n");
 }

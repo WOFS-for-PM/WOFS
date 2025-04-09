@@ -57,7 +57,7 @@
 #define HK_LINIX_SLOTS           (1024 * 256) /* related to init size */
 #define HK_HISTORY_WINDOWS       (1)          /* for dynamic workloads */
 #define HK_NAME_LEN              (128 - 36)
-#define HK_HASH_BITS17           17 /* for those long period hash table */
+#define HK_HASH_BITS18           18 /* for those long period hash table */
 #define HK_HASH_BITS7            7  /* for those long period hash table */
 #define HK_HASH_BITS3            3  /* for those frequent creating hash table */
 #define HK_CMT_QUEUE_BITS        10 /* for commit queue */

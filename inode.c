@@ -57,7 +57,6 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
     struct hk_inode *pi;
     struct hk_sb_info *sbi = HK_SB(sb);
     inode_mgr_t *mgr = sbi->inode_mgr;
-    imap_t *imap = &sbi->pack_layout.obj_mgr->prealloc_imap;
     struct hk_inode_info_header *cur;
     int bkt;
     u64 start_ino, end_ino;
@@ -79,9 +78,12 @@ int hk_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_i
             /* First insert all values */
             hk_init_free_inode_list_percore(sb, cpuid, true);
             /* Second filter out those existing value */
-            hash_for_each(imap->map, bkt, cur, hnode)
-            {
-                inode_mgr_restore(mgr, cur->ino);
+            for (i = 0; i < PREALLOC_IMAPS_NUM; i++) {
+                imap_t *imap = sbi->pack_layout.obj_mgr->prealloc_imaps[i];
+                hash_for_each(imap->map, bkt, cur, hnode)
+                {
+                    inode_mgr_restore(mgr, cur->ino);
+                }
             }
         } else {
             for (i = end_ino; i >= start_ino; i--) {

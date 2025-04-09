@@ -85,8 +85,11 @@ int obj_mgr_init(struct hk_sb_info *sbi, u32 cpus, obj_mgr_t *mgr)
     mgr->num_d_roots = cpus;
     mgr->sbi = sbi;
 
-    rng_lock_init(&mgr->prealloc_imap.rng_lock, cpus, NULL);
-    hash_init(mgr->prealloc_imap.map);
+    for (i = 0; i < PREALLOC_IMAPS_NUM; i++) {
+        mgr->prealloc_imaps[i] = kzalloc(sizeof(imap_t), GFP_KERNEL);
+        rng_lock_init(&mgr->prealloc_imaps[i]->rng_lock, cpus, NULL);
+        hash_init(mgr->prealloc_imaps[i]->map);
+    }
     rng_lock_init(&mgr->pending_table.rng_lock, cpus, NULL);
     hash_init(mgr->pending_table.tbl);
     mgr->d_roots = (d_root_t *)kzalloc(sizeof(d_root_t) * cpus, GFP_KERNEL);
@@ -115,21 +118,24 @@ void obj_mgr_destroy(obj_mgr_t *mgr)
     obj_ref_dentry_t *ref_dentry;
     struct list_head *pos, *n;
     d_root_t *root;
-    int bkt, root_id;
+    int bkt, root_id, i;
     struct hlist_node *temp;
 
     if (mgr) {
-        rng_lock_destroy(&mgr->prealloc_imap.rng_lock);
-        hash_for_each_safe(mgr->prealloc_imap.map, bkt, temp, cur, hnode)
-        {
-            hash_del(&cur->hnode);
-            if (cur->pack_spec.latest_fop.latest_attr)
-                ref_attr_destroy(cur->pack_spec.latest_fop.latest_attr);
-            if (cur->pack_spec.latest_fop.latest_inode)
-                ref_inode_destroy(cur->pack_spec.latest_fop.latest_inode);
-            cur->pack_spec.latest_fop.latest_attr = NULL;
-            cur->pack_spec.latest_fop.latest_inode = NULL;
-            hk_free_hk_inode_info_header(cur);
+        for (i = 0; i < PREALLOC_IMAPS_NUM; i++) {
+            rng_lock_destroy(&mgr->prealloc_imaps[i]->rng_lock);
+            hash_for_each_safe(mgr->prealloc_imaps[i]->map, bkt, temp, cur, hnode)
+            {
+                hash_del(&cur->hnode);
+                if (cur->pack_spec.latest_fop.latest_attr)
+                    ref_attr_destroy(cur->pack_spec.latest_fop.latest_attr);
+                if (cur->pack_spec.latest_fop.latest_inode)
+                    ref_inode_destroy(cur->pack_spec.latest_fop.latest_inode);
+                cur->pack_spec.latest_fop.latest_attr = NULL;
+                cur->pack_spec.latest_fop.latest_inode = NULL;
+                hk_free_hk_inode_info_header(cur);
+            }
+            kfree(mgr->prealloc_imaps[i]);
         }
 
         rng_lock_destroy(&mgr->pending_table.rng_lock);
@@ -349,7 +355,8 @@ int obj_mgr_get_dobjs(obj_mgr_t *mgr, int cpuid, u32 ino, u8 type, void **obj_re
 int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 {
     int ret = 0;
-    imap_t *imap = &mgr->prealloc_imap;
+    int which_imap = sih->ino % PREALLOC_IMAPS_NUM;
+    imap_t *imap = mgr->prealloc_imaps[which_imap];
     int slot = hash_min(sih->ino, HASH_BITS(imap->map));
 
     rng_lock(&imap->rng_lock, slot);
@@ -362,7 +369,8 @@ int obj_mgr_load_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih)
 {
     int ret = 0;
-    imap_t *imap = &mgr->prealloc_imap;
+    int which_imap = sih->ino % PREALLOC_IMAPS_NUM;
+    imap_t *imap = mgr->prealloc_imaps[which_imap];
     int slot = hash_min(sih->ino, HASH_BITS(imap->map));
 
     rng_lock(&imap->rng_lock, slot);
@@ -374,7 +382,8 @@ int obj_mgr_unload_imap_control(obj_mgr_t *mgr, struct hk_inode_info_header *sih
 
 struct hk_inode_info_header *obj_mgr_get_imap_inode(obj_mgr_t *mgr, u32 ino)
 {
-    imap_t *imap = &mgr->prealloc_imap;
+    int which_imap = ino % PREALLOC_IMAPS_NUM;
+    imap_t *imap = mgr->prealloc_imaps[which_imap];
     struct hk_inode_info_header *sih;
     int slot = hash_min(ino, HASH_BITS(imap->map));
 

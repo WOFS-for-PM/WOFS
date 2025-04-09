@@ -265,7 +265,7 @@ typedef struct d_root {
 /* imap: key ino, value hk_inode_info_header */
 typedef struct imap {
     rng_lock_t rng_lock;
-    DECLARE_HASHTABLE(map, HK_HASH_BITS17);
+    DECLARE_HASHTABLE(map, HK_HASH_BITS18);
 } imap_t;
 
 typedef struct pendtbl {
@@ -288,12 +288,14 @@ typedef struct claim_req {
     u32 ino;
 } claim_req_t;
 
+#define PREALLOC_IMAPS_NUM (1 << HK_HASH_BITS7) 
+
 /* build this in the mount time */
 typedef struct obj_mgr {
     struct hk_sb_info *sbi;  /* the superblock */
     d_root_t *d_roots;       /* the root of all objs, the number equals to the number of split layouts */
     int num_d_roots;         /* the number of d_roots */
-    imap_t prealloc_imap;    /* used to fast locate per file objs, key is ino, value is hk_inode */
+    imap_t *prealloc_imaps[PREALLOC_IMAPS_NUM];    /* used to fast locate per file objs, key is ino, value is hk_inode */
     pendtbl_t pending_table; /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
 } obj_mgr_t;
 

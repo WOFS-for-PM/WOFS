@@ -203,13 +203,18 @@ static inline void hk_dump_sih(struct hk_inode_info_header *sih)
 }
 
 static inline void hk_dump_inode_map(struct hk_sb_info *sbi) {
-    imap_t *imap = &sbi->pack_layout.obj_mgr->prealloc_imap;
-    struct hk_inode_info_header *sih;
-    int bkt;
-    
-    hash_for_each(imap->map, bkt, sih, hnode) {
-        hk_dump_sih(sih);
+    int i;
+
+    for (i = 0; i < PREALLOC_IMAPS_NUM; i++) {
+        imap_t *imap = sbi->pack_layout.obj_mgr->prealloc_imaps[i];
+        struct hk_inode_info_header *sih;
+        int bkt;
+        
+        hash_for_each(imap->map, bkt, sih, hnode) {
+            hk_dump_sih(sih);
+        }
     }
+
 }
 
 #endif /* _HK_DBG_H_ */

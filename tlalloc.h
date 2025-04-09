@@ -134,14 +134,14 @@ typedef struct data_mgr {
 
 typedef struct typed_meta_mgr {
     struct list_head free_list;
-    DECLARE_HASHTABLE(used_blks, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(used_blks, 18);
     u64 entries_perblk;
     u64 entries_mask;
     spinlock_t spin;
 } typed_meta_mgr_t;
 
 typedef struct meta_mgr {
-    typed_meta_mgr_t tmeta_mgrs[TL_MTA_TYPE_NUM];
+    typed_meta_mgr_t *tmeta_mgrs[TL_MTA_TYPE_NUM];
 } meta_mgr_t;
 
 typedef struct tl_allocator {

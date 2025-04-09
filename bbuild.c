@@ -1184,7 +1184,7 @@ void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
         layout = &sbi->layouts[i];
         allocator = &layout->allocator;
         meta_mgr = &allocator->meta_manager;
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[meta_type_to_idx(m_alloc_type)];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[meta_type_to_idx(m_alloc_type)];
 
         hash_for_each(tmeta_mgr->used_blks, bkt, cur, hnode)
         {

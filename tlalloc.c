@@ -418,7 +418,8 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
 
     /* typed metadata managers */
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
-        tmeta_mgr = &alloc->meta_manager.tmeta_mgrs[i];
+        alloc->meta_manager.tmeta_mgrs[i] = kzalloc(sizeof(typed_meta_mgr_t), GFP_KERNEL);
+        tmeta_mgr = alloc->meta_manager.tmeta_mgrs[i];
         hash_init(tmeta_mgr->used_blks);
         INIT_LIST_HEAD(&tmeta_mgr->free_list);
         tmeta_mgr->entries_perblk = blk_size / meta_size;
@@ -499,7 +500,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
         HK_START_TIMING(tl_alloc_meta_t, time);
         typed_meta_mgr_t *tmeta_mgr;
         u8 idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[idx];
         spin_lock(&tmeta_mgr->spin);
     retry:
         list_for_each(pos, &tmeta_mgr->free_list)
@@ -644,7 +645,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
 
         hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[idx];
 
         spin_lock(&tmeta_mgr->spin);
         hash_for_each_possible(tmeta_mgr->used_blks, cur, hnode, blk)
@@ -769,7 +770,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
 
         hk_dbgv("restore meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags))];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags))];
         spin_lock(&tmeta_mgr->spin);
         node = NULL;
         hash_for_each_possible(tmeta_mgr->used_blks, cur, hnode, blk)
@@ -825,7 +826,7 @@ void tl_destory(tl_allocator_t *alloc)
     /* destroy meta node */
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
         typed_meta_mgr_t *tmeta_mgr;
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[i];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[i];
 
         list_for_each_safe(pos, n, &tmeta_mgr->free_list)
         {
@@ -838,6 +839,8 @@ void tl_destory(tl_allocator_t *alloc)
             hash_del(&cur->hnode);
             tl_free_node(cur);
         }
+
+        kfree(tmeta_mgr);
     }
 }
 
@@ -886,7 +889,7 @@ void tl_dump_meta_mgr(meta_mgr_t *meta_mgr)
     int i;
 
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
-        tmeta_mgr = &meta_mgr->tmeta_mgrs[i];
+        tmeta_mgr = meta_mgr->tmeta_mgrs[i];
         spin_lock(&tmeta_mgr->spin);
         list_for_each(pos, &tmeta_mgr->free_list)
         {

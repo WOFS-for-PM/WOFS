@@ -932,6 +932,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
     u64 data_vtail;
     int ret = 0, cpuid;
 
+    attr = (struct hk_obj_attr *)in_buf_attr;
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
     if (!sih) {
         hk_warn("Can't find inode %lu in imap\n", attr->ino);

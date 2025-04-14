@@ -182,6 +182,9 @@ int hk_free_inode_blks(struct super_block *sb, struct hk_inode *pi,
 
     HK_START_TIMING(free_inode_log_t, free_time);
 
+    if (sih->ino == HK_ROOT_INO) /* We should not evict ROOT INO */
+        return 0;
+    
     freed = __hk_free_inode_blks(sb, pi, sih);
 
     HK_END_TIMING(free_inode_log_t, free_time);
@@ -261,7 +264,9 @@ static int hk_free_inode_resource(struct super_block *sb, struct hk_inode *pi,
         obj_mgr_unload_imap_control(obj_mgr, sih);
     }
 
-    sih->si->header = NULL;
+    if (sih->si)
+        sih->si->header = NULL;
+
     /* Then we can free the inode */
     ret = hk_free_inode(sb, sih);
     if (ret)

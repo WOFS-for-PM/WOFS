@@ -1,9 +1,9 @@
-#ifndef _HK_CMT_H_
-#define _HK_CMT_H_
+#ifndef _WOFS_CMT_H_
+#define _WOFS_CMT_H_
 
-#include "hunter.h"
+#include "wofs.h"
 
-struct hk_inode_state {
+struct wofs_inode_state {
     u64 ino;
     u16 mode;
     u32 uid;
@@ -14,33 +14,33 @@ struct hk_inode_state {
     u64 size; /* File size after truncation */
 };
 
-enum hk_cmt_type {
+enum wofs_cmt_type {
     CMT_VALID,
     CMT_INVALID
 };
 
-struct hk_cmt_batch {
+struct wofs_cmt_batch {
     u64 addr_start;
     u64 addr_end;
     u64 blk_start;
     u64 dst_blks;
 };
 
-static inline void hk_init_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
+static inline void wofs_init_cmt_batch(struct super_block *sb, struct wofs_cmt_batch *batch, u64 addr, u64 blk_cur, u64 dst_blks)
 {
     batch->addr_start = batch->addr_end = addr;
     batch->blk_start = blk_cur;
     batch->dst_blks = dst_blks;
 }
 
-static inline void hk_inc_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch)
+static inline void wofs_inc_cmt_batch(struct super_block *sb, struct wofs_cmt_batch *batch)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    batch->addr_end += HK_PBLK_SZ(sbi);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    batch->addr_end += WOFS_PBLK_SZ(sbi);
     batch->dst_blks -= 1;
 }
 
-static inline void hk_next_cmt_batch(struct super_block *sb, struct hk_cmt_batch *batch)
+static inline void wofs_next_cmt_batch(struct super_block *sb, struct wofs_cmt_batch *batch)
 {
     batch->addr_start = batch->addr_end;
     if (batch->dst_blks == 0) {
@@ -48,12 +48,12 @@ static inline void hk_next_cmt_batch(struct super_block *sb, struct hk_cmt_batch
     }
 }
 
-static inline bool hk_is_cmt_batch_valid(struct super_block *sb, struct hk_cmt_batch *batch)
+static inline bool wofs_is_cmt_batch_valid(struct super_block *sb, struct wofs_cmt_batch *batch)
 {
     return (batch->dst_blks >= 0);
 }
 
-struct hk_cmt_info {
+struct wofs_cmt_info {
     struct ch_slot slot;
     u8 type;
     u16 mode;
@@ -69,12 +69,12 @@ struct hk_cmt_info {
     u8 paddings[16];
 };
 
-// int a = sizeof(struct hk_cmt_info);
+// int a = sizeof(struct wofs_cmt_info);
 
-struct hk_cmt_queue {
-    DEFINE_CHASHTABLE(table, HK_CMT_QUEUE_BITS);
-    spinlock_t locks[1 << HK_CMT_QUEUE_BITS];
-    u64 nitems[1 << HK_CMT_QUEUE_BITS];
+struct wofs_cmt_queue {
+    DEFINE_CHASHTABLE(table, WOFS_CMT_QUEUE_BITS);
+    spinlock_t locks[1 << WOFS_CMT_QUEUE_BITS];
+    u64 nitems[1 << WOFS_CMT_QUEUE_BITS];
     void *fetchers;
     int nfetchers
 };

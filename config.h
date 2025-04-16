@@ -1,73 +1,73 @@
-#ifndef _HK_CONFIG_H_
-#define _HK_CONFIG_H_
+#ifndef _WOFS_CONFIG_H_
+#define _WOFS_CONFIG_H_
 
 /*
- * The HUNTER filesystem constants/structures
+ * The WOFS filesystem constants/structures
  */
-#define HUNTER_SUPER_BLKS       2
-#define HUNTER_FIRST_SUPER_BLK  0
-#define HUNTER_SECOND_SUPER_BLK 1
+#define WOFS_SUPER_BLKS       2
+#define WOFS_FIRST_SUPER_BLK  0
+#define WOFS_SECOND_SUPER_BLK 1
 
-#define HUNTER_SUPER_MAGIC     0x48554E54 /* HUNT */
-#define HUNTER_OBJ_MAGIC       0x484F424A /* HOBJ */
-#define HUNTER_UNO_MAGIC       0x48504B48 /* HUNO */
-#define HUNTER_MAX_NAME_LEN    (128 - 36)
-#define HUNTER_VALID_UNMOUNT   0xFFFFFFFF
-#define HUNTER_INVALID_UNMOUNT 0x00000000
-#define HUNTER_ROOT_INO        0
+#define WOFS_SUPER_MAGIC     0x48554E54 /* HUNT */
+#define WOFS_OBJ_MAGIC       0x484F424A /* HOBJ */
+#define WOFS_UNO_MAGIC       0x48504B48 /* HUNO */
+#define WOFS_MAX_NAME_LEN    (128 - 36)
+#define WOFS_VALID_UNMOUNT   0xFFFFFFFF
+#define WOFS_INVALID_UNMOUNT 0x00000000
+#define WOFS_ROOT_INO        0
 
 /*
  * Mount flags
  */
-#define HUNTER_MOUNT_PROTECT      0x000001 /* wprotect CR0.WP */
-#define HUNTER_MOUNT_XATTR_USER   0x000002 /* Extended user attributes */
-#define HUNTER_MOUNT_POSIX_ACL    0x000004 /* POSIX Access Control Lists */
-#define HUNTER_MOUNT_DAX          0x000008 /* Direct Access */
-#define HUNTER_MOUNT_ERRORS_CONT  0x000010 /* Continue on errors */
-#define HUNTER_MOUNT_ERRORS_RO    0x000020 /* Remount fs ro on errors */
-#define HUNTER_MOUNT_ERRORS_PANIC 0x000040 /* Panic on errors */
-#define HUNTER_MOUNT_HUGEMMAP     0x000080 /* Huge mappings with mmap */
-#define HUNTER_MOUNT_HUGEIOREMAP  0x000100 /* Huge mappings with ioremap */
-#define HUNTER_MOUNT_FORMAT       0x000200 /* was FS formatted on mount? */
-#define HUNTER_MOUNT_DATA_COW     0x000400 /* Copy-on-write for data integrity */
-#define HUNTER_MOUNT_META_ASYNC   0x000800 /* Write metadata asynchronously */
-#define HUNTER_MOUNT_META_LOCAL   0x001000 /* Reserving a continuous space to write meta */
-#define HUNTER_MOUNT_META_LFS     0x002000 /* Append metadata like LFS */
-#define HUNTER_MOUNT_META_PACK    0x004000 /* Pack meta (physically, logically). i.e., WRITE-ONCE */
-#define HUNTER_MOUNT_HISTORY_W    0x008000 /* History window for file open */
+#define WOFS_MOUNT_PROTECT      0x000001 /* wprotect CR0.WP */
+#define WOFS_MOUNT_XATTR_USER   0x000002 /* Extended user attributes */
+#define WOFS_MOUNT_POSIX_ACL    0x000004 /* POSIX Access Control Lists */
+#define WOFS_MOUNT_DAX          0x000008 /* Direct Access */
+#define WOFS_MOUNT_ERRORS_CONT  0x000010 /* Continue on errors */
+#define WOFS_MOUNT_ERRORS_RO    0x000020 /* Remount fs ro on errors */
+#define WOFS_MOUNT_ERRORS_PANIC 0x000040 /* Panic on errors */
+#define WOFS_MOUNT_HUGEMMAP     0x000080 /* Huge mappings with mmap */
+#define WOFS_MOUNT_HUGEIOREMAP  0x000100 /* Huge mappings with ioremap */
+#define WOFS_MOUNT_FORMAT       0x000200 /* was FS formatted on mount? */
+#define WOFS_MOUNT_DATA_COW     0x000400 /* Copy-on-write for data integrity */
+#define WOFS_MOUNT_META_ASYNC   0x000800 /* Write metadata asynchronously */
+#define WOFS_MOUNT_META_LOCAL   0x001000 /* Reserving a continuous space to write meta */
+#define WOFS_MOUNT_META_LFS     0x002000 /* Append metadata like LFS */
+#define WOFS_MOUNT_META_PACK    0x004000 /* Pack meta (physically, logically). i.e., WRITE-ONCE */
+#define WOFS_MOUNT_HISTORY_W    0x008000 /* History window for file open */
 
 /*
  * Maximal count of links to a file
  */
-#define HK_LINK_MAX      32000
+#define WOFS_LINK_MAX      32000
 #define POSSIBLE_MAX_CPU 1024
-#define HK_MAX_LAYOUTS   64
+#define WOFS_MAX_LAYOUTS   64
 #define PM_ACCESS_GRANU  256
 
 /*
- * HUNTER CONFIGURATIONS
+ * WOFS CONFIGURATIONS
  */
-#define HK_PBLK_SZ(sbi)          sbi->pblk_sz
-#define HK_LBLK_SZ(sbi)          sbi->lblk_sz /* logic block size */
-#define HK_NUM_INO               (1024 * 1024)
-#define HK_RG_SLOTS              (1024 * 1024)
-#define HK_RG_ENTY_SLOTS         (4)
-#define HK_MLIST_INST_MAXRETRIES (5)
-#define HK_EXTEND_NUM_BLOCKS     (512)        /* for optimizing append/sequntial write */
-#define HK_LINIX_SLOTS           (1024 * 256) /* related to init size */
-#define HK_HISTORY_WINDOWS       (1)          /* for dynamic workloads */
-#define HK_NAME_LEN              (128 - 36)
-#define HK_HASH_BITS7            7  /* for those long period hash table */
-#define HK_HASH_BITS3            3  /* for those frequent creating hash table */
-#define HK_CMT_QUEUE_BITS        10 /* for commit queue */
-#define HK_CMT_MAX_PROCESS_BATCH (1024 * 256)
-#define HK_CMT_WAKEUP_THRESHOLD  (HK_CMT_MAX_PROCESS_BATCH * 2)
-#define HK_MAX_GAPS_INRAM        (1024 * 256)
-#define HK_CMT_WORKER_NUM        4 /* for commit worker */
-#define HK_JOURNAL_SIZE          (4 * 1024)
-#define HK_PERCORE_JSLOTS        (1) /* per core journal slots */
-#define HK_READAHEAD_WINDOW      (16 * 1024)
-#define HK_RESCUE_WORKERS        8  /* for failure recovery */
+#define WOFS_PBLK_SZ(sbi)          sbi->pblk_sz
+#define WOFS_LBLK_SZ(sbi)          sbi->lblk_sz /* logic block size */
+#define WOFS_NUM_INO               (1024 * 1024)
+#define WOFS_RG_SLOTS              (1024 * 1024)
+#define WOFS_RG_ENTY_SLOTS         (4)
+#define WOFS_MLIST_INST_MAXRETRIES (5)
+#define WOFS_EXTEND_NUM_BLOCKS     (512)        /* for optimizing append/sequntial write */
+#define WOFS_LINIX_SLOTS           (1024 * 256) /* related to init size */
+#define WOFS_HISTORY_WINDOWS       (1)          /* for dynamic workloads */
+#define WOFS_NAME_LEN              (128 - 36)
+#define WOFS_HASH_BITS7            7  /* for those long period hash table */
+#define WOFS_HASH_BITS3            3  /* for those frequent creating hash table */
+#define WOFS_CMT_QUEUE_BITS        10 /* for commit queue */
+#define WOFS_CMT_MAX_PROCESS_BATCH (1024 * 256)
+#define WOFS_CMT_WAKEUP_THRESHOLD  (WOFS_CMT_MAX_PROCESS_BATCH * 2)
+#define WOFS_MAX_GAPS_INRAM        (1024 * 256)
+#define WOFS_CMT_WORKER_NUM        4 /* for commit worker */
+#define WOFS_JOURNAL_SIZE          (4 * 1024)
+#define WOFS_PERCORE_JSLOTS        (1) /* per core journal slots */
+#define WOFS_READAHEAD_WINDOW      (16 * 1024)
+#define WOFS_RESCUE_WORKERS        8  /* for failure recovery */
 
 /* ======================= Enhanced Configurations ========================= */
 #define CONFIG_CMT_BACKGROUND     /* enable background commit system */
@@ -78,7 +78,7 @@
 // #define CONFIG_LAYOUT_TIGHT						/* enable tight layout */
 
 #ifdef CONFIG_LAYOUT_TIGHT
-#define HK_PBLK_SZ(sbi) (PAGE_SIZE + sizeof(struct hk_header))
+#define WOFS_PBLK_SZ(sbi) (PAGE_SIZE + sizeof(struct wofs_header))
 #endif
 
 /* ======================= Write ordering ========================= */
@@ -129,7 +129,7 @@ static inline void MEMORY_BARRIER(void)
                  :);
 }
 
-static inline void hk_flush_small_buffer(void *buf, uint32_t len, bool fence)
+static inline void wofs_flush_small_buffer(void *buf, uint32_t len, bool fence)
 {
     uint32_t i;
 
@@ -145,7 +145,7 @@ static inline void hk_flush_small_buffer(void *buf, uint32_t len, bool fence)
         PERSISTENT_BARRIER();
 }
 
-static inline void hk_flush_buffer(void *buf, uint32_t len, bool fence)
+static inline void wofs_flush_buffer(void *buf, uint32_t len, bool fence)
 {
     uint32_t i;
 
@@ -169,10 +169,10 @@ static inline void hk_flush_buffer(void *buf, uint32_t len, bool fence)
 #if 0
 /* ======================= GC static workers ========================= */
 /* TODO: We might not need this */
-#define HK_MAX_GC_SENDER 4
-#define HK_MAX_GC_WRITER 2
+#define WOFS_MAX_GC_SENDER 4
+#define WOFS_MAX_GC_WRITER 2
 
-#define HK_EQU_FACTOR 50
+#define WOFS_EQU_FACTOR 50
 #endif
 
-#endif /* _HK_CONFIG_H_ */
+#endif /* _WOFS_CONFIG_H_ */

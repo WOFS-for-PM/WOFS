@@ -1,5 +1,5 @@
 /*
- * HUNTER (KILLER) Recovery routines.
+ * WOFS (WOFS) Recovery routines.
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -23,23 +23,23 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "hunter.h"
+#include "wofs.h"
 
-int hk_test_bit(u32 bit, u8 *bm)
+int wofs_test_bit(u32 bit, u8 *bm)
 {
     u32 byte = bit >> 3;
     u32 bit_in_byte = bit & 0x7;
     return (bm[byte] >> bit_in_byte) & 0x1;
 }
 
-void hk_set_bit(u32 bit, u8 *bm)
+void wofs_set_bit(u32 bit, u8 *bm)
 {
     u32 byte = bit >> 3;
     u32 bit_in_byte = bit & 0x7;
     bm[byte] |= (1 << bit_in_byte);
 }
 
-void hk_clear_bit(u32 bit, u8 *bm)
+void wofs_clear_bit(u32 bit, u8 *bm)
 {
     u32 byte = bit >> 3;
     u32 bit_in_byte = bit & 0x7;
@@ -58,7 +58,7 @@ u8 *in_dram_unlink_bm = NULL;
 typedef struct recovery_pkgs_param {
     u8 *in_dram_bm_buf;
     u8 *in_dram_blk_buf;
-    DECLARE_HASHTABLE(min_data_vtail_table, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(min_data_vtail_table, WOFS_HASH_BITS7);
 } recovery_pkgs_param_t;
 
 struct basic_hash_node {
@@ -145,9 +145,9 @@ static u64 get_min_data_vtail(recovery_pkgs_param_t *param, u32 ino) { return 0;
 static void destroy_min_data_vtail_table(recovery_pkgs_param_t *param) {}
 #endif
 
-#define hk_traverse_bm(sbi, bm, pointed_blk)                                                                                       \
-    for (pointed_blk = 0; pointed_blk < ((sbi->pack_layout.tl_per_type_bm_reserved_blks << HUNTER_BLK_SHIFT) << 3); pointed_blk++) \
-        if (hk_test_bit(pointed_blk, bm))
+#define wofs_traverse_bm(sbi, bm, pointed_blk)                                                                                       \
+    for (pointed_blk = 0; pointed_blk < ((sbi->pack_layout.tl_per_type_bm_reserved_blks << WOFS_BLK_SHIFT) << 3); pointed_blk++) \
+        if (wofs_test_bit(pointed_blk, bm))
 
 struct basic_list_node {
     struct list_head node;
@@ -171,56 +171,56 @@ static void free_basic_list_node(struct basic_list_node *node)
         kfree(node);
 }
 
-static u8 *hk_create_dram_blk_buf(struct hk_sb_info *sbi)
+static u8 *wofs_create_dram_blk_buf(struct wofs_sb_info *sbi)
 {
-    u8 *blk_buf = kvzalloc(HK_PBLK_SZ(sbi), GFP_KERNEL);
+    u8 *blk_buf = kvzalloc(WOFS_PBLK_SZ(sbi), GFP_KERNEL);
     if (!blk_buf)
-        hk_err(sbi->sb, "failed to allocate blk_buf");
+        wofs_err(sbi->sb, "failed to allocate blk_buf");
 
     return blk_buf;
 }
 
-static void hk_free_dram_blk_buf(u8 *blk_buf)
+static void wofs_free_dram_blk_buf(u8 *blk_buf)
 {
     if (blk_buf)
         kvfree(blk_buf);
 }
 
-static u8 *hk_create_dram_bm_buf(struct hk_sb_info *sbi)
+static u8 *wofs_create_dram_bm_buf(struct wofs_sb_info *sbi)
 {
     u8 *bm_buf = kvzalloc(BMBLK_SIZE(sbi), GFP_KERNEL);
     if (!bm_buf)
-        hk_err(sbi->sb, "failed to allocate bm_buf");
+        wofs_err(sbi->sb, "failed to allocate bm_buf");
 
     return bm_buf;
 }
 
-static void hk_free_dram_bm_buf(u8 *bm_buf)
+static void wofs_free_dram_bm_buf(u8 *bm_buf)
 {
     if (bm_buf)
         kvfree(bm_buf);
 }
 
-static int hk_create_dram_bufs_normal(struct hk_sb_info *sbi)
+static int wofs_create_dram_bufs_normal(struct wofs_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
-    hk_info("%s: Try to create bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi));
-    in_dram_bm_buf = hk_create_dram_bm_buf(sbi);
+    wofs_info("%s: Try to create bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi));
+    in_dram_bm_buf = wofs_create_dram_bm_buf(sbi);
     if (!in_dram_bm_buf) {
         return -ENOMEM;
     }
 
-    hk_info("%s: Try to create blk buffer: %d bytes\n", __func__, HK_PBLK_SZ(sbi));
-    in_dram_blk_buf = hk_create_dram_blk_buf(sbi);
+    wofs_info("%s: Try to create blk buffer: %d bytes\n", __func__, WOFS_PBLK_SZ(sbi));
+    in_dram_blk_buf = wofs_create_dram_blk_buf(sbi);
     if (!in_dram_blk_buf) {
-        hk_free_dram_bm_buf(in_dram_bm_buf);
+        wofs_free_dram_bm_buf(in_dram_bm_buf);
         return -ENOMEM;
     }
 
     return 0;
 }
 
-static void hk_destroy_dram_bufs_normal(void)
+static void wofs_destroy_dram_bufs_normal(void)
 {
     if (in_dram_bm_buf)
         kvfree(in_dram_bm_buf);
@@ -228,41 +228,41 @@ static void hk_destroy_dram_bufs_normal(void)
         kvfree(in_dram_blk_buf);
 }
 
-static int hk_create_dram_bufs_failure(struct hk_sb_info *sbi)
+static int wofs_create_dram_bufs_failure(struct wofs_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
-    hk_info("%s: Try to create 4 bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi) * 4);
+    wofs_info("%s: Try to create 4 bitmap buffer: %d bytes\n", __func__, BMBLK_SIZE(sbi) * 4);
 
-    in_dram_attr_bm = hk_create_dram_bm_buf(sbi);
+    in_dram_attr_bm = wofs_create_dram_bm_buf(sbi);
     if (!in_dram_attr_bm) {
         return -ENOMEM;
     }
 
-    in_dram_data_bm = hk_create_dram_bm_buf(sbi);
+    in_dram_data_bm = wofs_create_dram_bm_buf(sbi);
     if (!in_dram_data_bm) {
-        hk_free_dram_bm_buf(in_dram_attr_bm);
+        wofs_free_dram_bm_buf(in_dram_attr_bm);
         return -ENOMEM;
     }
 
-    in_dram_create_bm = hk_create_dram_bm_buf(sbi);
+    in_dram_create_bm = wofs_create_dram_bm_buf(sbi);
     if (!in_dram_create_bm) {
-        hk_free_dram_bm_buf(in_dram_attr_bm);
-        hk_free_dram_bm_buf(in_dram_data_bm);
+        wofs_free_dram_bm_buf(in_dram_attr_bm);
+        wofs_free_dram_bm_buf(in_dram_data_bm);
         return -ENOMEM;
     }
 
-    in_dram_unlink_bm = hk_create_dram_bm_buf(sbi);
+    in_dram_unlink_bm = wofs_create_dram_bm_buf(sbi);
     if (!in_dram_unlink_bm) {
-        hk_free_dram_bm_buf(in_dram_attr_bm);
-        hk_free_dram_bm_buf(in_dram_data_bm);
-        hk_free_dram_bm_buf(in_dram_create_bm);
+        wofs_free_dram_bm_buf(in_dram_attr_bm);
+        wofs_free_dram_bm_buf(in_dram_data_bm);
+        wofs_free_dram_bm_buf(in_dram_create_bm);
         return -ENOMEM;
     }
 
     return 0;
 }
 
-static void hk_destroy_dram_bufs_failure(void)
+static void wofs_destroy_dram_bufs_failure(void)
 {
     if (in_dram_attr_bm)
         kvfree(in_dram_attr_bm);
@@ -275,28 +275,28 @@ static void hk_destroy_dram_bufs_failure(void)
 }
 
 /* Recovery Routines for Pack Layout */
-static inline u8 *__hk_get_bm_addr(struct hk_sb_info *sbi, void *buf, u32 bmblk)
+static inline u8 *__wofs_get_bm_addr(struct wofs_sb_info *sbi, void *buf, u32 bmblk)
 {
     u8 *bm;
     if (buf) {
-        memcpy(buf, HK_BM_ADDR(sbi, bmblk), BMBLK_SIZE(sbi));
+        memcpy(buf, WOFS_BM_ADDR(sbi, bmblk), BMBLK_SIZE(sbi));
         bm = buf;
     } else {
-        bm = HK_BM_ADDR(sbi, bmblk);
+        bm = WOFS_BM_ADDR(sbi, bmblk);
     }
     return bm;
 }
 
-static inline u8 *__hk_get_blk_addr(struct hk_sb_info *sbi, void *buf, u32 blk)
+static inline u8 *__wofs_get_blk_addr(struct wofs_sb_info *sbi, void *buf, u32 blk)
 {
     u8 *addr;
     if (buf) {
         /* apply empirical read model */
         int i, j;
         size_t ra_win = sbi->ra_win;
-        size_t win = rounddown_pow_of_two(ra_win / HK_RESCUE_WORKERS);
+        size_t win = rounddown_pow_of_two(ra_win / WOFS_RESCUE_WORKERS);
 
-        for (i = 0; i < HK_PBLK_SZ(sbi); i += win) {
+        for (i = 0; i < WOFS_PBLK_SZ(sbi); i += win) {
             for (j = i; j < (i + win); j += 256) {
                 prefetcht2(get_pm_blk_addr(sbi, blk) + j);
             }
@@ -309,7 +309,7 @@ static inline u8 *__hk_get_blk_addr(struct hk_sb_info *sbi, void *buf, u32 blk)
     return addr;
 }
 
-int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
+int wofs_recovery_data_pkgs(struct wofs_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
 {
     u8 *bm_buf = recovery_param->in_dram_bm_buf;
     u8 *blk_buf = recovery_param->in_dram_blk_buf;
@@ -317,27 +317,27 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
     u8 *data_bm;
     u8 *cur_data;
     u8 *start_addr;
-    struct hk_inode *inode;
-    struct hk_obj_data *data;
+    struct wofs_inode *inode;
+    struct wofs_obj_data *data;
     obj_ref_data_t *ref_data;
     u64 in_pm_addr;
     u64 pm_data_addr;
     tlrestore_param_t param;
-    struct hk_obj_hdr *hdr = NULL;
-    struct hk_inode_info_header *sih;
+    struct wofs_obj_hdr *hdr = NULL;
+    struct wofs_inode_info_header *sih;
     u64 entrynr;
     u32 blk;
     u32 num;
     bool second_chance = false;
     u64 reserved = 0;
 
-    data_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_DATA);
-    hk_traverse_bm(sbi, data_bm, blk)
+    data_bm = __wofs_get_bm_addr(sbi, bm_buf, BMBLK_DATA);
+    wofs_traverse_bm(sbi, data_bm, blk)
     {
-        cur_data = __hk_get_blk_addr(sbi, blk_buf, blk);
+        cur_data = __wofs_get_blk_addr(sbi, blk_buf, blk);
         in_pm_addr = get_pm_blk_addr(sbi, blk);
         start_addr = cur_data;
-        while (cur_data < start_addr + HK_PBLK_SZ(sbi)) {
+        while (cur_data < start_addr + WOFS_PBLK_SZ(sbi)) {
             get_pkg_hdr(cur_data, PKG_DATA, (u64 *)&hdr);
             if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr)) {
                 second_chance = false;
@@ -347,13 +347,13 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
 
             /* NOTE: reserved field is used for append optimization */
             if (second_chance) {
-                data = (struct hk_obj_data *)cur_data;
+                data = (struct wofs_obj_data *)cur_data;
                 reserved = data->hdr.reserved;
                 data->hdr.reserved = 0;
             }
 
             if (check_pkg_valid(cur_data, OBJ_DATA_SIZE, hdr)) {
-                data = (struct hk_obj_data *)cur_data;
+                data = (struct wofs_obj_data *)cur_data;
                 sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, data->ino);
                 if (sih) {
                     /* restore data entry */
@@ -378,7 +378,7 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
             }
 
             if (second_chance) {
-                data = (struct hk_obj_data *)cur_data;
+                data = (struct wofs_obj_data *)cur_data;
                 data->hdr.reserved = reserved;
             }
 
@@ -390,10 +390,10 @@ int hk_recovery_data_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
     return 0;
 }
 
-int __check_should_update_attr(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u64 vtail, bool inline_update)
+int __check_should_update_attr(struct wofs_sb_info *sbi, struct wofs_inode_info_header *sih, u64 vtail, bool inline_update)
 {
-    struct hk_obj_attr *orig_attr;
-    struct hk_pkg_hdr *inline_attr;
+    struct wofs_obj_attr *orig_attr;
+    struct wofs_pkg_hdr *inline_attr;
 
     if (inline_update) {
         if (!sih->pack_spec.latest_fop.latest_inline_attr) {
@@ -420,7 +420,7 @@ int __check_should_update_attr(struct hk_sb_info *sbi, struct hk_inode_info_head
     return 0;
 }
 
-void __hk_build_attr_update_from_pm(struct hk_sb_info *sbi, struct hk_obj_attr *attr, attr_update_t *attr_update)
+void __wofs_build_attr_update_from_pm(struct wofs_sb_info *sbi, struct wofs_obj_attr *attr, attr_update_t *attr_update)
 {
     attr_update->addr = get_pm_offset(sbi, get_pm_offset(sbi, (u64)attr));
     attr_update->from_pkg = PKG_CREATE;
@@ -435,32 +435,32 @@ void __hk_build_attr_update_from_pm(struct hk_sb_info *sbi, struct hk_obj_attr *
     attr_update->i_links_count = attr->i_links_count;
 }
 
-void __hk_build_inode_update_from_pm(struct hk_sb_info *sbi, struct hk_obj_inode *inode, inode_update_t *inode_update)
+void __wofs_build_inode_update_from_pm(struct wofs_sb_info *sbi, struct wofs_obj_inode *inode, inode_update_t *inode_update)
 {
     inode_update->addr = get_pm_offset(sbi, (u64)inode);
     inode_update->ino = inode->ino;
 }
 
-static int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *in_pm_cur_create, bool parent)
+static int __wofs_recovery_attr_from_create_pkg(struct wofs_sb_info *sbi, u8 *in_pm_cur_create, bool parent)
 {
     struct super_block *sb = sbi->sb;
-    struct hk_inode_info_header *sih, *psih;
+    struct wofs_inode_info_header *sih, *psih;
     attr_update_t attr_update;
-    struct hk_obj_inode *obj_inode;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_obj_inode *obj_inode;
+    struct wofs_pkg_hdr *pkg_hdr;
     u64 vtail;
     u32 ino;
 
-    obj_inode = (struct hk_obj_inode *)in_pm_cur_create;
+    obj_inode = (struct wofs_obj_inode *)in_pm_cur_create;
     get_pkg_hdr(in_pm_cur_create, PKG_CREATE, (u64 *)&pkg_hdr);
     vtail = pkg_hdr->hdr.vtail;
 
     if (!parent) {
         ino = obj_inode->ino;
-        hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
+        wofs_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!sih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            wofs_warn("Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, sih, vtail, true)) {
@@ -479,14 +479,14 @@ static int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *in_pm_
             }
         }
     } else { /* parent */
-        if (obj_inode->ino == HK_ROOT_INO) {
+        if (obj_inode->ino == WOFS_ROOT_INO) {
             return 0;
         }
         ino = pkg_hdr->create_hdr.attr.ino;
-        hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
+        wofs_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!psih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            wofs_warn("Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, psih, vtail, true)) {
@@ -508,12 +508,12 @@ static int __hk_recovery_attr_from_create_pkg(struct hk_sb_info *sbi, u8 *in_pm_
     return 0;
 }
 
-static int __hk_recovery_attr_from_unlink_pkg(struct hk_sb_info *sbi, u8 *in_pm_cur_unlink, bool parent, struct hk_inode_info_header *sih)
+static int __wofs_recovery_attr_from_unlink_pkg(struct wofs_sb_info *sbi, u8 *in_pm_cur_unlink, bool parent, struct wofs_inode_info_header *sih)
 {
     struct super_block *sb = sbi->sb;
-    struct hk_inode_info_header *psih;
+    struct wofs_inode_info_header *psih;
     attr_update_t attr_update;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_pkg_hdr *pkg_hdr;
     u64 vtail;
     u32 ino;
 
@@ -524,10 +524,10 @@ static int __hk_recovery_attr_from_unlink_pkg(struct hk_sb_info *sbi, u8 *in_pm_
         /* Do Nothing */
     } else { /* parent */
         ino = pkg_hdr->unlink_hdr.parent_attr.ino;
-        hk_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
+        wofs_dbgv("Recovery attr from create pkg, ino %lu, vtail %lu, father %lu\n", ino, vtail, parent);
         psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
         if (!psih) {
-            hk_warn("Can't find inode %lu in imap\n", ino);
+            wofs_warn("Can't find inode %lu in imap\n", ino);
             return -ENOENT;
         } else {
             if (__check_should_update_attr(sbi, psih, vtail, true)) {
@@ -552,13 +552,13 @@ static int __hk_recovery_attr_from_unlink_pkg(struct hk_sb_info *sbi, u8 *in_pm_
     return 0;
 }
 
-static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_create, u64 in_pm_create, u32 blk, u64 *max_vtail)
+static int __wofs_recovery_from_create_pkg(struct wofs_sb_info *sbi, u64 in_buf_create, u64 in_pm_create, u32 blk, u64 *max_vtail)
 {
     u8 *cur_addr;
-    struct hk_inode_info_header *sih;
-    struct hk_obj_inode *obj_inode;
-    struct hk_obj_dentry *obj_dentry;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_inode_info_header *sih;
+    struct wofs_obj_inode *obj_inode;
+    struct wofs_obj_dentry *obj_dentry;
+    struct wofs_pkg_hdr *pkg_hdr;
     tlrestore_param_t param;
     inode_update_t inode_update;
     obj_ref_dentry_t *ref_dentry;
@@ -574,14 +574,14 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
     cur_addr = in_buf_create;
     get_pkg_hdr(cur_addr, PKG_CREATE, (u64 *)&pkg_hdr);
 
-    obj_inode = (struct hk_obj_inode *)cur_addr;
+    obj_inode = (struct wofs_obj_inode *)cur_addr;
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, obj_inode->ino);
     cur_vtail = pkg_hdr->hdr.vtail;
 
     if (sih) {
-        est_vtail = ((struct hk_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
+        est_vtail = ((struct wofs_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
         if (est_vtail < cur_vtail) {
-            hk_warn("New Inode @%llx found, Old Inode %lu @%llx is unlinked, but found in imap, which means corresponding CREATE pkg is not used, but ino is reused. We try to remove Old one\n",
+            wofs_warn("New Inode @%llx found, Old Inode %lu @%llx is unlinked, but found in imap, which means corresponding CREATE pkg is not used, but ino is reused. We try to remove Old one\n",
                     get_pm_offset(sbi, in_pm_create),
                     sih->ino,
                     sih->pack_spec.latest_fop.latest_inode->hdr.addr);
@@ -602,8 +602,8 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
                                 ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
                             if (sih->pack_spec.latest_fop.latest_inode)
                                 ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
-                            hk_free_hk_inode_info_header(sih);
-                            hk_free_obj_ref_dentry(ref_dentry);
+                            wofs_free_wofs_inode_info_header(sih);
+                            wofs_free_obj_ref_dentry(ref_dentry);
                             found = true;
                             break;
                         }
@@ -614,7 +614,7 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
             }
         } else {
             /* est is the newest one, we just ignore this CREATE PKG */
-            hk_info("Inode @%llx found, but Exist Inode %lu @%llx is newer. Thus we omit this Inode\n",
+            wofs_info("Inode @%llx found, but Exist Inode %lu @%llx is newer. Thus we omit this Inode\n",
                     get_pm_offset(sbi, in_pm_create),
                     sih->ino,
                     sih->pack_spec.latest_fop.latest_inode->hdr.addr);
@@ -629,28 +629,28 @@ static int __hk_recovery_from_create_pkg(struct hk_sb_info *sbi, u64 in_buf_crea
     tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_create)), &param);
 
     /* control inode */
-    sih = hk_alloc_hk_inode_info_header();
+    sih = wofs_alloc_wofs_inode_info_header();
     if (!sih) {
         ret = -ENOMEM;
-        hk_err(sb, "Create inode failed\n");
+        wofs_err(sb, "Create inode failed\n");
         goto out;
     }
 
     /* init header */
-    hk_init_header(sb, sih, pkg_hdr->create_hdr.attr.i_mode);
+    wofs_init_header(sb, sih, pkg_hdr->create_hdr.attr.i_mode);
 
-    __hk_build_inode_update_from_pm(sbi, (struct hk_obj_inode *)in_pm_create, &inode_update);
+    __wofs_build_inode_update_from_pm(sbi, (struct wofs_obj_inode *)in_pm_create, &inode_update);
     ur_dram_latest_inode(sbi->pack_layout.obj_mgr, sih, &inode_update);
     obj_mgr_load_imap_control(sbi->pack_layout.obj_mgr, sih);
     cur_addr += OBJ_INODE_SIZE;
 
     /* control dentry */
-    obj_dentry = (struct hk_obj_dentry *)cur_addr;
+    obj_dentry = (struct wofs_obj_dentry *)cur_addr;
     ref_dentry = ref_dentry_create(get_pm_offset(sbi, in_pm_create + OBJ_INODE_SIZE), obj_dentry->name, strlen(obj_dentry->name), obj_inode->ino, obj_dentry->parent_ino);
     obj_mgr_load_dobj_control(sbi->pack_layout.obj_mgr, ref_dentry, OBJ_DENTRY);
 
     /* apply myself attr based on current create */
-    __hk_recovery_attr_from_create_pkg(sbi, in_pm_create, false);
+    __wofs_recovery_attr_from_create_pkg(sbi, in_pm_create, false);
 
     if (pkg_hdr->hdr.vtail > *max_vtail)
         *max_vtail = pkg_hdr->hdr.vtail;
@@ -658,7 +658,7 @@ out:
     return ret;
 }
 
-int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
+int wofs_recovery_create_pkgs(struct wofs_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
 {
     int ret = 0;
     u8 *create_bm;
@@ -668,7 +668,7 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
     struct super_block *sb = sbi->sb;
     struct basic_list_node *lnode;
     tlrestore_param_t param;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_pkg_hdr *pkg_hdr;
     struct list_head create_list, *pos, *n;
     u32 blk;
     u8 *bm_buf = recovery_param->in_dram_bm_buf;
@@ -676,25 +676,25 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
 
     INIT_LIST_HEAD(&create_list);
 
-    create_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_CREATE);
-    hk_traverse_bm(sbi, create_bm, blk)
+    create_bm = __wofs_get_bm_addr(sbi, bm_buf, BMBLK_CREATE);
+    wofs_traverse_bm(sbi, create_bm, blk)
     {
-        in_buf_create = __hk_get_blk_addr(sbi, blk_buf, blk);
+        in_buf_create = __wofs_get_blk_addr(sbi, blk_buf, blk);
         in_pm_create = get_pm_blk_addr(sbi, blk);
         start_addr = in_buf_create;
-        while (in_buf_create < start_addr + HK_PBLK_SZ(sbi)) {
+        while (in_buf_create < start_addr + WOFS_PBLK_SZ(sbi)) {
             get_pkg_hdr(in_buf_create, PKG_CREATE, (u64 *)&pkg_hdr);
             if (check_pkg_valid(in_buf_create, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr)) {
                 /* pend create pkg for processing parent create package */
                 lnode = create_basic_list_node(in_pm_create);
                 if (!lnode) {
                     ret = -ENOMEM;
-                    hk_err(sb, "Create list node failed\n");
+                    wofs_err(sb, "Create list node failed\n");
                     goto out;
                 }
                 list_add_tail(&lnode->node, &create_list);
 
-                __hk_recovery_from_create_pkg(sbi, in_buf_create, in_pm_create, blk, max_vtail);
+                __wofs_recovery_from_create_pkg(sbi, in_buf_create, in_pm_create, blk, max_vtail);
             }
 
             in_buf_create += MTA_PKG_CREATE_SIZE;
@@ -707,7 +707,7 @@ int hk_recovery_create_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
     {
         lnode = list_entry(pos, struct basic_list_node, node);
         in_pm_create = (u8 *)lnode->value;
-        __hk_recovery_attr_from_create_pkg(sbi, in_pm_create, true);
+        __wofs_recovery_attr_from_create_pkg(sbi, in_pm_create, true);
         list_del(pos);
         free_basic_list_node(lnode);
     }
@@ -716,13 +716,13 @@ out:
     return ret;
 }
 
-static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unlink, u64 in_pm_unlink, u32 blk, u64 *max_vtail)
+static int __wofs_recovery_from_unlink_pkg(struct wofs_sb_info *sbi, u64 in_buf_unlink, u64 in_pm_unlink, u32 blk, u64 *max_vtail)
 {
-    struct hk_inode_info_header *sih, *psih;
+    struct wofs_inode_info_header *sih, *psih;
     tlrestore_param_t param;
     struct list_head *pos;
     obj_ref_dentry_t *ref_dentry;
-    struct hk_pkg_hdr *pkg_hdr, *dep_create_pkg_hdr;
+    struct wofs_pkg_hdr *pkg_hdr, *dep_create_pkg_hdr;
     d_obj_ref_list_t *dentry_list;
     u64 dep_create_addr;
     u64 entrynr;
@@ -738,15 +738,15 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
     /* parse pkg hdr */
     psih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, pkg_hdr->unlink_hdr.parent_attr.ino);
     if (!psih) {
-        hk_warn("Can't find parent inode %lu in imap\n", pkg_hdr->unlink_hdr.parent_attr.ino);
+        wofs_warn("Can't find parent inode %lu in imap\n", pkg_hdr->unlink_hdr.parent_attr.ino);
         return -ENOENT;
     }
 
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, pkg_hdr->unlink_hdr.unlinked_ino);
     if (sih) {
-        est_vtail = ((struct hk_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
+        est_vtail = ((struct wofs_obj_inode *)get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr))->hdr.vtail;
         if (est_vtail < cur_vtail) {
-            hk_warn("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);
+            wofs_warn("Inode %lu is unlinked, but found in imap, which means corresponding CREATE pkg is not used\n", sih->ino);
             obj_mgr_unload_imap_control(sbi->pack_layout.obj_mgr, sih);
             for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
                 /* remove from parent */
@@ -757,7 +757,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
                         ref_dentry = container_of(pos, obj_ref_dentry_t, node);
                         if (ref_dentry->target_ino == sih->ino) {
                             reclaim_dram_create(sbi->pack_layout.obj_mgr, sih, ref_dentry);
-                            hk_free_obj_ref_dentry(ref_dentry);
+                            wofs_free_obj_ref_dentry(ref_dentry);
                             need_free_sih = true;
                             break;
                         }
@@ -769,7 +769,7 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
             }
             /* fall thru */
         } else {
-            hk_warn("Get UNLINK PKG @0x%llx, but current inode %lu is not unlinked by this pkg \n\
+            wofs_warn("Get UNLINK PKG @0x%llx, but current inode %lu is not unlinked by this pkg \n\
 \t\t(since vtail of inode %llu > pkg's %llu). This means the corresponding CREATE PKG for UNLINK PKG @0x%llx \n\
 \t\tis either overwritten or not used. Therefore, we perform further check.\n",
                     in_pm_unlink,
@@ -781,19 +781,19 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
             get_pkg_hdr(dep_create_addr, PKG_CREATE, (u64 *)&dep_create_pkg_hdr);
             if (check_pkg_valid(dep_create_addr, MTA_PKG_CREATE_SIZE, &dep_create_pkg_hdr->hdr)) {
                 dep_vtail = dep_create_pkg_hdr->hdr.vtail;
-                dep_ino = ((struct hk_obj_inode *)dep_create_addr)->ino;
+                dep_ino = ((struct wofs_obj_inode *)dep_create_addr)->ino;
                 if (dep_vtail > cur_vtail) {
                     /* the dep inode is overwritten, the UNLINK PKG can be reclaimed */
-                    hk_info("The dep addr @%llx is overwritten, the UNLINK PKG can be reclaimed.\n", dep_create_addr);
+                    wofs_info("The dep addr @%llx is overwritten, the UNLINK PKG can be reclaimed.\n", dep_create_addr);
                     goto out;
                 }
                 /* the dep inode is not used */
-                hk_info("The dep addr @%llx is not used, we cannot safely free this UNLINK PKG for now.\n", dep_create_addr);
+                wofs_info("The dep addr @%llx is not used, we cannot safely free this UNLINK PKG for now.\n", dep_create_addr);
                 BUG_ON(dep_ino != sih->ino);
                 /* fall thru */
             } else {
                 /* the dep inode is partially overwritten, the UNLINK PKG can be reclaimed */
-                hk_info("The dep addr @%llx is partially overwritten, the UNLINK PKG can be reclaimed.\n", dep_create_addr);
+                wofs_info("The dep addr @%llx is partially overwritten, the UNLINK PKG can be reclaimed.\n", dep_create_addr);
                 goto out;
             }
         }
@@ -803,14 +803,14 @@ static int __hk_recovery_from_unlink_pkg(struct hk_sb_info *sbi, u64 in_buf_unli
         tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_UNLINK);
         tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_unlink)), &param);
 
-        __hk_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
+        __wofs_recovery_attr_from_unlink_pkg(sbi, in_pm_unlink, true, sih);
 
         if (need_free_sih) {
             if (sih->pack_spec.latest_fop.latest_attr)
                 ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
             if (sih->pack_spec.latest_fop.latest_inode)
                 ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
-            hk_free_hk_inode_info_header(sih);
+            wofs_free_wofs_inode_info_header(sih);
         }
     }
 
@@ -823,17 +823,17 @@ out:
 
 extern pendlst_t *obj_mgr_get_pendlst(obj_mgr_t *mgr, u64 dep_pkg_addr);
 
-int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
+int wofs_recovery_unlink_pkgs(struct wofs_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
 {
     int ret = 0;
     u8 *unlink_bm;
     u8 *in_buf_unlink;
     u64 in_pm_unlink;
     u8 *start_addr;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_pkg_hdr *pkg_hdr;
     struct basic_list_node *lnode;
     u8 *in_pm_rename_unlink, *in_pm_rename_create;
-    struct hk_pkg_hdr *rename_unlink_pkg_hdr, *rename_create_pkg_hdr;
+    struct wofs_pkg_hdr *rename_unlink_pkg_hdr, *rename_create_pkg_hdr;
     struct list_head rename_unlink_list, *pos, *n;
     pendlst_t *pendlst;
     u32 blk;
@@ -843,29 +843,29 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
     INIT_LIST_HEAD(&rename_unlink_list);
 
     /* check and clean all unlink pkg */
-    unlink_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_UNLINK);
-    hk_traverse_bm(sbi, unlink_bm, blk)
+    unlink_bm = __wofs_get_bm_addr(sbi, bm_buf, BMBLK_UNLINK);
+    wofs_traverse_bm(sbi, unlink_bm, blk)
     {
-        in_buf_unlink = __hk_get_blk_addr(sbi, blk_buf, blk);
+        in_buf_unlink = __wofs_get_blk_addr(sbi, blk_buf, blk);
         in_pm_unlink = get_pm_blk_addr(sbi, blk);
         start_addr = in_buf_unlink;
-        while (in_buf_unlink < start_addr + HK_PBLK_SZ(sbi)) {
+        while (in_buf_unlink < start_addr + WOFS_PBLK_SZ(sbi)) {
             get_pkg_hdr(in_buf_unlink, PKG_UNLINK, (u64 *)&pkg_hdr);
             if (check_pkg_valid(in_buf_unlink, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr)) {
-                pkg_hdr = (struct hk_pkg_hdr *)in_buf_unlink;
+                pkg_hdr = (struct wofs_pkg_hdr *)in_buf_unlink;
 
-                if (HK_PKG_TO_BIN_TYPE(pkg_hdr->pkg_type) == BIN_RENAME) {
+                if (WOFS_PKG_TO_BIN_TYPE(pkg_hdr->pkg_type) == BIN_RENAME) {
                     lnode = create_basic_list_node(in_pm_unlink);
                     if (!lnode) {
                         ret = -ENOMEM;
-                        hk_err(sbi->sb, "Create list node failed\n");
+                        wofs_err(sbi->sb, "Create list node failed\n");
                         goto out;
                     }
                     list_add_tail(&lnode->node, &rename_unlink_list);
                     continue;
                 }
 
-                __hk_recovery_from_unlink_pkg(sbi, in_buf_unlink, in_pm_unlink, blk, max_vtail);
+                __wofs_recovery_from_unlink_pkg(sbi, in_buf_unlink, in_pm_unlink, blk, max_vtail);
             }
             in_buf_unlink += MTA_PKG_UNLINK_SIZE;
             in_pm_unlink += MTA_PKG_UNLINK_SIZE;
@@ -896,7 +896,7 @@ int hk_recovery_unlink_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recov
         } else {
             /* Normally Re-Process UNLINK */
             blk = get_pm_blk(sbi, in_pm_rename_unlink);
-            __hk_recovery_from_unlink_pkg(sbi, in_pm_rename_unlink, in_pm_rename_unlink, blk, max_vtail);
+            __wofs_recovery_from_unlink_pkg(sbi, in_pm_rename_unlink, in_pm_rename_unlink, blk, max_vtail);
         }
 
         list_del(pos);
@@ -907,13 +907,13 @@ out:
     return ret;
 }
 
-static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, u64 in_pm_attr,
+static int __wofs_recovery_from_attr_pkg(struct wofs_sb_info *sbi, u64 in_buf_attr, u64 in_pm_attr,
                                        recovery_pkgs_param_t *recovery_param, u32 blk, u64 *max_vtail)
 {
     tlrestore_param_t param;
     tlfree_param_t free_param;
-    struct hk_inode_info_header *sih;
-    struct hk_obj_attr *attr;
+    struct wofs_inode_info_header *sih;
+    struct wofs_obj_attr *attr;
     attr_update_t attr_update;
     d_obj_ref_list_t *data_list;
     struct list_head invalid_data_list;
@@ -928,7 +928,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
 
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
     if (!sih) {
-        hk_warn("Can't find inode %lu in imap\n", attr->ino);
+        wofs_warn("Can't find inode %lu in imap\n", attr->ino);
         ret = -ENOENT;
         goto out;
     }
@@ -945,7 +945,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
                     list_for_each(pos, &data_list->list)
                     {
                         ref_data = list_entry(pos, obj_ref_data_t, node);
-                        data_vtail = ((struct hk_obj_data *)get_pm_addr(sbi, ref_data->hdr.addr))->hdr.vtail;
+                        data_vtail = ((struct wofs_obj_data *)get_pm_addr(sbi, ref_data->hdr.addr))->hdr.vtail;
                         if (data_vtail < attr->hdr.vtail) {
                             if (ref_data->ofs >= attr->i_size) {
                                 /* totally overlapped */
@@ -963,7 +963,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
                                 /* free ref_data later */
                                 lnode = create_basic_list_node(ref_data);
                                 if (!lnode) {
-                                    hk_err(sbi->sb, "Can't create basic list node\n");
+                                    wofs_err(sbi->sb, "Can't create basic list node\n");
                                     ret = -ENOMEM;
                                     goto out;
                                 }
@@ -972,7 +972,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
                                 u32 reclaimed_blk;
                                 u32 reclaimed_blks;
 
-                                num = (_round_up(attr->i_size - ref_data->ofs, HUNTER_BLK_SIZE)) >> PAGE_SHIFT;
+                                num = (_round_up(attr->i_size - ref_data->ofs, WOFS_BLK_SIZE)) >> PAGE_SHIFT;
                                 reclaimed_blks = ref_data->num - num;
                                 reclaimed_blk = get_pm_blk(sbi, get_pm_addr(sbi, ref_data->data_offset)) + (ref_data->num - reclaimed_blks);
                                 /* free truncated data */
@@ -1007,7 +1007,7 @@ static int __hk_recovery_from_attr_pkg(struct hk_sb_info *sbi, u64 in_buf_attr, 
         tl_build_restore_param(&param, blk, (entrynr << 32 | num), TL_MTA | TL_MTA_PKG_ATTR);
         tlrestore(get_tl_allocator(sbi, get_pm_offset(sbi, in_pm_attr)), &param);
 
-        __hk_build_attr_update_from_pm(sbi, attr, &attr_update);
+        __wofs_build_attr_update_from_pm(sbi, attr, &attr_update);
         ur_dram_latest_attr(sbi->pack_layout.obj_mgr, sih, &attr_update);
     }
 
@@ -1018,7 +1018,7 @@ out:
     return ret;
 }
 
-int hk_recovery_attr_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
+int wofs_recovery_attr_pkgs(struct wofs_sb_info *sbi, recovery_pkgs_param_t *recovery_param, u64 *max_vtail)
 {
     u8 *bm_buf = recovery_param->in_dram_bm_buf;
     u8 *blk_buf = recovery_param->in_dram_blk_buf;
@@ -1028,20 +1028,20 @@ int hk_recovery_attr_pkgs(struct hk_sb_info *sbi, recovery_pkgs_param_t *recover
     u64 in_pm_attr;
     u8 *start_addr;
     u32 blk;
-    struct hk_obj_hdr *hdr;
+    struct wofs_obj_hdr *hdr;
 
     /* check and clean all attr pkg */
-    attr_bm = __hk_get_bm_addr(sbi, bm_buf, BMBLK_ATTR);
-    hk_traverse_bm(sbi, attr_bm, blk)
+    attr_bm = __wofs_get_bm_addr(sbi, bm_buf, BMBLK_ATTR);
+    wofs_traverse_bm(sbi, attr_bm, blk)
     {
-        in_buf_attr = __hk_get_blk_addr(sbi, blk_buf, blk);
+        in_buf_attr = __wofs_get_blk_addr(sbi, blk_buf, blk);
         in_pm_attr = get_pm_blk_addr(sbi, blk);
         start_addr = in_buf_attr;
-        while (in_buf_attr < start_addr + HK_PBLK_SZ(sbi)) {
+        while (in_buf_attr < start_addr + WOFS_PBLK_SZ(sbi)) {
             get_pkg_hdr(in_buf_attr, PKG_ATTR, (u64 *)&hdr);
             if (check_pkg_valid(in_buf_attr, MTA_PKG_ATTR_SIZE, hdr)) {
                 /* parse attr */
-                __hk_recovery_from_attr_pkg(sbi, in_buf_attr, in_pm_attr, recovery_param, blk, max_vtail);
+                __wofs_recovery_from_attr_pkg(sbi, in_buf_attr, in_pm_attr, recovery_param, blk, max_vtail);
             }
             in_buf_attr += MTA_PKG_ATTR_SIZE;
             in_pm_attr += MTA_PKG_ATTR_SIZE;
@@ -1052,61 +1052,61 @@ out:
     return ret;
 }
 
-unsigned long hk_get_bm_size(struct super_block *sb)
+unsigned long wofs_get_bm_size(struct super_block *sb)
 {
     if (ENABLE_META_PACK(sb)) {
-        return BMBLK_SIZE(HK_SB(sb)) * BMBLK_NUM;
+        return BMBLK_SIZE(WOFS_SB(sb)) * BMBLK_NUM;
     } else {
-        hk_warn("meta pack is disabled, no need to allocate bitmap");
+        wofs_warn("meta pack is disabled, no need to allocate bitmap");
         return 0;
     }
 }
 
-void hk_set_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
+void wofs_set_bm(struct wofs_sb_info *sbi, u16 bmblk, u64 blk)
 {
     u8 *bm;
     unsigned long flags = 0;
     struct super_block *sb = sbi->sb;
     INIT_TIMING(time);
 
-    HK_START_TIMING(imm_set_bm_t, time);
+    WOFS_START_TIMING(imm_set_bm_t, time);
 
-    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
+    bm = __wofs_get_bm_addr(sbi, NULL, bmblk);
 
-    hk_memunlock_bm(sb, bmblk, &flags);
-    hk_set_bit(blk, bm);
+    wofs_memunlock_bm(sb, bmblk, &flags);
+    wofs_set_bit(blk, bm);
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
-    hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
-    hk_memlock_bm(sb, bmblk, &flags);
+    wofs_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
+    wofs_memlock_bm(sb, bmblk, &flags);
 
-    HK_END_TIMING(imm_set_bm_t, time);
+    WOFS_END_TIMING(imm_set_bm_t, time);
 }
 
-void hk_clear_bm(struct hk_sb_info *sbi, u16 bmblk, u64 blk)
+void wofs_clear_bm(struct wofs_sb_info *sbi, u16 bmblk, u64 blk)
 {
     u8 *bm;
     unsigned long flags = 0;
     struct super_block *sb = sbi->sb;
     INIT_TIMING(time);
 
-    HK_START_TIMING(imm_clear_bm_t, time);
+    WOFS_START_TIMING(imm_clear_bm_t, time);
 
-    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
+    bm = __wofs_get_bm_addr(sbi, NULL, bmblk);
 
-    hk_memunlock_bm(sb, bmblk, &flags);
-    hk_clear_bit(blk, bm);
+    wofs_memunlock_bm(sb, bmblk, &flags);
+    wofs_clear_bit(blk, bm);
     /* NOTE: the bm is then fenced together with the first */
     /* written entry in the corresponding container */
-    hk_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
-    hk_memlock_bm(sb, bmblk, &flags);
+    wofs_flush_buffer(bm + (blk >> 3), CACHELINE_SIZE, false);
+    wofs_memlock_bm(sb, bmblk, &flags);
 
-    HK_END_TIMING(imm_clear_bm_t, time);
+    WOFS_END_TIMING(imm_clear_bm_t, time);
 }
 
-void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
+void wofs_dump_bm(struct wofs_sb_info *sbi, u16 bmblk)
 {
-    struct hk_layout_info *layout;
+    struct wofs_layout_info *layout;
     tl_allocator_t *allocator;
     meta_mgr_t *meta_mgr;
     typed_meta_mgr_t *tmeta_mgr;
@@ -1132,8 +1132,8 @@ void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
         break;
     }
 
-    bm = __hk_get_bm_addr(sbi, NULL, bmblk);
-    hk_info("%s: bmblk %d, bm @ 0x%llx\n", __func__, bmblk, bm);
+    bm = __wofs_get_bm_addr(sbi, NULL, bmblk);
+    wofs_info("%s: bmblk %d, bm @ 0x%llx\n", __func__, bmblk, bm);
 
     for (i = 0; i < sbi->num_layout; i++) {
         layout = &sbi->layouts[i];
@@ -1143,77 +1143,77 @@ void hk_dump_bm(struct hk_sb_info *sbi, u16 bmblk)
 
         hash_for_each(tmeta_mgr->used_blks, bkt, cur, hnode)
         {
-            hk_set_bit(cur->blk, bm);
+            wofs_set_bit(cur->blk, bm);
         }
     }
 }
 
-int hk_save_layouts(struct super_block *sb)
+int wofs_save_layouts(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_super_block *hk_sb = sbi->hk_sb;
-    struct hk_layout_info *layout;
-    struct hk_normal_data *nd;
-    struct hk_pack_data *pd;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_super_block *wofs_sb = sbi->wofs_sb;
+    struct wofs_layout_info *layout;
+    struct wofs_normal_data *nd;
+    struct wofs_pack_data *pd;
     int ret = 0;
     int cpuid;
 
     if (ENABLE_META_PACK(sb)) {
-        pd = (struct hk_pack_data *)(((void *)hk_sb) + sizeof(struct hk_super_block));
+        pd = (struct wofs_pack_data *)(((void *)wofs_sb) + sizeof(struct wofs_super_block));
         pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->pack_layout.vtail));
-        hk_dump_bm(sbi, BMBLK_ATTR);
-        hk_dump_bm(sbi, BMBLK_UNLINK);
-        hk_dump_bm(sbi, BMBLK_CREATE);
-        hk_dump_bm(sbi, BMBLK_DATA);
+        wofs_dump_bm(sbi, BMBLK_ATTR);
+        wofs_dump_bm(sbi, BMBLK_UNLINK);
+        wofs_dump_bm(sbi, BMBLK_CREATE);
+        wofs_dump_bm(sbi, BMBLK_DATA);
     } else {
         for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
             layout = &sbi->layouts[cpuid];
 
             if (layout->ind.prep_blks != 0) {
-                hk_dump_layout_info(layout);
+                wofs_dump_layout_info(layout);
             }
-            nd = (struct hk_normal_data *)(((void *)hk_sb) + sizeof(struct hk_super_block));
+            nd = (struct wofs_normal_data *)(((void *)wofs_sb) + sizeof(struct wofs_super_block));
             nd->s_layout->s_atomic_counter = cpu_to_le64(layout->atomic_counter);
             nd->s_layout->s_ind.free_blks = cpu_to_le64(layout->ind.free_blks);
             nd->s_layout->s_ind.invalid_blks = cpu_to_le64(layout->ind.invalid_blks);
             nd->s_layout->s_ind.prep_blks = cpu_to_le64(layout->ind.prep_blks);
-            HK_ASSERT(nd->s_layout->s_ind.prep_blks == 0);
+            WOFS_ASSERT(nd->s_layout->s_ind.prep_blks == 0);
             nd->s_layout->s_ind.valid_blks = cpu_to_le64(layout->ind.valid_blks);
             nd->s_layout->s_ind.total_blks = cpu_to_le64(layout->ind.total_blks);
         }
     }
 
-    hk_update_super_crc(sb);
+    wofs_update_super_crc(sb);
 
-    hk_sync_super(sb);
-    hk_info("layouts dumped OK\n");
+    wofs_sync_super(sb);
+    wofs_info("layouts dumped OK\n");
     return ret;
 }
 
 /* Apply all regions to inode */
-int hk_save_regions(struct super_block *sb)
+int wofs_save_regions(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_mregion *rg;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_mregion *rg;
     int rgid;
 
     for (rgid = 0; rgid < sbi->norm_layout.rg_slots; rgid++) {
-        rg = hk_get_region_by_rgid(sb, rgid);
+        rg = wofs_get_region_by_rgid(sb, rgid);
         if (le64_to_cpu(rg->ino) != (u64)-1) {
-            hk_applying_region(sb, rg);
+            wofs_applying_region(sb, rg);
         }
     }
-    hk_info("regions dumped OK\n");
+    wofs_info("regions dumped OK\n");
 
     return 0;
 }
 
-static int hk_inode_recovery_from_jentry(struct super_block *sb, struct hk_jentry *je)
+static int wofs_inode_recovery_from_jentry(struct super_block *sb, struct wofs_jentry *je)
 {
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
 
 #ifndef CONFIG_FINEGRAIN_JOURNAL
-    pi = hk_get_inode_by_ino(sb, le64_to_cpu(je->jinode.ino));
+    pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je->jinode.ino));
     pi->i_flags = je->jinode.i_flags;
     pi->i_size = je->jinode.i_size;
     pi->i_ctime = je->jinode.i_ctime;
@@ -1236,35 +1236,35 @@ static int hk_inode_recovery_from_jentry(struct super_block *sb, struct hk_jentr
     return 0;
 }
 
-static int hk_inode_recovery(struct super_block *sb, struct hk_inode *pi, struct hk_jentry *je_pi,
+static int wofs_inode_recovery(struct super_block *sb, struct wofs_inode *pi, struct wofs_jentry *je_pi,
                              bool create, bool invalidate)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     unsigned long irq_flags = 0;
 
 #ifndef CONFIG_FINEGRAIN_JOURNAL
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    wofs_memunlock_inode(sb, pi, &irq_flags);
     if (!invalidate) {
-        hk_inode_recovery_from_jentry(sb, je_pi);
+        wofs_inode_recovery_from_jentry(sb, je_pi);
         if (create) {
             pi->tstamp = get_version(sbi);
-            hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+            wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
             pi->valid = 1;
             /* FIXME: Change len to CACHELINE_SIZE */
-            hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+            wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
         }
     } else {
         pi->valid = 0;
-        hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+        wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
     }
-    hk_memlock_inode(sb, pi, &irq_flags);
+    wofs_memlock_inode(sb, pi, &irq_flags);
 #else
     // TODO: Fine-grain inode recovery
 #endif
     return 0;
 }
 
-static int hk_dentry_recovery(struct super_block *sb, u64 dir_ino, struct hk_jentry *je_pd, bool invalidate)
+static int wofs_dentry_recovery(struct super_block *sb, u64 dir_ino, struct wofs_jentry *je_pd, bool invalidate)
 {
     struct inode *dir;
     const char *name;
@@ -1284,8 +1284,8 @@ static int hk_dentry_recovery(struct super_block *sb, u64 dir_ino, struct hk_jen
         ino = 0;
     }
 
-    dir = hk_iget(sb, dir_ino);
-    hk_append_dentry_innvm(sb, dir, name, name_len, ino, link_change, NULL);
+    dir = wofs_iget(sb, dir_ino);
+    wofs_append_dentry_innvm(sb, dir, name, name_len, ino, link_change, NULL);
     iput(dir);
 #else
     // TODO: Fine-grain dentry recovery
@@ -1294,18 +1294,18 @@ static int hk_dentry_recovery(struct super_block *sb, u64 dir_ino, struct hk_jen
 }
 
 /* Re-do Recovery (Redo Journal) */
-static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journal *jnl)
+static int wofs_journal_recovery(struct super_block *sb, int txid, struct wofs_journal *jnl)
 {
     int ret = 0;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_jentry *je_pi;
-    struct hk_jentry *je_pd;
-    struct hk_jentry *je_pd_new;
-    struct hk_jentry *je_pi_par;
-    struct hk_jentry *je_pi_new;
-    struct hk_jentry *je_pd_sym; /* only for symlink */
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_jentry *je_pi;
+    struct wofs_jentry *je_pd;
+    struct wofs_jentry *je_pd_new;
+    struct wofs_jentry *je_pi_par;
+    struct wofs_jentry *je_pi_new;
+    struct wofs_jentry *je_pd_sym; /* only for symlink */
 
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
 
     struct inode *dir, *inode;
     const char *symname;
@@ -1322,63 +1322,63 @@ static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journ
     case LINK:
     case SYMLINK:
         /* fall thru */
-        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);
-        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);
-        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 2);
+        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);
+        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);
+        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 2);
 
         /* 1. fix inode */
-        pi = hk_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
+        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
         if (jtype != LINK) {
-            hk_inode_recovery(sb, pi, je_pi, true, false);
+            wofs_inode_recovery(sb, pi, je_pi, true, false);
         }
 
         /* 2. re-append dentry to directory */
-        hk_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, false);
+        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, false);
 
         /* 3. if it is a symlink, then re-build the block sym link */
         if (jtype == SYMLINK) {
-            je_pd_sym = hk_get_jentry_by_slotid(sb, txid, 3);
+            je_pd_sym = wofs_get_jentry_by_slotid(sb, txid, 3);
             symname = je_pd_sym->jdentry.name;
             symlen = je_pd_sym->jdentry.name_len;
 
-            inode = hk_iget(sb, le64_to_cpu(pi->ino));
-            hk_block_symlink(sb, inode, symname, symlen, NULL);
+            inode = wofs_iget(sb, le64_to_cpu(pi->ino));
+            wofs_block_symlink(sb, inode, symname, symlen, NULL);
             iput(inode);
         }
 
         break;
     case UNLINK:
-        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);
-        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);
-        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 2);
+        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);
+        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);
+        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 2);
 
         /* 1. re-remove denrty from directory */
-        hk_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
+        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
 
         /* 2. invalid inode */
-        pi = hk_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
-        hk_inode_recovery(sb, pi, je_pi, false, true);
+        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
+        wofs_inode_recovery(sb, pi, je_pi, false, true);
 
         /* 3. invalid blks belongs to inode, we don't need invalidators */
-        hk_free_inode_blks_no_invalidators(sb, pi, NULL);
+        wofs_free_inode_blks_no_invalidators(sb, pi, NULL);
 
         break;
     case RENAME:
-        je_pi = hk_get_jentry_by_slotid(sb, txid, 0);     /* self */
-        je_pd = hk_get_jentry_by_slotid(sb, txid, 1);     /* self-dentry */
-        je_pd_new = hk_get_jentry_by_slotid(sb, txid, 2); /* new-dentry */
-        je_pi_par = hk_get_jentry_by_slotid(sb, txid, 3); /* parent */
-        je_pi_new = hk_get_jentry_by_slotid(sb, txid, 4); /* new-parent */
+        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);     /* self */
+        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);     /* self-dentry */
+        je_pd_new = wofs_get_jentry_by_slotid(sb, txid, 2); /* new-dentry */
+        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 3); /* parent */
+        je_pi_new = wofs_get_jentry_by_slotid(sb, txid, 4); /* new-parent */
 
         /* 1. fix inode */
-        pi = hk_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
-        hk_inode_recovery(sb, pi, je_pi, false, false);
+        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
+        wofs_inode_recovery(sb, pi, je_pi, false, false);
 
         /* 2. re-remove from parent */
-        hk_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
+        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
 
         /* 3. re-add to new parent */
-        hk_dentry_recovery(sb, le64_to_cpu(je_pi_new->jinode.ino), je_pd_new, false);
+        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_new->jinode.ino), je_pd_new, false);
 
         break;
     default:
@@ -1388,7 +1388,7 @@ static int hk_journal_recovery(struct super_block *sb, int txid, struct hk_journ
     // TODO: Fine-grain journal recovery
 #endif
 
-    hk_finish_tx(sb, txid);
+    wofs_finish_tx(sb, txid);
 out:
     return ret;
 }
@@ -1397,13 +1397,13 @@ out:
 #define NEED_FORCE_NORMAL_RECOVERY 1
 #define NEED_NO_FURTHER_RECOVERY   2
 
-static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
+static bool wofs_try_normal_recovery(struct super_block *sb, int recovery_flags)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_super_block *super = sbi->hk_sb;
-    struct hk_layout_info *layout;
-    struct hk_normal_data *nd;
-    struct hk_pack_data *pd;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_super_block *super = sbi->wofs_sb;
+    struct wofs_layout_info *layout;
+    struct wofs_normal_data *nd;
+    struct wofs_pack_data *pd;
     u64 cur_vtail = 0;
     bool is_failure = false;
     int cpuid;
@@ -1416,29 +1416,29 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
     if (recovery_flags == NEED_NO_FURTHER_RECOVERY)
         return false;
 
-    if (le32_to_cpu(super->s_valid_umount) == HK_VALID_UMOUNT) {
-        hk_dbg("Start normal recovery\n");
+    if (le32_to_cpu(super->s_valid_umount) == WOFS_VALID_UMOUNT) {
+        wofs_dbg("Start normal recovery\n");
     } else {
-        hk_dbg("Start failure recovery\n");
+        wofs_dbg("Start failure recovery\n");
         is_failure = true;
     }
 
     /* TODO: Handle RENAME and SYMLINK  */
     if (recovery_flags == NEED_FORCE_NORMAL_RECOVERY || !is_failure) {
         if (ENABLE_META_PACK(sb)) {
-            pd = (struct hk_pack_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
-            hk_create_dram_bufs_normal(sbi);
+            pd = (struct wofs_pack_data *)((char *)sbi->wofs_sb + sizeof(struct wofs_super_block));
+            wofs_create_dram_bufs_normal(sbi);
             /* Traverse create pkg */
-            hk_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
+            wofs_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse unlink pkg */
-            hk_recovery_unlink_pkgs(sbi, &recovery_param, &cur_vtail);
+            wofs_recovery_unlink_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse data pkg */
-            hk_recovery_data_pkgs(sbi, &recovery_param, &cur_vtail);
+            wofs_recovery_data_pkgs(sbi, &recovery_param, &cur_vtail);
             /* Traverse attr pkg */
-            hk_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
+            wofs_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
 
             destroy_min_data_vtail_table(&recovery_param);
-            hk_destroy_dram_bufs_normal();
+            wofs_destroy_dram_bufs_normal();
 
             atomic64_and(0, &sbi->pack_layout.vtail);
             if (is_failure) {
@@ -1449,7 +1449,7 @@ static bool hk_try_normal_recovery(struct super_block *sb, int recovery_flags)
                 atomic64_add(le64_to_cpu(pd->s_vtail), &sbi->pack_layout.vtail);
             }
         } else {
-            nd = (struct hk_normal_data *)((char *)sbi->hk_sb + sizeof(struct hk_super_block));
+            nd = (struct wofs_normal_data *)((char *)sbi->wofs_sb + sizeof(struct wofs_super_block));
             sbi->norm_layout.tstamp = le64_to_cpu(nd->s_tstamp);
             for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
                 layout = &sbi->layouts[cpuid];
@@ -1490,9 +1490,9 @@ typedef struct rescuer_work {
     u32 probe_blks;
 } rescuer_work_t;
 
-void __assign_rescuer_work(struct hk_sb_info *sbi, u32 rescuer_id, u32 rescuer_num, rescuer_work_t *work)
+void __assign_rescuer_work(struct wofs_sb_info *sbi, u32 rescuer_id, u32 rescuer_num, rescuer_work_t *work)
 {
-    u32 total_blks = (sbi->initsize >> HUNTER_BLK_SHIFT);
+    u32 total_blks = (sbi->initsize >> WOFS_BLK_SHIFT);
     u32 blks_per_rescuer = total_blks / rescuer_num;
     u32 start_blk = rescuer_id * blks_per_rescuer;
     u32 end_blk = (rescuer_id + 1) * blks_per_rescuer;
@@ -1504,28 +1504,28 @@ void __assign_rescuer_work(struct hk_sb_info *sbi, u32 rescuer_id, u32 rescuer_n
         probe_blks = end_blk - start_blk;
     }
 
-    work->create_bm = in_dram_create_bm; // __hk_get_bm_addr(sbi, in_dram_create_bm, BMBLK_CREATE);
-    work->unlink_bm = in_dram_unlink_bm; // __hk_get_bm_addr(sbi, in_dram_unlink_bm, BMBLK_UNLINK);
-    work->attr_bm = in_dram_attr_bm;     // __hk_get_bm_addr(sbi, in_dram_attr_bm, BMBLK_ATTR);
-    work->data_bm = in_dram_data_bm;     // __hk_get_bm_addr(sbi, in_dram_data_bm, BMBLK_DATA);
+    work->create_bm = in_dram_create_bm; // __wofs_get_bm_addr(sbi, in_dram_create_bm, BMBLK_CREATE);
+    work->unlink_bm = in_dram_unlink_bm; // __wofs_get_bm_addr(sbi, in_dram_unlink_bm, BMBLK_UNLINK);
+    work->attr_bm = in_dram_attr_bm;     // __wofs_get_bm_addr(sbi, in_dram_attr_bm, BMBLK_ATTR);
+    work->data_bm = in_dram_data_bm;     // __wofs_get_bm_addr(sbi, in_dram_data_bm, BMBLK_DATA);
     work->probe_start_blk = probe_start_blk;
     work->probe_blks = probe_blks;
 }
 
-u32 hk_probe_hint(struct hk_sb_info *sbi, u8 *cur_blk)
+u32 wofs_probe_hint(struct wofs_sb_info *sbi, u8 *cur_blk)
 {
-    struct killer_bhint_hdr *bhint_hdr;
+    struct wofs_bhint_hdr *bhint_hdr;
     u32 orig_hcrc32, orig_bcrc32;
     u32 calc_hcrc32, calc_bcrc32;
-    u32 hint = KILLER_HINT_OCCPY_BLK;
+    u32 hint = WOFS_HINT_OCCPY_BLK;
 
-    bhint_hdr = (struct killer_bhint_hdr *)cur_blk;
+    bhint_hdr = (struct wofs_bhint_hdr *)cur_blk;
     orig_hcrc32 = bhint_hdr->hcrc32;
     orig_bcrc32 = bhint_hdr->bcrc32;
 
     /* check hdr valid */
     bhint_hdr->hcrc32 = 0;
-    calc_hcrc32 = hk_crc32c(~0, (u8 *)bhint_hdr, sizeof(struct killer_bhint_hdr));
+    calc_hcrc32 = wofs_crc32c(~0, (u8 *)bhint_hdr, sizeof(struct wofs_bhint_hdr));
 
     if (calc_hcrc32 != orig_hcrc32) {
         goto out;
@@ -1533,11 +1533,11 @@ u32 hk_probe_hint(struct hk_sb_info *sbi, u8 *cur_blk)
 
     /* check hint */
     hint = bhint_hdr->hint;
-    if (bhint_hdr->hint == KILLER_HINT_EMPTY_BLK) {
+    if (bhint_hdr->hint == WOFS_HINT_EMPTY_BLK) {
         bhint_hdr->bcrc32 = 0;
-        calc_bcrc32 = hk_crc32c(~0, cur_blk, HK_PBLK_SZ(sbi));
+        calc_bcrc32 = wofs_crc32c(~0, cur_blk, WOFS_PBLK_SZ(sbi));
         if (calc_bcrc32 != orig_bcrc32) {
-            hint = KILLER_HINT_OCCPY_BLK;
+            hint = WOFS_HINT_OCCPY_BLK;
             goto out;
         }
     }
@@ -1548,32 +1548,32 @@ out:
     return hint;
 }
 
-u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
+u8 wofs_probe_blk(struct wofs_sb_info *sbi, u8 *local_blk_buf, u32 blk)
 {
     u8 *cur_blk;
     u8 *start_addr;
     u64 in_pm_addr;
     u64 remained_size;
-    struct hk_obj_hdr *hdr;
-    struct hk_pkg_hdr *pkg_hdr;
+    struct wofs_obj_hdr *hdr;
+    struct wofs_pkg_hdr *pkg_hdr;
     u8 probe_type = PKG_TYPE_NUM;
     u32 hint;
 
-    cur_blk = __hk_get_blk_addr(sbi, local_blk_buf, blk);
+    cur_blk = __wofs_get_blk_addr(sbi, local_blk_buf, blk);
     in_pm_addr = get_pm_blk_addr(sbi, blk);
-    remained_size = HK_PBLK_SZ(sbi);
+    remained_size = WOFS_PBLK_SZ(sbi);
     start_addr = cur_blk;
 
-    hint = hk_probe_hint(sbi, cur_blk);
-    if (hint == KILLER_HINT_EMPTY_BLK) {
+    hint = wofs_probe_hint(sbi, cur_blk);
+    if (hint == WOFS_HINT_EMPTY_BLK) {
         goto out;
     }
 
-    while (cur_blk < start_addr + HK_PBLK_SZ(sbi)) {
+    while (cur_blk < start_addr + WOFS_PBLK_SZ(sbi)) {
         if (remained_size >= MTA_PKG_ATTR_SIZE) {
             get_pkg_hdr(cur_blk, PKG_ATTR, (u64 *)&hdr);
             if (check_pkg_valid(cur_blk, MTA_PKG_ATTR_SIZE, hdr)) {
-                if (hdr->magic == HUNTER_OBJ_MAGIC) {
+                if (hdr->magic == WOFS_OBJ_MAGIC) {
                     if (hdr->type == OBJ_ATTR) {
                         probe_type = PKG_ATTR;
                         break;
@@ -1585,7 +1585,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
         if (remained_size >= MTA_PKG_DATA_SIZE) {
             get_pkg_hdr(cur_blk, PKG_DATA, (u64 *)&hdr);
             if (check_pkg_valid(cur_blk, MTA_PKG_DATA_SIZE, hdr)) {
-                if (hdr->magic == HUNTER_OBJ_MAGIC) {
+                if (hdr->magic == WOFS_OBJ_MAGIC) {
                     if (hdr->type == OBJ_DATA) {
                         probe_type = PKG_DATA;
                         break;
@@ -1597,7 +1597,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
         if (remained_size >= MTA_PKG_CREATE_SIZE) {
             get_pkg_hdr(cur_blk, PKG_CREATE, (u64 *)&pkg_hdr);
             if (check_pkg_valid(cur_blk, MTA_PKG_CREATE_SIZE, &pkg_hdr->hdr)) {
-                if (pkg_hdr->hdr.magic == HUNTER_OBJ_MAGIC) {
+                if (pkg_hdr->hdr.magic == WOFS_OBJ_MAGIC) {
                     if (pkg_hdr->pkg_type == PKG_CREATE) {
                         probe_type = PKG_CREATE;
                         break;
@@ -1609,7 +1609,7 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
         if (remained_size >= MTA_PKG_UNLINK_SIZE) {
             get_pkg_hdr(cur_blk, PKG_UNLINK, (u64 *)&pkg_hdr);
             if (check_pkg_valid(cur_blk, MTA_PKG_UNLINK_SIZE, &pkg_hdr->hdr)) {
-                if (pkg_hdr->hdr.magic == HUNTER_OBJ_MAGIC) {
+                if (pkg_hdr->hdr.magic == WOFS_OBJ_MAGIC) {
                     if (pkg_hdr->pkg_type == PKG_UNLINK) {
                         probe_type = PKG_UNLINK;
                         break;
@@ -1618,9 +1618,9 @@ u8 hk_probe_blk(struct hk_sb_info *sbi, u8 *local_blk_buf, u32 blk)
             }
         }
 
-        cur_blk += HUNTER_MTA_SIZE;
-        in_pm_addr += HUNTER_MTA_SIZE;
-        remained_size -= HUNTER_MTA_SIZE;
+        cur_blk += WOFS_MTA_SIZE;
+        in_pm_addr += WOFS_MTA_SIZE;
+        remained_size -= WOFS_MTA_SIZE;
     }
 
 out:
@@ -1628,16 +1628,16 @@ out:
 }
 
 typedef struct rescuer_param {
-    struct hk_sb_info *sbi;
+    struct wofs_sb_info *sbi;
     u32 rescuer_id;
     u32 rescuer_num;
     u8 *local_blk_buf;
 } rescuer_param_t;
 
-void *hk_bmblk_rescuer(void *args)
+void *wofs_bmblk_rescuer(void *args)
 {
     rescuer_param_t *param = (rescuer_param_t *)args;
-    struct hk_sb_info *sbi = param->sbi;
+    struct wofs_sb_info *sbi = param->sbi;
     u32 rescuer_id = param->rescuer_id;
     u32 rescuer_num = param->rescuer_num;
     rescuer_work_t work;
@@ -1646,31 +1646,31 @@ void *hk_bmblk_rescuer(void *args)
     u8 probe_type;
 
     __assign_rescuer_work(sbi, rescuer_id, rescuer_num, &work);
-    hk_dbgv("Rescuer %d start blk %d, end blk %d, probe blks %d\n", rescuer_id, work.probe_start_blk, work.probe_start_blk + work.probe_blks - 1, work.probe_blks);
+    wofs_dbgv("Rescuer %d start blk %d, end blk %d, probe blks %d\n", rescuer_id, work.probe_start_blk, work.probe_start_blk + work.probe_blks - 1, work.probe_blks);
 
     /* start probe */
     for (cur_blk = work.probe_start_blk; cur_blk < work.probe_start_blk + work.probe_blks; cur_blk++) {
         addr = get_pm_blk_addr(sbi, cur_blk);
-        probe_type = hk_probe_blk(sbi, param->local_blk_buf, cur_blk);
+        probe_type = wofs_probe_blk(sbi, param->local_blk_buf, cur_blk);
         switch (probe_type) {
         case PKG_ATTR:
-            hk_set_bit(cur_blk, work.attr_bm);
+            wofs_set_bit(cur_blk, work.attr_bm);
             break;
         case PKG_DATA:
-            hk_set_bit(cur_blk, work.data_bm);
+            wofs_set_bit(cur_blk, work.data_bm);
             break;
         case PKG_CREATE:
-            hk_set_bit(cur_blk, work.create_bm);
+            wofs_set_bit(cur_blk, work.create_bm);
             break;
         case PKG_UNLINK:
-            hk_set_bit(cur_blk, work.unlink_bm);
+            wofs_set_bit(cur_blk, work.unlink_bm);
             break;
         default:
             break;
         }
 
         if (probe_type != PKG_TYPE_NUM) {
-            hk_dbgv("Rescuer %d probe blk %d (%s), addr 0x%llx\n", rescuer_id, cur_blk, probe_type == PKG_ATTR ? "ATTR" : probe_type == PKG_DATA ? "DATA"
+            wofs_dbgv("Rescuer %d probe blk %d (%s), addr 0x%llx\n", rescuer_id, cur_blk, probe_type == PKG_ATTR ? "ATTR" : probe_type == PKG_DATA ? "DATA"
                                                                                                                       : probe_type == PKG_CREATE ? "CREATE"
                                                                                                                       : probe_type == PKG_UNLINK ? "UNLINK"
                                                                                                                                                  : "UNKNOWN",
@@ -1682,36 +1682,36 @@ void *hk_bmblk_rescuer(void *args)
 
     finished[rescuer_id] = 1;
     wake_up_interruptible(&finish_wq);
-    hk_info("Rescuer %d finish\n", rescuer_id);
+    wofs_info("Rescuer %d finish\n", rescuer_id);
     kfree(args);
     do_exit(0);
 
     return NULL;
 }
 
-static int hk_rescue_bm(struct super_block *sb)
+static int wofs_rescue_bm(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     struct task_struct **rescuer_threads;
     int i, ret = 0;
-    u32 rescuer_num = HK_RESCUE_WORKERS;
+    u32 rescuer_num = WOFS_RESCUE_WORKERS;
 
-    hk_info("Rescue bitmap with %d rescuers\n", rescuer_num);
+    wofs_info("Rescue bitmap with %d rescuers\n", rescuer_num);
 
     init_waitqueue_head(&finish_wq);
 
-    hk_create_dram_bufs_failure(sbi);
+    wofs_create_dram_bufs_failure(sbi);
 
     rescuer_threads = (struct task_struct **)kzalloc(sizeof(struct task_struct) * rescuer_num, GFP_KERNEL);
     if (!rescuer_threads) {
-        hk_err(sb, "Allocate rescuer threads failed\n");
+        wofs_err(sb, "Allocate rescuer threads failed\n");
         ret = -ENOMEM;
         goto out;
     }
 
     finished = kcalloc(rescuer_num, sizeof(int), GFP_KERNEL);
     if (!finished) {
-        hk_err(sb, "Allocate finished array failed\n");
+        wofs_err(sb, "Allocate finished array failed\n");
         ret = -ENOMEM;
         goto out;
     }
@@ -1720,18 +1720,18 @@ static int hk_rescue_bm(struct super_block *sb)
     for (i = 0; i < rescuer_num; i++) {
         rescuer_param_t *param = (rescuer_param_t *)kzalloc(sizeof(rescuer_param_t), GFP_KERNEL);
         if (!param) {
-            hk_err(sb, "Allocate rescuer param failed\n");
+            wofs_err(sb, "Allocate rescuer param failed\n");
             ret = -ENOMEM;
             goto out;
         }
         param->sbi = sbi;
         param->rescuer_id = i;
         param->rescuer_num = rescuer_num;
-        param->local_blk_buf = hk_create_dram_blk_buf(sbi);
+        param->local_blk_buf = wofs_create_dram_blk_buf(sbi);
 
-        rescuer_threads[i] = kthread_create((void *)hk_bmblk_rescuer, (void *)param, "hk_bmblk_rescuer%d", i);
+        rescuer_threads[i] = kthread_create((void *)wofs_bmblk_rescuer, (void *)param, "wofs_bmblk_rescuer%d", i);
         if (IS_ERR(rescuer_threads[i])) {
-            hk_err(sb, "Create rescuer thread %d failed\n", i);
+            wofs_err(sb, "Create rescuer thread %d failed\n", i);
             ret = PTR_ERR(rescuer_threads[i]);
             goto out;
         }
@@ -1739,7 +1739,7 @@ static int hk_rescue_bm(struct super_block *sb)
         wake_up_process(rescuer_threads[i]);
 
         if (ret) {
-            hk_err(sb, "Create rescuer thread %d failed\n", i);
+            wofs_err(sb, "Create rescuer thread %d failed\n", i);
             goto out;
         }
     }
@@ -1747,27 +1747,27 @@ static int hk_rescue_bm(struct super_block *sb)
     wait_to_finish(rescuer_num);
 
     /* aggregate bm buffers to pm */
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
-    memcpy_to_pmem_nocache(__hk_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__wofs_get_bm_addr(sbi, NULL, BMBLK_CREATE), in_dram_create_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__wofs_get_bm_addr(sbi, NULL, BMBLK_UNLINK), in_dram_unlink_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__wofs_get_bm_addr(sbi, NULL, BMBLK_ATTR), in_dram_attr_bm, BMBLK_SIZE(sbi));
+    memcpy_to_pmem_nocache(__wofs_get_bm_addr(sbi, NULL, BMBLK_DATA), in_dram_data_bm, BMBLK_SIZE(sbi));
 
 out:
     kfree(finished);
     kfree(rescuer_threads);
-    hk_destroy_dram_bufs_failure();
+    wofs_destroy_dram_bufs_failure();
     return 0;
 }
 
-int hk_failure_recovery(struct super_block *sb)
+int wofs_failure_recovery(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_super_block *hk_sb = sbi->hk_sb;
-    struct hk_layout_info *layout;
-    struct hk_journal *jnl;
-    struct hk_mregion *rg;
-    struct hk_header *hdr;
-    struct hk_inode *pi;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_super_block *wofs_sb = sbi->wofs_sb;
+    struct wofs_layout_info *layout;
+    struct wofs_journal *jnl;
+    struct wofs_mregion *rg;
+    struct wofs_header *hdr;
+    struct wofs_inode *pi;
     u64 not_free_blks = 0;
     u64 blk = 0;
     u64 addr = 0;
@@ -1777,14 +1777,14 @@ int hk_failure_recovery(struct super_block *sb)
 
     if (ENABLE_META_PACK(sb)) {
         ret = NEED_FORCE_NORMAL_RECOVERY;
-        // hk_rescue_bm(sb);
+        // wofs_rescue_bm(sb);
     } else {
         ret = NEED_NO_FURTHER_RECOVERY;
         /* Revisiting Meta Regions Here */
         for (rgid = 0; rgid < sbi->norm_layout.rg_slots; rgid++) {
-            rg = hk_get_region_by_rgid(sb, rgid);
+            rg = wofs_get_region_by_rgid(sb, rgid);
             if (rg->applying || le64_to_cpu(rg->ino) != (u64)-1) {
-                hk_applying_region(sb, rg);
+                wofs_applying_region(sb, rg);
             }
         }
 
@@ -1795,18 +1795,18 @@ int hk_failure_recovery(struct super_block *sb)
             blk = 0;
 
             use_layout(layout);
-            layout->atomic_counter = (layout->layout_blks * HK_PBLK_SZ(sbi));
+            layout->atomic_counter = (layout->layout_blks * WOFS_PBLK_SZ(sbi));
 
             traverse_layout_blks(addr, layout)
             {
                 hdr = sm_get_hdr_by_addr(sb, addr);
                 if (hdr->valid) {
-                    pi = hk_get_inode_by_ino(sb, hdr->ino);
+                    pi = wofs_get_inode_by_ino(sb, hdr->ino);
                     /* Remove The Invalid Hdr */
                     if (!pi->valid || hdr->tstamp > pi->tstamp) {
-                        hk_memunlock_hdr(sb, hdr, &irq_flags);
+                        wofs_memunlock_hdr(sb, hdr, &irq_flags);
                         hdr->valid = 0;
-                        hk_memlock_hdr(sb, hdr, &irq_flags);
+                        wofs_memlock_hdr(sb, hdr, &irq_flags);
 
                         sm_remove_hdr(sb, pi, hdr);
                     } else { /* Re insert */
@@ -1819,15 +1819,15 @@ int hk_failure_recovery(struct super_block *sb)
                 }
                 blk++;
             }
-            hk_release_layout(sb, cpuid, layout->layout_blks - not_free_blks, false);
+            wofs_release_layout(sb, cpuid, layout->layout_blks - not_free_blks, false);
             unuse_layout(layout);
         }
 
         /* Redo Journal Here */
         for (txid = 0; txid < sbi->norm_layout.j_slots; txid++) {
-            jnl = hk_get_journal_by_txid(sb, txid);
+            jnl = wofs_get_journal_by_txid(sb, txid);
             if (jnl->jhdr.jofs_head != jnl->jhdr.jofs_tail) {
-                hk_journal_recovery(sb, txid, jnl);
+                wofs_journal_recovery(sb, txid, jnl);
             }
         }
     }
@@ -1835,27 +1835,27 @@ int hk_failure_recovery(struct super_block *sb)
     return ret;
 }
 
-int hk_recovery(struct super_block *sb)
+int wofs_recovery(struct super_block *sb)
 {
     bool is_failure = false;
     int ret;
 
     INIT_TIMING(start);
 
-    hk_dbgv("%s\n", __func__);
+    wofs_dbgv("%s\n", __func__);
 
-    HK_START_TIMING(recovery_t, start);
+    WOFS_START_TIMING(recovery_t, start);
 
-    is_failure = hk_try_normal_recovery(sb, NEED_NORMAL_RECOVERY);
+    is_failure = wofs_try_normal_recovery(sb, NEED_NORMAL_RECOVERY);
 
     if (!is_failure) {
-        hk_dbg("HUNTER: Normal shutdown\n");
+        wofs_dbg("WOFS: Normal shutdown\n");
     } else {
-        ret = hk_failure_recovery(sb);
-        hk_try_normal_recovery(sb, ret);
+        ret = wofs_failure_recovery(sb);
+        wofs_try_normal_recovery(sb, ret);
     }
 
-    HK_END_TIMING(recovery_t, start);
+    WOFS_END_TIMING(recovery_t, start);
 
     return 0;
 }

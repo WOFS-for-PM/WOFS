@@ -1,7 +1,7 @@
 #ifndef _RNG_LOCK_H
 #define _RNG_LOCK_H
 
-#include "hunter.h"
+#include "wofs.h"
 
 typedef struct rng_lock{
     spinlock_t *locks;

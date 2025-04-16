@@ -239,7 +239,7 @@ extern char *optarg;
 
 void usage()
 {
-    printf("HUNTER Kernel Testsuite by Deadpool\n");
+    printf("WOFS Kernel Testsuite by Deadpool\n");
     printf("Description: This file will perform corner case I/O tests\n");
     printf("-f file     <filename>\n");
     printf("-o options  <num>\n");

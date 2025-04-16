@@ -3,20 +3,20 @@
  *
  * Object management: Manage PKG and OBJ.
  *
- * This file is part of hunter-userspace.
+ * This file is part of wofs-userspace.
  *
- * hunter-kernel is free software: you can redistribute it and/or modify
+ * wofs-kernel is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * hunter-userspace is distributed in the hope that it will be useful,
+ * wofs-userspace is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with hunter-userspace.  If not, see <http://www.gnu.org/licenses/>.
+ * along with wofs-userspace.  If not, see <http://www.gnu.org/licenses/>.
  *
  *
  * Implementation of the package management system:
@@ -48,7 +48,7 @@
 #ifndef _OBJ_H
 #define _OBJ_H
 
-#include "hunter.h"
+#include "wofs.h"
 
 /* ==== in-media structures ==== */
 struct pm_space_bm_hdr {
@@ -71,8 +71,8 @@ typedef enum {
     BIN_SYMLINK = PKG_SYMLINK
 } HUNT_BIN_TYPE;
 
-#define HK_BIN_TO_PKG_TYPE(bin_type) (bin_type)
-#define HK_PKG_TO_BIN_TYPE(pkg_type) (pkg_type)
+#define WOFS_BIN_TO_PKG_TYPE(bin_type) (bin_type)
+#define WOFS_PKG_TO_BIN_TYPE(pkg_type) (pkg_type)
 
 struct create_spec_hdr {
     /* parent attr */
@@ -120,9 +120,9 @@ typedef enum {
     OBJ_DENTRY,
     OBJ_PKGHDR,
     OBJ_TYPE_NUM
-} HK_OBJ_TYPE;
+} WOFS_OBJ_TYPE;
 
-struct hk_obj_hdr {
+struct wofs_obj_hdr {
     u32 magic;
     u32 type;
     u64 vtail;
@@ -130,8 +130,8 @@ struct hk_obj_hdr {
     u64 reserved;
 } __attribute__((__packed__));
 
-struct hk_pkg_hdr {
-    struct hk_obj_hdr hdr;
+struct wofs_pkg_hdr {
+    struct wofs_obj_hdr hdr;
     u16 pkg_type;
     union {
         struct create_spec_hdr create_hdr;
@@ -140,10 +140,10 @@ struct hk_pkg_hdr {
     };
 } __attribute__((__packed__));
 
-static_assert(sizeof(struct hk_pkg_hdr) == 64);
+static_assert(sizeof(struct wofs_pkg_hdr) == 64);
 
-struct hk_obj_inode {
-    struct hk_obj_hdr hdr;
+struct wofs_obj_inode {
+    struct wofs_obj_hdr hdr;
     /* static part of inode */
     u32 ino;           /* inode number */
     u32 i_flags;       /* Inode flags */
@@ -156,10 +156,10 @@ struct hk_obj_inode {
     u8 reserved[4];
 } __attribute__((__packed__));
 
-static_assert(sizeof(struct hk_obj_inode) == 64);
+static_assert(sizeof(struct wofs_obj_inode) == 64);
 
-struct hk_obj_attr {
-    struct hk_obj_hdr hdr;
+struct wofs_obj_attr {
+    struct wofs_obj_hdr hdr;
     /* dynamic part of inode */
     u32 ino;           /* inode number */
     u16 i_mode;        /* File mode */
@@ -172,19 +172,19 @@ struct hk_obj_attr {
     u16 i_links_count; /* Links count if i_links_count == 0, it is a removed entry */
 } __attribute__((__packed__));
 
-static_assert(sizeof(struct hk_obj_attr) == 64);
+static_assert(sizeof(struct wofs_obj_attr) == 64);
 
-struct hk_obj_dentry {
-    struct hk_obj_hdr hdr;
+struct wofs_obj_dentry {
+    struct wofs_obj_hdr hdr;
     u32 ino;
     u32 parent_ino;
-    u8 name[HK_NAME_LEN];
+    u8 name[WOFS_NAME_LEN];
 } __attribute__((__packed__));
 
-static_assert(sizeof(struct hk_obj_dentry) == 128);
+static_assert(sizeof(struct wofs_obj_dentry) == 128);
 
-struct hk_obj_data {
-    struct hk_obj_hdr hdr;
+struct wofs_obj_data {
+    struct wofs_obj_hdr hdr;
     u32 ino;
     u64 ofs; /* offset in file */
     u32 blk;
@@ -193,13 +193,13 @@ struct hk_obj_data {
     u64 i_size;
 } __attribute__((__packed__));
 
-static_assert(sizeof(struct hk_obj_data) == 64);
+static_assert(sizeof(struct wofs_obj_data) == 64);
 
-#define OBJ_DATA_SIZE   sizeof(struct hk_obj_data)
-#define OBJ_INODE_SIZE  sizeof(struct hk_obj_inode)
-#define OBJ_ATTR_SIZE   sizeof(struct hk_obj_attr)
-#define OBJ_DENTRY_SIZE sizeof(struct hk_obj_dentry)
-#define OBJ_PKGHDR_SIZE sizeof(struct hk_pkg_hdr)
+#define OBJ_DATA_SIZE   sizeof(struct wofs_obj_data)
+#define OBJ_INODE_SIZE  sizeof(struct wofs_obj_inode)
+#define OBJ_ATTR_SIZE   sizeof(struct wofs_obj_attr)
+#define OBJ_DENTRY_SIZE sizeof(struct wofs_obj_dentry)
+#define OBJ_PKGHDR_SIZE sizeof(struct wofs_pkg_hdr)
 
 /* ==== in-DRAM structures ==== */
 
@@ -256,21 +256,21 @@ typedef struct d_obj_ref_list {
 
 /* use d_root to fast locate objs in the media */
 typedef struct d_root {
-    DECLARE_HASHTABLE(data_obj_refs, HK_HASH_BITS7);   /* key is ino, value is the list of data of this ino */
-    DECLARE_HASHTABLE(dentry_obj_refs, HK_HASH_BITS7); /* key is parent ino, value is the list of dentries of this ino */
+    DECLARE_HASHTABLE(data_obj_refs, WOFS_HASH_BITS7);   /* key is ino, value is the list of data of this ino */
+    DECLARE_HASHTABLE(dentry_obj_refs, WOFS_HASH_BITS7); /* key is parent ino, value is the list of dentries of this ino */
     spinlock_t data_lock;
     spinlock_t dentry_lock;
 } d_root_t;
 
-/* imap: key ino, value hk_inode_info_header */
+/* imap: key ino, value wofs_inode_info_header */
 typedef struct imap {
     rng_lock_t rng_lock;
-    DECLARE_HASHTABLE(map, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(map, WOFS_HASH_BITS7);
 } imap_t;
 
 typedef struct pendtbl {
     rng_lock_t rng_lock;
-    DECLARE_HASHTABLE(tbl, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(tbl, WOFS_HASH_BITS7);
 } pendtbl_t;
 
 typedef struct pendlst {
@@ -290,10 +290,10 @@ typedef struct claim_req {
 
 /* build this in the mount time */
 typedef struct obj_mgr {
-    struct hk_sb_info *sbi;  /* the superblock */
+    struct wofs_sb_info *sbi;  /* the superblock */
     d_root_t *d_roots;       /* the root of all objs, the number equals to the number of split layouts */
     int num_d_roots;         /* the number of d_roots */
-    imap_t prealloc_imap;    /* used to fast locate per file objs, key is ino, value is hk_inode */
+    imap_t prealloc_imap;    /* used to fast locate per file objs, key is ino, value is wofs_inode */
     pendtbl_t pending_table; /* used to handle dependency issues. e.g., to reclaim UNLINK space, we must pend the request into list until corresponding CREATE is claimed.   */
 } obj_mgr_t;
 
@@ -329,7 +329,7 @@ typedef struct inode_update {
     u64 addr; /* In-PM inode offset */
     union {
         unsigned long ino;
-        struct hk_inode_info_header *sih;
+        struct wofs_inode_info_header *sih;
     };
 } inode_update_t;
 
@@ -365,19 +365,19 @@ typedef struct out_create_pkg_param {
     obj_ref_dentry_t *ref;
 } out_create_pkg_param_t;
 
-#define MTA_PKG_DATA_BLK   (OBJ_DATA_SIZE >> HUNTER_MTA_SHIFT)
-#define MTA_PKG_ATTR_BLK   (OBJ_ATTR_SIZE >> HUNTER_MTA_SHIFT)
-#define MTA_PKG_CREATE_BLK ((OBJ_INODE_SIZE + OBJ_DENTRY_SIZE + OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
-#define MTA_PKG_UNLINK_BLK ((OBJ_PKGHDR_SIZE) >> HUNTER_MTA_SHIFT)
+#define MTA_PKG_DATA_BLK   (OBJ_DATA_SIZE >> WOFS_MTA_SHIFT)
+#define MTA_PKG_ATTR_BLK   (OBJ_ATTR_SIZE >> WOFS_MTA_SHIFT)
+#define MTA_PKG_CREATE_BLK ((OBJ_INODE_SIZE + OBJ_DENTRY_SIZE + OBJ_PKGHDR_SIZE) >> WOFS_MTA_SHIFT)
+#define MTA_PKG_UNLINK_BLK ((OBJ_PKGHDR_SIZE) >> WOFS_MTA_SHIFT)
 
-#define MTA_PKG_DATA_SIZE   (MTA_PKG_DATA_BLK << HUNTER_MTA_SHIFT)
-#define MTA_PKG_ATTR_SIZE   (MTA_PKG_ATTR_BLK << HUNTER_MTA_SHIFT)
-#define MTA_PKG_CREATE_SIZE (MTA_PKG_CREATE_BLK << HUNTER_MTA_SHIFT)
-#define MTA_PKG_UNLINK_SIZE (MTA_PKG_UNLINK_BLK << HUNTER_MTA_SHIFT)
+#define MTA_PKG_DATA_SIZE   (MTA_PKG_DATA_BLK << WOFS_MTA_SHIFT)
+#define MTA_PKG_ATTR_SIZE   (MTA_PKG_ATTR_BLK << WOFS_MTA_SHIFT)
+#define MTA_PKG_CREATE_SIZE (MTA_PKG_CREATE_BLK << WOFS_MTA_SHIFT)
+#define MTA_PKG_UNLINK_SIZE (MTA_PKG_UNLINK_BLK << WOFS_MTA_SHIFT)
 
-#define GET_OFS_INBLK(ofs_addr) ((ofs_addr) & (HUNTER_BLK_SIZE - 1))
+#define GET_OFS_INBLK(ofs_addr) ((ofs_addr) & (WOFS_BLK_SIZE - 1))
 #define GET_ENTRYNR(ofs_addr) \
-    (GET_OFS_INBLK(ofs_addr) >> HUNTER_MTA_SHIFT)
+    (GET_OFS_INBLK(ofs_addr) >> WOFS_MTA_SHIFT)
 
 /* related to pkg update */
 #define UPDATE_SIZE_FOR_APPEND 0

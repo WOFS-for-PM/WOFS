@@ -1,12 +1,12 @@
-#ifndef _HK_INODE_H
-#define _HK_INODE_H
+#ifndef _WOFS_INODE_H
+#define _WOFS_INODE_H
 
-#include "hunter.h"
+#include "wofs.h"
 
-struct hk_inode;
-struct hk_inode_info_header;
+struct wofs_inode;
+struct wofs_inode_info_header;
 
-enum hk_new_inode_type {
+enum wofs_new_inode_type {
     TYPE_CREATE = 0,
     TYPE_MKNOD,
     TYPE_SYMLINK,
@@ -16,7 +16,7 @@ enum hk_new_inode_type {
 /*
  * Structure of an inode in PMEM
  */
-struct hk_inode {
+struct wofs_inode {
     u8 valid;             /* Is this inode valid? */
     __le32 i_flags;       /* Inode flags */
     __le64 i_size;        /* Size of data in bytes */
@@ -47,7 +47,7 @@ struct hk_inode {
     u8 paddings[PM_ACCESS_GRANU - 93];
 } __attribute((__packed__));
 
-static_assert(sizeof(struct hk_inode) != PM_ACCESS_GRANU, "hk_inode size mismatch");
+static_assert(sizeof(struct wofs_inode) != PM_ACCESS_GRANU, "wofs_inode size mismatch");
 
 struct latest_fop_objs {
     obj_ref_inode_t *latest_inode;
@@ -58,12 +58,12 @@ struct latest_fop_objs {
 /*
  * hk-specific inode state kept in DRAM
  */
-struct hk_inode_info_header {
+struct wofs_inode_info_header {
     struct hlist_node hnode;
-    struct hk_inode_info *si;
+    struct wofs_inode_info *si;
     u32 ino;
     struct linix ix;                        /* Linear Index for blks in use */
-    DECLARE_HASHTABLE(dirs, HK_HASH_BITS7); /* Hash table for dirs */
+    DECLARE_HASHTABLE(dirs, WOFS_HASH_BITS7); /* Hash table for dirs */
     u64 i_num_dentrys;                      /* Dentrys tail */
     struct rb_root vma_tree;                /* Write vmas */
     struct list_head list;                  /* SB list of mmap sih */
@@ -83,7 +83,7 @@ struct hk_inode_info_header {
     union {
         /* for lfs or local */
         struct {
-            u64 pi_addr;          /* Exact hk_inode addr */
+            u64 pi_addr;          /* Exact wofs_inode addr */
             u64 last_link_change; /* Last link change entry */
             u64 last_dentry;      /* Last updated dentry */
             u64 tstamp;           /* Time stamp for Version Control */
@@ -99,55 +99,55 @@ struct hk_inode_info_header {
 /*
  * DRAM state for inodes
  */
-struct hk_inode_info {
-    struct hk_inode_info_header *header;
+struct wofs_inode_info {
+    struct wofs_inode_info_header *header;
     struct inode vfs_inode;
     int layout_type;
 };
 
-static inline struct hk_inode_info *HK_I(struct inode *inode)
+static inline struct wofs_inode_info *WOFS_I(struct inode *inode)
 {
-    return container_of(inode, struct hk_inode_info, vfs_inode);
+    return container_of(inode, struct wofs_inode_info, vfs_inode);
 }
 
-static inline struct hk_inode_info_header *HK_IH(struct inode *inode)
+static inline struct wofs_inode_info_header *WOFS_IH(struct inode *inode)
 {
-    struct hk_inode_info *si = HK_I(inode);
+    struct wofs_inode_info *si = WOFS_I(inode);
     return si->header;
 }
 
 /* If this is part of a read-modify-write of the inode metadata,
- * hk_memunlock_inode() before calling!
+ * wofs_memunlock_inode() before calling!
  */
-static inline struct hk_inode *hk_get_inode_by_ino(struct super_block *sb, u64 ino)
+static inline struct wofs_inode *wofs_get_inode_by_ino(struct super_block *sb, u64 ino)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
-    if (ino >= HK_NUM_INO)
+    if (ino >= WOFS_NUM_INO)
         return NULL;
 
-    return (struct hk_inode *)(sbi->norm_layout.ino_tab_addr + ino * sizeof(struct hk_inode));
+    return (struct wofs_inode *)(sbi->norm_layout.ino_tab_addr + ino * sizeof(struct wofs_inode));
 }
 
-static inline struct hk_inode *hk_get_inode(struct super_block *sb,
+static inline struct wofs_inode *wofs_get_inode(struct super_block *sb,
                                             struct inode *inode)
 {
-    struct hk_inode_info *si = HK_I(inode);
-    struct hk_inode_info_header *sih = si->header;
-    struct hk_inode fake_pi;
+    struct wofs_inode_info *si = WOFS_I(inode);
+    struct wofs_inode_info_header *sih = si->header;
+    struct wofs_inode fake_pi;
     void *addr;
     int rc;
 
     addr = sih->norm_spec.pi_addr;
-    rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct hk_inode));
+    rc = memcpy_mcsafe(&fake_pi, addr, sizeof(struct wofs_inode));
     if (rc)
         return NULL;
 
-    return (struct hk_inode *)addr;
+    return (struct wofs_inode *)addr;
 }
 
 typedef struct inode_mgr {
-    struct hk_sb_info *sbi; /* the superblock */
+    struct wofs_sb_info *sbi; /* the superblock */
 #ifndef CONFIG_PERCORE_IALLOCATOR
     spinlock_t ilist_lock;
     struct list_head ilist; /* Sort asending */

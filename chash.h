@@ -1,5 +1,5 @@
-#ifndef _HK_CHASH_H_
-#define _HK_CHASH_H_
+#ifndef _WOFS_CHASH_H_
+#define _WOFS_CHASH_H_
 
 /* circular hash table implement */
 struct ch_slot

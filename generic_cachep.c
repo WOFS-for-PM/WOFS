@@ -1,5 +1,5 @@
 /*
- * HUNTER Generic Cache pool Helper.
+ * WOFS Generic Cache pool Helper.
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -18,7 +18,7 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "hunter.h"
+#include "wofs.h"
 
 DEFINE_GENERIC_CACHEP(obj_ref_inode);
 DEFINE_GENERIC_CACHEP(obj_ref_data);
@@ -26,9 +26,9 @@ DEFINE_GENERIC_CACHEP(obj_ref_attr);
 DEFINE_GENERIC_CACHEP(obj_ref_dentry);
 DEFINE_GENERIC_CACHEP(claim_req);
 
-DEFINE_GENERIC_CACHEP(hk_range_node);
-DEFINE_GENERIC_CACHEP(hk_dentry_info);
-DEFINE_GENERIC_CACHEP(hk_cmt_info);
-DEFINE_GENERIC_CACHEP(hk_inode_info_header);
+DEFINE_GENERIC_CACHEP(wofs_range_node);
+DEFINE_GENERIC_CACHEP(wofs_dentry_info);
+DEFINE_GENERIC_CACHEP(wofs_cmt_info);
+DEFINE_GENERIC_CACHEP(wofs_inode_info_header);
 
 DEFINE_GENERIC_CACHEP(tl_node);

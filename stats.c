@@ -1,4 +1,4 @@
-#include "hunter.h"
+#include "wofs.h"
 
 const char *Timingstring[TIMING_NUM] = {
 	/* Init */
@@ -78,7 +78,7 @@ const char *Timingstring[TIMING_NUM] = {
 	"delete_file_tree",
 	"delete_dir_tree",
 	"new_vfs_inode",
-	"new_hk_inode",
+	"new_wofs_inode",
 	"free_inode",
 	"free_inode_log",
 	"evict_inode",
@@ -129,7 +129,7 @@ DEFINE_PER_CPU(u64[TIMING_NUM], Countstats_percpu);
 u64 IOstats[STATS_NUM];
 DEFINE_PER_CPU(u64[STATS_NUM], IOstats_percpu);
 
-void hk_get_timing_stats(void)
+void wofs_get_timing_stats(void)
 {
 	int i;
 	int cpu;
@@ -145,7 +145,7 @@ void hk_get_timing_stats(void)
 }
 
 
-void hk_get_IO_stats(void)
+void wofs_get_IO_stats(void)
 {
 	int i;
 	int cpu;
@@ -157,7 +157,7 @@ void hk_get_IO_stats(void)
 	}
 }
 
-static void hk_clear_timing_stats(void)
+static void wofs_clear_timing_stats(void)
 {
 	int i;
 	int cpu;
@@ -172,9 +172,9 @@ static void hk_clear_timing_stats(void)
 	}
 }
 
-static void hk_clear_IO_stats(struct super_block *sb)
+static void wofs_clear_IO_stats(struct super_block *sb)
 {
-	struct hk_sb_info *sbi = HK_SB(sb);
+	struct wofs_sb_info *sbi = WOFS_SB(sb);
 	int i;
 	int cpu;
 
@@ -185,8 +185,8 @@ static void hk_clear_IO_stats(struct super_block *sb)
 	}
 }
 
-void hk_clear_stats(struct super_block *sb)
+void wofs_clear_stats(struct super_block *sb)
 {
-	hk_clear_timing_stats();
-	hk_clear_IO_stats(sb);
+	wofs_clear_timing_stats();
+	wofs_clear_IO_stats(sb);
 }

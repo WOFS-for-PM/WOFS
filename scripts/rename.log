@@ -22,5 +22,5 @@ J_INODE: ino: 0, tstamp: 0, i_flags: 0, i_size: 4096
          i_mode: 16877, i_links_count: 2, i_xattr: 0 i_uid: 0, i_gid: 0, 
          i_generation: 0, i_create_time: 0, rdev: 0
 
-hk_commit_linkchange: inode 1 is open: true
-hk_commit_newattr: inode 0 is open: true
+wofs_commit_linkchange: inode 1 is open: true
+wofs_commit_newattr: inode 0 is open: true

@@ -1,6 +1,6 @@
 # Functions
 
-This folder is mainly for validating the basic syscalls of HUNTER-KERNEL.
+This folder is mainly for validating the basic syscalls of WOFS-KERNEL.
 
 - [x] **rw_test.c**: Basic `open`, `read` and `write`.
 
@@ -12,4 +12,4 @@ This folder is mainly for validating the basic syscalls of HUNTER-KERNEL.
 
 Till the 2022/5/23, I can't gurrantee the project can compliant with FIO or Linux Test Suites.
 
-This folder will perform generic test for HUNTER File system.
+This folder will perform generic test for WOFS File system.

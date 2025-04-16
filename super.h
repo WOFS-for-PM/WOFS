@@ -1,19 +1,19 @@
-#ifndef _HK_SUPER_H
-#define _HK_SUPER_H
-#include "hunter.h"
+#ifndef _WOFS_SUPER_H
+#define _WOFS_SUPER_H
+#include "wofs.h"
 /*
- * Structure of the HUNTER super block in PMEM
+ * Structure of the WOFS super block in PMEM
  *
  * The fields are partitioned into static and dynamic fields. The static fields
  * never change after file system creation. This was primarily done because
- * hk_get_block() returns NULL if the block offset is 0 (helps in catching
+ * wofs_get_block() returns NULL if the block offset is 0 (helps in catching
  * bugs). So if we modify any field using journaling (for consistency), we
  * will have to modify s_sum which is at offset 0. So journaling code fails.
  * This (static+dynamic fields) is a temporary solution and can be avoided
- * once the file system becomes stable and hk_get_block() returns correct
+ * once the file system becomes stable and wofs_get_block() returns correct
  * pointers even for offset 0.
  */
-struct hk_super_block {
+struct wofs_super_block {
     /* static fields. they never change after file system creation.
      * checksum only validates up to s_start_dynamic field below
      */
@@ -39,7 +39,7 @@ struct hk_super_block {
 
 } __attribute((__packed__));
 
-struct hk_normal_data {
+struct wofs_normal_data {
     __le64 s_tstamp; /* time stemp */
     struct {
         __le64 s_atomic_counter;
@@ -53,25 +53,25 @@ struct hk_normal_data {
     } s_layout[POSSIBLE_MAX_CPU];
 };
 
-struct hk_pack_data {
+struct wofs_pack_data {
     u64 s_vtail;
 };
 
-#define HK_SB_SIZE(sbi) round_up(sizeof(struct hk_super_block) + sbi->hk_sb->s_private_data_len, HK_LBLK_SZ(sbi)) /* must be power of two */
+#define WOFS_SB_SIZE(sbi) round_up(sizeof(struct wofs_super_block) + sbi->wofs_sb->s_private_data_len, WOFS_LBLK_SZ(sbi)) /* must be power of two */
 
-#define HUNTER_BLK_SIZE  (4 * 1024)
-#define HUNTER_MTA_SIZE  (64) // 64B grained
-#define HUNTER_BLK_SHIFT (12)
-#define HUNTER_MTA_SHIFT (6)
+#define WOFS_BLK_SIZE  (4 * 1024)
+#define WOFS_MTA_SIZE  (64) // 64B grained
+#define WOFS_BLK_SHIFT (12)
+#define WOFS_MTA_SHIFT (6)
 
-#define HK_ROOT_INO (0)
-#define HK_RESV_NUM (1)
+#define WOFS_ROOT_INO (0)
+#define WOFS_RESV_NUM (1)
 /*
  * hk super-block data in DRAM
  */
-struct hk_sb_info {
+struct wofs_sb_info {
     struct super_block *sb;        /* VFS super block */
-    struct hk_super_block *hk_sb;  /* DRAM copy of primary SB (i.e., First SB) */
+    struct wofs_super_block *wofs_sb;  /* DRAM copy of primary SB (i.e., First SB) */
     struct block_device *s_bdev;
     struct dax_device *s_dax_dev;
     /*
@@ -156,7 +156,7 @@ struct hk_sb_info {
             u64 tl_per_type_bm_reserved_blks;
             atomic64_t vtail;
             struct obj_mgr *obj_mgr;
-            struct hk_inode_info_header *rih; /* root header */
+            struct wofs_inode_info_header *rih; /* root header */
         } pack_layout;
     };
 
@@ -168,51 +168,51 @@ struct hk_sb_info {
     atomic64_t num_readers;
 
     /* per cpu structure */
-    struct hk_layout_info *layouts;
+    struct wofs_layout_info *layouts;
     u32 num_layout;
     u64 per_layout_blks; /* aligned blks */
 
     /* for background cmt */
-    struct hk_cmt_queue *cq;
-    struct task_struct *cmt_workers[HK_CMT_WORKER_NUM];
+    struct wofs_cmt_queue *cq;
+    struct task_struct *cmt_workers[WOFS_CMT_WORKER_NUM];
     int wake_up_interval;
 
     /* 32-bits per-core ino allocator */
     struct inode_mgr *inode_mgr;
 
     /* for dynamic workload */
-    struct hk_dym_wkld dw;
+    struct wofs_dym_wkld dw;
 };
 
-static u64 inline hk_inc_and_get_vtail(struct hk_sb_info *sbi)
+static u64 inline wofs_inc_and_get_vtail(struct wofs_sb_info *sbi)
 {
     return (u64)atomic64_add_return(1, &sbi->pack_layout.vtail);
 }
 
-static inline struct hk_sb_info *HK_SB(struct super_block *sb)
+static inline struct wofs_sb_info *WOFS_SB(struct super_block *sb)
 {
     return sb->s_fs_info;
 }
 
 /* If this is part of a read-modify-write of the super block,
- * hk_memunlock_super() before calling!
+ * wofs_memunlock_super() before calling!
  */
-static inline struct hk_super_block *hk_get_super(struct super_block *sb, int n)
+static inline struct wofs_super_block *wofs_get_super(struct super_block *sb, int n)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
-    return n == HUNTER_FIRST_SUPER_BLK ? (struct hk_super_block *)sbi->virt_addr : (sbi->virt_addr + HK_SB_SIZE(sbi));
+    return n == WOFS_FIRST_SUPER_BLK ? (struct wofs_super_block *)sbi->virt_addr : (sbi->virt_addr + WOFS_SB_SIZE(sbi));
 }
 
 /* Update the crc32c value by appending a 64b data word. */
-#define hk_crc32c_qword(qword, crc)           \
+#define wofs_crc32c_qword(qword, crc)           \
     do {                                      \
         asm volatile("crc32q %1, %0"          \
                      : "=r"(crc)              \
                      : "r"(qword), "0"(crc)); \
     } while (0)
 
-static inline u32 hk_crc32c(u32 crc, const u8 *data, size_t len)
+static inline u32 wofs_crc32c(u32 crc, const u8 *data, size_t len)
 {
     u8 *ptr = (u8 *)data;
     u64 acc = crc; /* accumulator, crc32c value in lower 32b */
@@ -255,4 +255,4 @@ static inline u32 hk_crc32c(u32 crc, const u8 *data, size_t len)
     return csum;
 }
 
-#endif /* _HK_SUPER_H */
+#endif /* _WOFS_SUPER_H */

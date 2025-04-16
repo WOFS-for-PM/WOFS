@@ -1,52 +1,52 @@
-#include "hunter.h"
+#include "wofs.h"
 
 /* ======================= ANCHOR: Summary Header ========================= */
 
 /* start of pblk */
 u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     if (ENABLE_META_LOCAL(sb)) {
-        u64 blk = (hdr - sbi->norm_layout.sm_addr) / sizeof(struct hk_header);
-        return sbi->d_addr + (blk * HK_PBLK_SZ(sbi));
+        u64 blk = (hdr - sbi->norm_layout.sm_addr) / sizeof(struct wofs_header);
+        return sbi->d_addr + (blk * WOFS_PBLK_SZ(sbi));
     } else {
-        return hdr + sizeof(struct hk_header) - HK_PBLK_SZ(sbi);
+        return hdr + sizeof(struct wofs_header) - WOFS_PBLK_SZ(sbi);
     }
 }
 
-struct hk_header *sm_get_hdr_by_blk(struct super_block *sb, u64 blk)
+struct wofs_header *sm_get_hdr_by_blk(struct super_block *sb, u64 blk)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     if (ENABLE_META_LOCAL(sb)) {
-        return (struct hk_header *)(sbi->norm_layout.sm_addr + blk * sizeof(struct hk_header));
+        return (struct wofs_header *)(sbi->norm_layout.sm_addr + blk * sizeof(struct wofs_header));
     } else {
-        return (struct hk_header *)(sbi->d_addr + (blk + 1) * HK_PBLK_SZ(sbi) - sizeof(struct hk_header));
+        return (struct wofs_header *)(sbi->d_addr + (blk + 1) * WOFS_PBLK_SZ(sbi) - sizeof(struct wofs_header));
     }
 }
 
-struct hk_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr)
+struct wofs_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr)
 {
     u64 blk;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     if (addr < sbi->d_addr) {
-        hk_info("%s: Invalid Addr\n", __func__);
+        wofs_info("%s: Invalid Addr\n", __func__);
         BUG_ON(1);
     }
 
-    blk = (addr - sbi->d_addr) / HK_PBLK_SZ(sbi);
+    blk = (addr - sbi->d_addr) / WOFS_PBLK_SZ(sbi);
 
-    hk_dbgv("sbi->norm_layout.sm_addr: %llx, %d, %d\n", sbi->norm_layout.sm_addr, sizeof(struct hk_header), blk * sizeof(struct hk_header));
+    wofs_dbgv("sbi->norm_layout.sm_addr: %llx, %d, %d\n", sbi->norm_layout.sm_addr, sizeof(struct wofs_header), blk * sizeof(struct wofs_header));
 
     return sm_get_hdr_by_blk(sb, blk);
 }
 
-struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
+struct wofs_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
 {
     int cpuid;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     u64 addr = sm_get_addr_by_hdr(sb, hdr);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, HK_PBLK_SZ(sbi));
+    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, WOFS_PBLK_SZ(sbi));
 
     cpuid = (addr - sbi->d_addr) / size_per_layout;
 
@@ -57,93 +57,93 @@ struct hk_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr)
 }
 
 /* TODO: Not protect hdr in remove function */
-int sm_remove_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr)
+int sm_remove_hdr(struct super_block *sb, struct wofs_inode *pi, struct wofs_header *hdr)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     bool is_hdr_unlock_already = false;
     unsigned long irq_flags = 0;
 
     if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev) == pi) {
-        hk_memunlock_inode(sb, pi, &irq_flags);
+        wofs_memunlock_inode(sb, pi, &irq_flags);
         pi->h_addr = hdr->ofs_next;
-        hk_memlock_inode(sb, pi, &irq_flags);
+        wofs_memlock_inode(sb, pi, &irq_flags);
     } else {
-        hk_memunlock_hdr(sb, hdr, &irq_flags);
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev))->ofs_next = hdr->ofs_next;
+        wofs_memunlock_hdr(sb, hdr, &irq_flags);
+        ((struct wofs_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_prev))->ofs_next = hdr->ofs_next;
         is_hdr_unlock_already = true;
     }
 
     if (!is_hdr_unlock_already) {
-        hk_memunlock_hdr(sb, hdr, &irq_flags);
+        wofs_memunlock_hdr(sb, hdr, &irq_flags);
     }
 
     if (TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next) != NULL) {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next))->ofs_prev = hdr->ofs_prev;
+        ((struct wofs_header *)TRANS_OFS_TO_ADDR(sbi, hdr->ofs_next))->ofs_prev = hdr->ofs_prev;
     }
     hdr->ofs_next = NULL;
     hdr->ofs_prev = NULL;
-    hk_memlock_hdr(sb, hdr, &irq_flags);
+    wofs_memlock_hdr(sb, hdr, &irq_flags);
 
     return 0;
 }
 
-int sm_insert_hdr(struct super_block *sb, struct hk_inode *pi, struct hk_header *hdr)
+int sm_insert_hdr(struct super_block *sb, struct wofs_inode *pi, struct wofs_header *hdr)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     unsigned long irq_flags = 0;
 
     /* Write Hdr, then persist it */
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
+    wofs_memunlock_hdr(sb, hdr, &irq_flags);
     /* Change the link */
     hdr->ofs_prev = TRANS_ADDR_TO_OFS(sbi, pi);
     hdr->ofs_next = pi->h_addr;
-    hk_memunlock_inode(sb, pi, &irq_flags);
+    wofs_memunlock_inode(sb, pi, &irq_flags);
     if (pi->h_addr != NULL) {
-        ((struct hk_header *)TRANS_OFS_TO_ADDR(sbi, pi->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
+        ((struct wofs_header *)TRANS_OFS_TO_ADDR(sbi, pi->h_addr))->ofs_prev = TRANS_ADDR_TO_OFS(sbi, hdr);
     }
     pi->h_addr = TRANS_ADDR_TO_OFS(sbi, hdr);
-    hk_memlock_inode(sb, pi, &irq_flags);
-    hk_memlock_hdr(sb, hdr, &irq_flags);
+    wofs_memlock_inode(sb, pi, &irq_flags);
+    wofs_memlock_hdr(sb, hdr, &irq_flags);
     return 0;
 }
 
 int sm_invalid_hdr(struct super_block *sb, u64 blk_addr, u64 ino)
 {
     /*! Note: Do not update tstamp in invalid process, since version control */
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
     struct inode *inode;
-    struct hk_header *hdr;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_header *hdr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     unsigned long irq_flags = 0;
     INIT_TIMING(invalid_time);
 
-    HK_START_TIMING(sm_invalid_t, invalid_time);
-    pi = hk_get_inode_by_ino(sb, ino);
+    WOFS_START_TIMING(sm_invalid_t, invalid_time);
+    pi = wofs_get_inode_by_ino(sb, ino);
     hdr = sm_get_hdr_by_addr(sb, blk_addr);
     sm_remove_hdr(sb, pi, hdr);
 
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
-    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
+    wofs_memunlock_hdr(sb, hdr, &irq_flags);
+    wofs_flush_buffer(hdr, sizeof(struct wofs_header), true);
     hdr->valid = 0;
-    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
-    hk_memlock_hdr(sb, hdr, &irq_flags);
+    wofs_flush_buffer(hdr, sizeof(struct wofs_header), true);
+    wofs_memlock_hdr(sb, hdr, &irq_flags);
 
-    HK_END_TIMING(sm_invalid_t, invalid_time);
+    WOFS_END_TIMING(sm_invalid_t, invalid_time);
     return 0;
 }
 
 int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp)
 {
-    struct hk_inode *pi;
-    struct hk_header *hdr;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_inode *pi;
+    struct wofs_header *hdr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     struct inode *inode = NULL;
     u64 blk;
     unsigned long irq_flags = 0;
     INIT_TIMING(valid_time);
 
-    HK_START_TIMING(sm_valid_t, valid_time);
-    pi = hk_get_inode_by_ino(sb, ino);
+    WOFS_START_TIMING(sm_valid_t, valid_time);
+    pi = wofs_get_inode_by_ino(sb, ino);
     if (!pi)
         return -1;
 
@@ -153,7 +153,7 @@ int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 t
         hdr->ino == ino &&
         hdr->valid == 1) /*! No need to update */
     {
-        hk_warn("hdr@0x%llx does not need to update\n", (u64)hdr);
+        wofs_warn("hdr@0x%llx does not need to update\n", (u64)hdr);
         return 0;
     }
 
@@ -161,41 +161,41 @@ int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 t
     sm_insert_hdr(sb, pi, hdr);
 
     /* Write Hdr, then persist it */
-    hk_memunlock_hdr(sb, hdr, &irq_flags);
+    wofs_memunlock_hdr(sb, hdr, &irq_flags);
     hdr->ino = ino;
     hdr->tstamp = tstamp;
     hdr->f_blk = f_blk;
     /* flush and fence here significantly hinder the performance */
     /* So that try killing it, fence once or delaying fence */
-    /* hk_flush_buffer(hdr, sizeof(struct hk_header), true); */
+    /* wofs_flush_buffer(hdr, sizeof(struct wofs_header), true); */
     hdr->valid = 1;
-    hk_flush_buffer(hdr, sizeof(struct hk_header), true);
-    hk_memlock_hdr(sb, hdr, &irq_flags);
+    wofs_flush_buffer(hdr, sizeof(struct wofs_header), true);
+    wofs_memlock_hdr(sb, hdr, &irq_flags);
 
-    HK_END_TIMING(sm_valid_t, valid_time);
+    WOFS_END_TIMING(sm_valid_t, valid_time);
     return 0;
 }
 
 /* ======================= ANCHOR: Meta Regions ========================= */
 
-struct hk_mregion *hk_get_region_by_rgid(struct super_block *sb, int rgid)
+struct wofs_mregion *wofs_get_region_by_rgid(struct super_block *sb, int rgid)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    return (struct hk_mregion *)(sbi->norm_layout.rg_addr + rgid * sizeof(struct hk_mregion));
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    return (struct wofs_mregion *)(sbi->norm_layout.rg_addr + rgid * sizeof(struct wofs_mregion));
 }
 
-struct hk_mregion *hk_get_region_by_ino(struct super_block *sb, u64 ino)
+struct wofs_mregion *wofs_get_region_by_ino(struct super_block *sb, u64 ino)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     int rgid;
 
     rgid = ino % sbi->norm_layout.rg_slots;
 
-    return hk_get_region_by_rgid(sb, rgid);
+    return wofs_get_region_by_rgid(sb, rgid);
 }
 
 /* Make sure region is memunlocked */
-int hk_reinit_region(struct super_block *sb, struct hk_mregion *rg)
+int wofs_reinit_region(struct super_block *sb, struct wofs_mregion *rg)
 {
     rg->ino = cpu_to_le64((u64)-1);
     rg->last_valid_setattr = cpu_to_le64((u8)-1);
@@ -204,7 +204,7 @@ int hk_reinit_region(struct super_block *sb, struct hk_mregion *rg)
 }
 
 /* pi should be unlocked */
-void hk_apply_entry(struct super_block *sb, struct hk_inode *pi, struct hk_mentry *entry)
+void wofs_apply_entry(struct super_block *sb, struct wofs_inode *pi, struct wofs_mentry *entry)
 {
     switch (entry->type) {
     case SET_ATTR:
@@ -228,18 +228,18 @@ void hk_apply_entry(struct super_block *sb, struct hk_inode *pi, struct hk_mentr
 }
 
 /* no need to handle memlock or unlock */
-void hk_apply_entry_once(struct super_block *sb, struct hk_inode *pi, struct hk_mentry *entry)
+void wofs_apply_entry_once(struct super_block *sb, struct wofs_inode *pi, struct wofs_mentry *entry)
 {
-    struct hk_mregion *rg;
+    struct wofs_mregion *rg;
     unsigned long irq_flags = 0;
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
-    hk_apply_entry(sb, pi, entry);
-    hk_memlock_inode(sb, pi, &irq_flags);
+    wofs_memunlock_inode(sb, pi, &irq_flags);
+    wofs_apply_entry(sb, pi, entry);
+    wofs_memlock_inode(sb, pi, &irq_flags);
 
-    rg = hk_get_region_by_ino(sb, le64_to_cpu(pi->ino));
+    rg = wofs_get_region_by_ino(sb, le64_to_cpu(pi->ino));
 
-    hk_memunlock_mregion(sb, rg, &irq_flags);
+    wofs_memunlock_mregion(sb, rg, &irq_flags);
     switch (entry->type) {
     case SET_ATTR:
         rg->last_valid_setattr = (u8)-1;
@@ -250,82 +250,82 @@ void hk_apply_entry_once(struct super_block *sb, struct hk_inode *pi, struct hk_
     default:
         break;
     }
-    hk_memlock_mregion(sb, rg, &irq_flags);
+    wofs_memlock_mregion(sb, rg, &irq_flags);
 }
 
-int hk_applying_region(struct super_block *sb, struct hk_mregion *rg)
+int wofs_applying_region(struct super_block *sb, struct wofs_mregion *rg)
 {
     u32 ino = rg->ino;
     int slotid;
-    struct hk_inode *pi = hk_get_inode_by_ino(sb, ino);
+    struct wofs_inode *pi = wofs_get_inode_by_ino(sb, ino);
     unsigned long irq_flags = 0;
 
     if (!pi->valid) {
         return -1;
     }
 
-    hk_memunlock_mregion(sb, rg, &irq_flags);
+    wofs_memunlock_mregion(sb, rg, &irq_flags);
     rg->applying = 1;
-    hk_memlock_mregion(sb, rg, &irq_flags);
-    hk_flush_buffer(rg, sizeof(struct hk_mregion), true);
+    wofs_memlock_mregion(sb, rg, &irq_flags);
+    wofs_flush_buffer(rg, sizeof(struct wofs_mregion), true);
 
-    hk_memunlock_inode(sb, pi, &irq_flags);
-    for (slotid = 0; slotid < HK_RG_ENTY_SLOTS; slotid++) {
+    wofs_memunlock_inode(sb, pi, &irq_flags);
+    for (slotid = 0; slotid < WOFS_RG_ENTY_SLOTS; slotid++) {
         if (rg->last_valid_setattr == slotid || rg->last_valid_linkchange == slotid) {
-            hk_apply_entry(sb, pi, &rg->entries[slotid]);
+            wofs_apply_entry(sb, pi, &rg->entries[slotid]);
         }
     }
-    hk_memlock_inode(sb, pi, &irq_flags);
-    hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+    wofs_memlock_inode(sb, pi, &irq_flags);
+    wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
 
-    hk_memunlock_mregion(sb, rg, &irq_flags);
+    wofs_memunlock_mregion(sb, rg, &irq_flags);
     rg->applying = 0;
-    hk_memlock_mregion(sb, rg, &irq_flags);
-    hk_flush_buffer(rg, sizeof(struct hk_mregion), true);
+    wofs_memlock_mregion(sb, rg, &irq_flags);
+    wofs_flush_buffer(rg, sizeof(struct wofs_mregion), true);
 
     /* Invalidate the region */
-    hk_reinit_region(sb, rg);
+    wofs_reinit_region(sb, rg);
 
     return 0;
 }
 
 /* apply region to pi */
-int hk_applying_region_to_inode(struct super_block *sb, struct hk_inode *pi)
+int wofs_applying_region_to_inode(struct super_block *sb, struct wofs_inode *pi)
 {
-    struct hk_mentry entry;
+    struct wofs_mentry entry;
     bool commit_found = false;
 
-    commit_found = hk_get_cur_commit(sb, pi, SET_ATTR, &entry);
+    commit_found = wofs_get_cur_commit(sb, pi, SET_ATTR, &entry);
     if (commit_found) {
-        hk_apply_entry_once(sb, pi, &entry);
+        wofs_apply_entry_once(sb, pi, &entry);
     }
 
-    commit_found = hk_get_cur_commit(sb, pi, LINK_CHANGE, &entry);
+    commit_found = wofs_get_cur_commit(sb, pi, LINK_CHANGE, &entry);
     if (commit_found) {
-        hk_apply_entry_once(sb, pi, &entry);
+        wofs_apply_entry_once(sb, pi, &entry);
     }
 
     return 0;
 }
 
-int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
+int wofs_do_commit_inode(struct super_block *sb, u64 ino, struct wofs_mentry *entry)
 {
-    struct hk_mregion *rg;
+    struct wofs_mregion *rg;
     unsigned long irq_flags = 0;
     int slotid;
 
-    rg = hk_get_region_by_ino(sb, ino);
+    rg = wofs_get_region_by_ino(sb, ino);
     /* Evict Region */
     if (rg->ino != ino && rg->ino != (u64)-1) {
-        hk_applying_region(sb, rg);
+        wofs_applying_region(sb, rg);
     }
 
-    hk_memunlock_mregion(sb, rg, &irq_flags);
+    wofs_memunlock_mregion(sb, rg, &irq_flags);
     rg->ino = ino;
 
-    for (slotid = 0; slotid < HK_RG_ENTY_SLOTS; slotid++) {
+    for (slotid = 0; slotid < WOFS_RG_ENTY_SLOTS; slotid++) {
         if (slotid != rg->last_valid_linkchange && slotid != rg->last_valid_setattr) {
-            memcpy_to_pmem_nocache(&rg->entries[slotid], entry, sizeof(struct hk_mentry));
+            memcpy_to_pmem_nocache(&rg->entries[slotid], entry, sizeof(struct wofs_mentry));
 
             /* Commit The Write */
             switch (entry->type) {
@@ -339,34 +339,34 @@ int hk_do_commit_inode(struct super_block *sb, u64 ino, struct hk_mentry *entry)
                 break;
             }
 
-            hk_flush_buffer(rg, sizeof(struct hk_mentry), true);
+            wofs_flush_buffer(rg, sizeof(struct wofs_mentry), true);
             break;
         }
     }
-    hk_memlock_mregion(sb, rg, &irq_flags);
+    wofs_memlock_mregion(sb, rg, &irq_flags);
 
     return 0;
 }
 
 /* cur_commit is returned at @entry */
-bool hk_get_cur_commit(struct super_block *sb, struct hk_inode *pi, enum hk_entry_type type, struct hk_mentry *entry)
+bool wofs_get_cur_commit(struct super_block *sb, struct wofs_inode *pi, enum wofs_entry_type type, struct wofs_mentry *entry)
 {
     bool commit_found = false;
-    struct hk_mregion *rg;
+    struct wofs_mregion *rg;
 
-    rg = hk_get_region_by_ino(sb, pi->ino);
+    rg = wofs_get_region_by_ino(sb, pi->ino);
     if (rg->ino == pi->ino) /* Cur Commit */
     {
         switch (type) {
         case SET_ATTR:
             if (rg->last_valid_setattr != (u8)-1) {
-                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_setattr], sizeof(struct hk_mentry));
+                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_setattr], sizeof(struct wofs_mentry));
                 commit_found = true;
             }
             break;
         case LINK_CHANGE:
             if (rg->last_valid_linkchange != (u8)-1) {
-                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_linkchange], sizeof(struct hk_mentry));
+                memcpy_mcsafe(entry, &rg->entries[rg->last_valid_linkchange], sizeof(struct wofs_mentry));
                 commit_found = true;
             }
             break;
@@ -379,16 +379,16 @@ bool hk_get_cur_commit(struct super_block *sb, struct hk_inode *pi, enum hk_entr
 }
 
 /* ======================= ANCHOR: commit newattr ========================= */
-int hk_commit_newattr_innvm(struct super_block *sb, struct hk_inode *pi)
+int wofs_commit_newattr_innvm(struct super_block *sb, struct wofs_inode *pi)
 {
-    struct hk_mentry entry;
-    struct hk_setattr_entry *setattr;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_mentry entry;
+    struct wofs_setattr_entry *setattr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     bool commit_found = false;
 
     setattr = &entry.entry.setattr;
 
-    commit_found = hk_get_cur_commit(sb, pi, SET_ATTR, &entry);
+    commit_found = wofs_get_cur_commit(sb, pi, SET_ATTR, &entry);
     if (!commit_found) {
         setattr->mode = pi->i_mode;
         setattr->gid = pi->i_gid;
@@ -402,19 +402,19 @@ int hk_commit_newattr_innvm(struct super_block *sb, struct hk_inode *pi)
     entry.type = SET_ATTR;
     setattr->tstamp = get_version(sbi);
 
-    hk_do_commit_inode(sb, pi->ino, &entry);
+    wofs_do_commit_inode(sb, pi->ino, &entry);
 
     return 0;
 }
 
-int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
+int wofs_commit_newattr_indram(struct super_block *sb, struct inode *inode)
 {
-    struct hk_mentry entry;
-    struct hk_setattr_entry *setattr;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_mentry entry;
+    struct wofs_setattr_entry *setattr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     INIT_TIMING(commit_newattr);
 
-    HK_START_TIMING(commit_newattr_t, commit_newattr);
+    WOFS_START_TIMING(commit_newattr_t, commit_newattr);
 
     setattr = &entry.entry.setattr;
 
@@ -429,42 +429,42 @@ int hk_commit_newattr_indram(struct super_block *sb, struct inode *inode)
     entry.type = SET_ATTR;
     setattr->tstamp = get_version(sbi);
 
-    hk_do_commit_inode(sb, inode->i_ino, &entry);
-    HK_END_TIMING(commit_newattr_t, commit_newattr);
+    wofs_do_commit_inode(sb, inode->i_ino, &entry);
+    WOFS_END_TIMING(commit_newattr_t, commit_newattr);
 }
 
 /* automatically update attr based on whether the file (ino) is opened */
-int hk_commit_newattr(struct super_block *sb, u64 ino)
+int wofs_commit_newattr(struct super_block *sb, u64 ino)
 {
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
     struct inode *inode = NULL;
 
-    pi = hk_get_inode_by_ino(sb, ino);
-    inode = hk_iget_opened(sb, ino);
+    pi = wofs_get_inode_by_ino(sb, ino);
+    inode = wofs_iget_opened(sb, ino);
 
-    hk_dbgv("%s: inode %d is open: %s\n", __func__, ino, inode != NULL ? "true" : "false");
+    wofs_dbgv("%s: inode %d is open: %s\n", __func__, ino, inode != NULL ? "true" : "false");
     /* FIXME: apply haddr here */
     if (inode) {
-        hk_commit_newattr_indram(sb, inode);
+        wofs_commit_newattr_indram(sb, inode);
         iput(inode);
     } else {
-        hk_commit_newattr_innvm(sb, pi);
+        wofs_commit_newattr_innvm(sb, pi);
     }
 
     return 0;
 }
 
 /* ======================= ANCHOR: commit sizechange ========================= */
-/* used only for hk_setsize(), inode must be opened */
-int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size)
+/* used only for wofs_setsize(), inode must be opened */
+int wofs_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size)
 {
-    struct hk_mentry entry;
-    struct hk_setattr_entry *setattr;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode_info_header *sih = HK_IH(inode);
-    struct hk_inode *pi;
+    struct wofs_mentry entry;
+    struct wofs_setattr_entry *setattr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_inode_info_header *sih = WOFS_IH(inode);
+    struct wofs_inode *pi;
 
-    pi = hk_get_inode(sb, inode);
+    pi = wofs_get_inode(sb, inode);
 
     setattr = &entry.entry.setattr;
     entry.type = SET_ATTR;
@@ -478,17 +478,17 @@ int hk_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_
     setattr->size = cpu_to_le64(ia_size);
     setattr->tstamp = get_version(sbi);
 
-    hk_do_commit_inode(sb, pi->ino, &entry);
+    wofs_do_commit_inode(sb, pi->ino, &entry);
 
     return 0;
 }
 
 /* ======================= ANCHOR: commit linkchange ========================= */
-int hk_commit_linkchange_indram(struct super_block *sb, struct inode *inode)
+int wofs_commit_linkchange_indram(struct super_block *sb, struct inode *inode)
 {
-    struct hk_mentry entry;
-    struct hk_linkchange_entry *linkchange;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_mentry entry;
+    struct wofs_linkchange_entry *linkchange;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     entry.type = LINK_CHANGE;
     linkchange = &entry.entry.linkchange;
@@ -496,20 +496,20 @@ int hk_commit_linkchange_indram(struct super_block *sb, struct inode *inode)
     linkchange->links = cpu_to_le16(inode->i_link);
     linkchange->ctime = cpu_to_le32(inode->i_ctime.tv_sec);
 
-    hk_do_commit_inode(sb, inode->i_ino, &entry);
+    wofs_do_commit_inode(sb, inode->i_ino, &entry);
 
     return 0;
 }
 
-int hk_commit_linkchange_innvm(struct super_block *sb, struct hk_inode *pi)
+int wofs_commit_linkchange_innvm(struct super_block *sb, struct wofs_inode *pi)
 {
-    struct hk_mentry entry;
-    struct hk_linkchange_entry *linkchange;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_mentry entry;
+    struct wofs_linkchange_entry *linkchange;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     bool commit_found = false;
 
     linkchange = &entry.entry.linkchange;
-    commit_found = hk_get_cur_commit(sb, pi, LINK_CHANGE, &entry);
+    commit_found = wofs_get_cur_commit(sb, pi, LINK_CHANGE, &entry);
     if (!commit_found) {
         linkchange->ctime = cpu_to_le32(pi->i_ctime);
         linkchange->links = cpu_to_le16(pi->i_links_count);
@@ -517,40 +517,40 @@ int hk_commit_linkchange_innvm(struct super_block *sb, struct hk_inode *pi)
     entry.type = LINK_CHANGE;
     linkchange->tstamp = get_version(sbi);
 
-    hk_do_commit_inode(sb, pi->ino, &entry);
+    wofs_do_commit_inode(sb, pi->ino, &entry);
 
     return 0;
 }
 
-int hk_commit_linkchange(struct super_block *sb, u64 ino)
+int wofs_commit_linkchange(struct super_block *sb, u64 ino)
 {
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
     struct inode *inode = NULL;
 
-    pi = hk_get_inode_by_ino(sb, ino);
-    inode = hk_iget_opened(sb, ino);
+    pi = wofs_get_inode_by_ino(sb, ino);
+    inode = wofs_iget_opened(sb, ino);
 
-    hk_info("%s: inode %d is open: %s\n", __func__, ino, inode != NULL ? "true" : "false");
+    wofs_info("%s: inode %d is open: %s\n", __func__, ino, inode != NULL ? "true" : "false");
 
     if (inode) {
-        hk_commit_linkchange_indram(sb, inode);
+        wofs_commit_linkchange_indram(sb, inode);
         iput(inode);
     } else {
-        hk_commit_linkchange_innvm(sb, pi);
+        wofs_commit_linkchange_innvm(sb, pi);
     }
 
     return 0;
 }
 
 /* ======================= ANCHOR: commit state ========================= */
-int hk_commit_inode_state(struct super_block *sb, struct hk_inode_state *state)
+int wofs_commit_inode_state(struct super_block *sb, struct wofs_inode_state *state)
 {
-    struct hk_mentry entry;
-    struct hk_setattr_entry *setattr;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode *pi = NULL;
+    struct wofs_mentry entry;
+    struct wofs_setattr_entry *setattr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_inode *pi = NULL;
 
-    pi = hk_get_inode_by_ino(sb, state->ino);
+    pi = wofs_get_inode_by_ino(sb, state->ino);
 
     setattr = &entry.entry.setattr;
     entry.type = SET_ATTR;
@@ -564,22 +564,22 @@ int hk_commit_inode_state(struct super_block *sb, struct hk_inode_state *state)
     setattr->size = cpu_to_le64(state->size);
 
     setattr->tstamp = cpu_to_le64(get_version(sbi));
-    hk_do_commit_inode(sb, pi->ino, &entry);
+    wofs_do_commit_inode(sb, pi->ino, &entry);
 
     return 0;
 }
 
 /* ======================= ANCHOR: Transactions ========================= */
-struct hk_journal *hk_get_journal_by_txid(struct super_block *sb, int txid)
+struct wofs_journal *wofs_get_journal_by_txid(struct super_block *sb, int txid)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    return (struct hk_journal *)(sbi->norm_layout.j_addr + txid * HK_JOURNAL_SIZE);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    return (struct wofs_journal *)(sbi->norm_layout.j_addr + txid * WOFS_JOURNAL_SIZE);
 }
 
-struct hk_jentry *hk_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid)
+struct wofs_jentry *wofs_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_journal *jnl = hk_get_journal_by_txid(sb, txid);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_journal *jnl = wofs_get_journal_by_txid(sb, txid);
     u64 jcur;
     int cnt = 0;
 
@@ -591,27 +591,27 @@ struct hk_jentry *hk_get_jentry_by_slotid(struct super_block *sb, int txid, int 
         cnt++;
     }
 
-    return (struct hk_jentry *)jcur;
+    return (struct wofs_jentry *)jcur;
 }
 
-void hk_flush_journal_in_batch(struct super_block *sb, u64 jhead, u64 jtail)
+void wofs_flush_journal_in_batch(struct super_block *sb, u64 jhead, u64 jtail)
 {
     /* flush journal log entries in batch */
     if (jhead < jtail) {
-        hk_flush_buffer(jhead, jtail - jhead, 0);
+        wofs_flush_buffer(jhead, jtail - jhead, 0);
     } else { /* circular */
         /* head to end */
-        hk_flush_buffer(jhead,
-                        HK_JOURNAL_SIZE - (jhead & ~PAGE_MASK), 0);
+        wofs_flush_buffer(jhead,
+                        WOFS_JOURNAL_SIZE - (jhead & ~PAGE_MASK), 0);
 
         /* start to tail */
-        hk_flush_buffer((void *)((u64)jtail & PAGE_MASK),
+        wofs_flush_buffer((void *)((u64)jtail & PAGE_MASK),
                         jtail & ~PAGE_MASK, 0);
     }
     PERSISTENT_BARRIER();
 }
 
-enum hk_ji_obj_type {
+enum wofs_ji_obj_type {
     JI_PI = 0,
     JI_PD,
     JI_PD_NEW,
@@ -620,7 +620,7 @@ enum hk_ji_obj_type {
     JI_MAX
 };
 
-int hk_tx_args_map[][HK_MAX_OBJ_INVOVED] = {
+int wofs_tx_args_map[][WOFS_MAX_OBJ_INVOVED] = {
     [IDLE] { JI_MAX, JI_MAX, JI_MAX, JI_MAX, JI_MAX },
     [CREATE] { JI_PI, JI_PD, JI_PI_PAR, JI_MAX, JI_MAX },
     [MKDIR] { JI_PI, JI_PD, JI_PI_PAR, JI_MAX, JI_MAX },
@@ -630,8 +630,8 @@ int hk_tx_args_map[][HK_MAX_OBJ_INVOVED] = {
     [RENAME] { JI_PI, JI_PD, JI_PD_NEW, JI_PI_PAR, JI_PI_NEW },
 };
 
-struct hk_jentry_info *hk_tx_get_ji_from_tx_info(struct hk_tx_info *info,
-                                                 enum hk_ji_obj_type obj_type)
+struct wofs_jentry_info *wofs_tx_get_ji_from_tx_info(struct wofs_tx_info *info,
+                                                 enum wofs_ji_obj_type obj_type)
 {
     switch (obj_type) {
     case JI_PI:
@@ -650,10 +650,10 @@ struct hk_jentry_info *hk_tx_get_ji_from_tx_info(struct hk_tx_info *info,
     return NULL;
 }
 
-int hk_tx_assign_inode_to_ji(struct super_block *sb, struct hk_jentry_info *ji, struct hk_inode *pi)
+int wofs_tx_assign_inode_to_ji(struct super_block *sb, struct wofs_jentry_info *ji, struct wofs_inode *pi)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_jentry *je = &ji->jentry;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_jentry *je = &ji->jentry;
 #ifndef CONFIG_FINEGRAIN_JOURNAL
     /* pi is pesudo */
     je->jinode.i_flags = pi->i_flags;
@@ -680,10 +680,10 @@ int hk_tx_assign_inode_to_ji(struct super_block *sb, struct hk_jentry_info *ji, 
     return 0;
 }
 
-int hk_tx_assign_dentry_to_ji(struct super_block *sb, struct hk_jentry_info *ji, struct hk_dentry *pd)
+int wofs_tx_assign_dentry_to_ji(struct super_block *sb, struct wofs_jentry_info *ji, struct wofs_dentry *pd)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_jentry *je = &ji->jentry;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_jentry *je = &ji->jentry;
 
 #ifndef CONFIG_FINEGRAIN_JOURNAL
     /* pd is pesudo */
@@ -700,18 +700,18 @@ int hk_tx_assign_dentry_to_ji(struct super_block *sb, struct hk_jentry_info *ji,
     return 0;
 }
 
-int do_start_tx(struct super_block *sb, int txid, struct hk_tx_info *info)
+int do_start_tx(struct super_block *sb, int txid, struct wofs_tx_info *info)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_journal *jnl;
-    struct hk_jentry_info *ji;
-    struct hk_jentry *je;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_journal *jnl;
+    struct wofs_jentry_info *ji;
+    struct wofs_jentry *je;
     u64 jhead, jtail, jend, jstart, jcur;
     unsigned long irq_flags = 0;
     int slotid;
 
-    jnl = hk_get_journal_by_txid(sb, txid);
-    hk_memunlock_journal(sb, jnl, &irq_flags);
+    jnl = wofs_get_journal_by_txid(sb, txid);
+    wofs_memunlock_journal(sb, jnl, &irq_flags);
     /* write type */
     jnl->jhdr.jtype = info->jtype;
 
@@ -731,11 +731,11 @@ int do_start_tx(struct super_block *sb, int txid, struct hk_tx_info *info)
     {
         if (ji->valid) {
             je = &ji->jentry;
-            if (jcur + sizeof(struct hk_jentry) > jend) {
+            if (jcur + sizeof(struct wofs_jentry) > jend) {
                 jcur = jstart;
             }
-            memcpy_to_pmem_nocache((void *)jcur, je, sizeof(struct hk_jentry));
-            jcur += sizeof(struct hk_jentry);
+            memcpy_to_pmem_nocache((void *)jcur, je, sizeof(struct wofs_jentry));
+            jcur += sizeof(struct wofs_jentry);
         }
     }
 
@@ -743,30 +743,30 @@ int do_start_tx(struct super_block *sb, int txid, struct hk_tx_info *info)
 
     /* commit */
     jnl->jhdr.jofs_tail = TRANS_ADDR_TO_OFS(sbi, jtail);
-    hk_flush_buffer(&jnl->jhdr, sizeof(struct hk_jheader), true);
+    wofs_flush_buffer(&jnl->jhdr, sizeof(struct wofs_jheader), true);
 
-    hk_memlock_journal(sb, jnl, &irq_flags);
+    wofs_memlock_journal(sb, jnl, &irq_flags);
 
     return 0;
 }
 
-static bool hk_tx_obj_is_inode(enum hk_ji_obj_type obj_type)
+static bool wofs_tx_obj_is_inode(enum wofs_ji_obj_type obj_type)
 {
     return obj_type == JI_PI || obj_type == JI_PI_PAR || obj_type == JI_PI_NEW;
 }
 
-static bool hk_tx_obj_is_dentry(enum hk_ji_obj_type obj_type)
+static bool wofs_tx_obj_is_dentry(enum wofs_ji_obj_type obj_type)
 {
     return obj_type == JI_PD || obj_type == JI_PD_NEW;
 }
 
-static int hk_tx_cnt_args(enum hk_journal_type jtype)
+static int wofs_tx_cnt_args(enum wofs_journal_type jtype)
 {
-    int *args = hk_tx_args_map[jtype];
+    int *args = wofs_tx_args_map[jtype];
     int i;
     int cnt = 0;
 
-    for (i = 0; i < HK_MAX_OBJ_INVOVED; i++) {
+    for (i = 0; i < WOFS_MAX_OBJ_INVOVED; i++) {
         if (args[i] != JI_MAX) {
             cnt++;
         }
@@ -775,16 +775,16 @@ static int hk_tx_cnt_args(enum hk_journal_type jtype)
     return cnt;
 }
 
-int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...)
+int wofs_start_tx(struct super_block *sb, enum wofs_journal_type jtype, ...)
 {
     va_list valist;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_tx_info info;
-    struct hk_jentry_info *ji;
-    enum hk_ji_obj_type ji_obj_type;
-    struct hk_inode *pi;
-    struct hk_dentry *pd;
-    struct hk_journal *jnl;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_tx_info info;
+    struct wofs_jentry_info *ji;
+    enum wofs_ji_obj_type ji_obj_type;
+    struct wofs_inode *pi;
+    struct wofs_dentry *pd;
+    struct wofs_journal *jnl;
     bool journal_started = false;
     int txid_cmt = -1;
     int i, txid, start_txid;
@@ -795,28 +795,28 @@ int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...)
     }
 
     /* Build tx info*/
-    objs_cnt = hk_tx_cnt_args(jtype);
+    objs_cnt = wofs_tx_cnt_args(jtype);
     va_start(valist, objs_cnt);
 
     /* invalid all entry */
-    for (i = 0; i < HK_MAX_OBJ_INVOVED; i++) {
-        ji = hk_tx_get_ji_from_tx_info(&info, (enum hk_ji_obj_type)i);
+    for (i = 0; i < WOFS_MAX_OBJ_INVOVED; i++) {
+        ji = wofs_tx_get_ji_from_tx_info(&info, (enum wofs_ji_obj_type)i);
         ji->valid = false;
     }
 
     /* valid specific entry */
     for (i = 0; i < objs_cnt; i++) {
-        ji_obj_type = hk_tx_args_map[jtype][i];
-        ji = hk_tx_get_ji_from_tx_info(&info, ji_obj_type);
+        ji_obj_type = wofs_tx_args_map[jtype][i];
+        ji = wofs_tx_get_ji_from_tx_info(&info, ji_obj_type);
         ji->valid = true;
-        if (hk_tx_obj_is_inode(ji_obj_type)) {
-            pi = va_arg(valist, struct hk_inode *);
+        if (wofs_tx_obj_is_inode(ji_obj_type)) {
+            pi = va_arg(valist, struct wofs_inode *);
             ji->jentry.type = J_INODE;
-            hk_tx_assign_inode_to_ji(sb, ji, pi);
-        } else if (hk_tx_obj_is_dentry(ji_obj_type)) {
-            pd = va_arg(valist, struct hk_dentry *);
+            wofs_tx_assign_inode_to_ji(sb, ji, pi);
+        } else if (wofs_tx_obj_is_dentry(ji_obj_type)) {
+            pd = va_arg(valist, struct wofs_dentry *);
             ji->jentry.type = J_DENTRY;
-            hk_tx_assign_dentry_to_ji(sb, ji, pd);
+            wofs_tx_assign_dentry_to_ji(sb, ji, pd);
         }
     }
 
@@ -825,10 +825,10 @@ int hk_start_tx(struct super_block *sb, enum hk_journal_type jtype, ...)
 
     /* find a journal to append txinfo */
     while (!journal_started) {
-        txid = hk_get_cpuid(sb) * HK_PERCORE_JSLOTS;
+        txid = wofs_get_cpuid(sb) * WOFS_PERCORE_JSLOTS;
         start_txid = txid;
         do {
-            jnl = hk_get_journal_by_txid(sb, txid);
+            jnl = wofs_get_journal_by_txid(sb, txid);
             use_journal(sb, txid);
             if (jnl->jhdr.jtype == IDLE) {
                 do_start_tx(sb, txid, &info);
@@ -847,32 +847,32 @@ out:
     return txid_cmt;
 }
 
-int hk_finish_tx(struct super_block *sb, int txid)
+int wofs_finish_tx(struct super_block *sb, int txid)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_journal *jnl;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_journal *jnl;
     unsigned long irq_flags = 0;
 
-    jnl = hk_get_journal_by_txid(sb, txid);
+    jnl = wofs_get_journal_by_txid(sb, txid);
     use_journal(sb, txid);
-    hk_memunlock_journal(sb, jnl, &irq_flags);
+    wofs_memunlock_journal(sb, jnl, &irq_flags);
     jnl->jhdr.jtype = IDLE;
-    hk_flush_buffer(jnl, sizeof(struct hk_jheader), true);
+    wofs_flush_buffer(jnl, sizeof(struct wofs_jheader), true);
     jnl->jhdr.jofs_head = jnl->jhdr.jofs_tail;
-    hk_flush_buffer(jnl, sizeof(struct hk_jheader), true);
-    hk_memlock_journal(sb, jnl, &irq_flags);
+    wofs_flush_buffer(jnl, sizeof(struct wofs_jheader), true);
+    wofs_memlock_journal(sb, jnl, &irq_flags);
     unuse_journal(sb, txid);
 
     return 0;
 }
 
-int hk_reinit_journal(struct super_block *sb, struct hk_journal *jnl)
+int wofs_reinit_journal(struct super_block *sb, struct wofs_journal *jnl)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     jnl->jhdr.jtype = IDLE;
-    jnl->jhdr.jofs_start = TRANS_ADDR_TO_OFS(sbi, (u64)jnl + sizeof(struct hk_jheader));
-    jnl->jhdr.jofs_end = jnl->jhdr.jofs_start + sizeof(struct hk_jbody);
+    jnl->jhdr.jofs_start = TRANS_ADDR_TO_OFS(sbi, (u64)jnl + sizeof(struct wofs_jheader));
+    jnl->jhdr.jofs_end = jnl->jhdr.jofs_start + sizeof(struct wofs_jbody);
 
     jnl->jhdr.jofs_head = jnl->jhdr.jofs_start;
     jnl->jhdr.jofs_tail = jnl->jhdr.jofs_start;
@@ -881,96 +881,96 @@ int hk_reinit_journal(struct super_block *sb, struct hk_journal *jnl)
 }
 
 /* clean unused pending states caused by find_gaps */
-int hk_stablisze_meta(struct super_block *sb)
+int wofs_stablisze_meta(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_header *hdr;
-    struct hk_layout_info *layout;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_header *hdr;
+    struct wofs_layout_info *layout;
     u64 addr;
     int cpuid = 0;
     unsigned long irq_flags = 0;
 
     for (cpuid = 0; cpuid < sbi->cpus; cpuid++) {
         layout = &sbi->layouts[cpuid];
-        hk_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+        wofs_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
         traverse_layout_blks_reverse(addr, layout)
         {
             hdr = sm_get_hdr_by_addr(sb, addr);
             if (hdr->valid == HDR_PENDING) {
                 hdr->valid = HDR_INVALID;
-                hk_flush_buffer(hdr, sizeof(struct hk_header), false);
+                wofs_flush_buffer(hdr, sizeof(struct wofs_header), false);
             }
         }
-        hk_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+        wofs_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
         PERSISTENT_BARRIER();
     }
 }
 
-int hk_format_meta(struct super_block *sb)
+int wofs_format_meta(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     unsigned long irq_flags = 0;
-    struct hk_header *hdr;
-    struct hk_mregion *rg;
-    struct hk_journal *jnl;
+    struct wofs_header *hdr;
+    struct wofs_mregion *rg;
+    struct wofs_journal *jnl;
     unsigned long bid, rgid, txid;
 
     if (ENABLE_META_PACK(sb)) {
         /* Format Bitmaps for Two-Layer Allocator */
-        hk_memunlock_range(sb, (void *)sbi->pack_layout.bm_start , sbi->pack_layout.bm_size, &irq_flags);
+        wofs_memunlock_range(sb, (void *)sbi->pack_layout.bm_start , sbi->pack_layout.bm_size, &irq_flags);
         memset_nt_large((void *)sbi->pack_layout.bm_start , 0, sbi->pack_layout.bm_size);
-        hk_memlock_range(sb, (void *)sbi->pack_layout.bm_start , sbi->pack_layout.bm_size, &irq_flags);
+        wofs_memlock_range(sb, (void *)sbi->pack_layout.bm_start , sbi->pack_layout.bm_size, &irq_flags);
     } else {
         /* Step 1: Format Inode Table */
-        hk_memunlock_range(sb, (void *)sbi->norm_layout.ino_tab_addr, sbi->norm_layout.ino_tab_size, &irq_flags);
+        wofs_memunlock_range(sb, (void *)sbi->norm_layout.ino_tab_addr, sbi->norm_layout.ino_tab_size, &irq_flags);
         memset_nt_large((void *)sbi->norm_layout.ino_tab_addr, 0, sbi->norm_layout.ino_tab_size);
-        hk_memlock_range(sb, sbi->norm_layout.ino_tab_addr, sbi->norm_layout.ino_tab_size, &irq_flags);
+        wofs_memlock_range(sb, sbi->norm_layout.ino_tab_addr, sbi->norm_layout.ino_tab_size, &irq_flags);
 
         /* Step 2: Format Summary Headers  */
         if (ENABLE_META_LOCAL(sb)) {
-            hk_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+            wofs_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
             memset_nt_large((void *)sbi->norm_layout.sm_addr, 0, sbi->norm_layout.sm_size);
             for (bid = 0; bid < sbi->d_blks; bid++) {
                 hdr = sm_get_hdr_by_blk(sb, bid);
                 if (hdr->valid != HDR_INVALID) {
-                    hk_info("Not Clean\n");
+                    wofs_info("Not Clean\n");
                 }
                 hdr->valid = HDR_PENDING;
             }
-            hk_flush_buffer((void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, false);
-            hk_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+            wofs_flush_buffer((void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, false);
+            wofs_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
         } else {
             // TODO: Implement MAGIC number to prevent all valid at init
-            hk_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+            wofs_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
             for (bid = 0; bid < sbi->d_blks; bid++) {
                 hdr = sm_get_hdr_by_blk(sb, bid);
                 hdr->valid = HDR_PENDING;
             }
-            hk_flush_buffer(sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, false);
-            hk_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+            wofs_flush_buffer(sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, false);
+            wofs_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
         }
-        hk_dbgv("entries: %llu\n", sbi->norm_layout.sm_size / sizeof(struct hk_header));
-        hk_dbgv("sbi->d_blks: %llu\n", sbi->d_blks);
+        wofs_dbgv("entries: %llu\n", sbi->norm_layout.sm_size / sizeof(struct wofs_header));
+        wofs_dbgv("sbi->d_blks: %llu\n", sbi->d_blks);
 
         /* Step 3: Format Jentry */
-        hk_memunlock_range(sb, (void *)sbi->norm_layout.j_addr, sbi->norm_layout.j_size, &irq_flags);
+        wofs_memunlock_range(sb, (void *)sbi->norm_layout.j_addr, sbi->norm_layout.j_size, &irq_flags);
         for (txid = 0; txid < sbi->norm_layout.j_slots; txid++) {
-            jnl = hk_get_journal_by_txid(sb, txid);
-            hk_reinit_journal(sb, jnl);
-            hk_flush_buffer((void *)jnl, HK_JOURNAL_SIZE, false);
+            jnl = wofs_get_journal_by_txid(sb, txid);
+            wofs_reinit_journal(sb, jnl);
+            wofs_flush_buffer((void *)jnl, WOFS_JOURNAL_SIZE, false);
         }
-        hk_memlock_range(sb, (void *)sbi->norm_layout.j_addr, sbi->norm_layout.j_size, &irq_flags);
+        wofs_memlock_range(sb, (void *)sbi->norm_layout.j_addr, sbi->norm_layout.j_size, &irq_flags);
 
         /* Step 4: Format Regions */
-        hk_memunlock_range(sb, (void *)sbi->norm_layout.rg_addr, sbi->pack_layout.obj_mgr, &irq_flags);
+        wofs_memunlock_range(sb, (void *)sbi->norm_layout.rg_addr, sbi->pack_layout.obj_mgr, &irq_flags);
         for (rgid = 0; rgid < sbi->norm_layout.rg_slots; rgid++) {
-            rg = hk_get_region_by_rgid(sb, rgid);
+            rg = wofs_get_region_by_rgid(sb, rgid);
             rg->applying = 0;
-            hk_reinit_region(sb, rg);
-            hk_flush_buffer((void *)rg, sizeof(struct hk_mregion), false);
+            wofs_reinit_region(sb, rg);
+            wofs_flush_buffer((void *)rg, sizeof(struct wofs_mregion), false);
         }
-        hk_memlock_range(sb, (void *)sbi->norm_layout.rg_addr, sbi->pack_layout.obj_mgr, &irq_flags);
+        wofs_memlock_range(sb, (void *)sbi->norm_layout.rg_addr, sbi->pack_layout.obj_mgr, &irq_flags);
     }
-    hk_info("meta format done.\n");
+    wofs_info("meta format done.\n");
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "hunter.h"
+#include "wofs.h"
 
 #define get_fetcher(cq, i) ((struct memory_fetcher *)((cq)->fetchers + (i) * sizeof(struct memory_fetcher)))
 
@@ -33,13 +33,13 @@ struct memory_fetcher {
 static void *alloc_cmt_info(void *ctl_msg, size_t size, gfp_t flags)
 {
     struct pre_alloc_memory_pool_control_msg *msg = ctl_msg;
-    return hk_alloc_hk_cmt_info();
+    return wofs_alloc_wofs_cmt_info();
 }
 
 static void free_cmt_info(void *ctl_msg, void *node)
 {
     (void) ctl_msg;
-    hk_free_hk_cmt_info(node);
+    wofs_free_wofs_cmt_info(node);
 }
 
 static int destroy_memory_node_list(struct pre_alloc_memory_pool *pamp, struct list_head *head)
@@ -79,7 +79,7 @@ static int destroy_pre_alloc_memory_pool(struct pre_alloc_memory_pool *pamp)
     return 0;
 }
 
-static __always_inline void *get_pre_alloc_memory(struct super_block *sb, struct hk_cmt_queue *cq)
+static __always_inline void *get_pre_alloc_memory(struct super_block *sb, struct wofs_cmt_queue *cq)
 {
     struct memory_node *cur;
     struct list_head *pos;
@@ -119,7 +119,7 @@ static int populate_pre_alloc_memory_pool(struct pre_alloc_memory_pool *pamp, si
 {
     struct memory_node *cur;
     int i;
-    hk_info("populate_pre_alloc_memory_pool count %d");
+    wofs_info("populate_pre_alloc_memory_pool count %d");
     
     for (i = 0; i < count; i++) {
         void *memory;
@@ -129,7 +129,7 @@ static int populate_pre_alloc_memory_pool(struct pre_alloc_memory_pool *pamp, si
             memory = kmalloc(pamp->size, GFP_KERNEL);
         }
         if (memory == NULL) {
-            hk_warn("kmalloc memory failed");
+            wofs_warn("kmalloc memory failed");
             return -1;
         }
         pamp->pool[i] = memory;
@@ -189,16 +189,16 @@ static int try_to_populate_memory(struct pre_alloc_memory_pool *pamp)
     return 0;
 }
 
-int hk_request_cmt(struct super_block *sb, struct hk_cmt_info *info)
+int wofs_request_cmt(struct super_block *sb, struct wofs_cmt_info *info)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_cmt_queue *cq = sbi->cq;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_cmt_queue *cq = sbi->cq;
     u64 ino;
     int key;
 
     ino = info->ino;
 
-    key = hash_min(ino, HK_CMT_QUEUE_BITS);
+    key = hash_min(ino, WOFS_CMT_QUEUE_BITS);
 
     spin_lock(&cq->locks[key]);
     cq->nitems[key]++;
@@ -208,22 +208,22 @@ int hk_request_cmt(struct super_block *sb, struct hk_cmt_info *info)
     return 0;
 }
 
-int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
+int wofs_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
 {
-    struct hk_cmt_info *info;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_cmt_info *info;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     INIT_TIMING(request_time);
     INIT_TIMING(prepare_time);
-    HK_START_TIMING(request_valid_t, request_time);
+    WOFS_START_TIMING(request_valid_t, request_time);
 
-    HK_START_TIMING(prepare_request_t, prepare_time);
-    info = hk_alloc_hk_cmt_info();
+    WOFS_START_TIMING(prepare_request_t, prepare_time);
+    info = wofs_alloc_wofs_cmt_info();
     
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
     info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ(sbi);
+    info->addr_end = blk_addr + WOFS_PBLK_SZ(sbi);
     info->blk_start = f_blk;
     info->tstamp = get_version(sbi);
     info->uid = i_uid_read(inode);
@@ -231,31 +231,31 @@ int hk_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk
     info->mode = inode->i_mode;
     info->time = inode->i_mtime.tv_sec;
     info->size = inode->i_size;
-    HK_END_TIMING(prepare_request_t, prepare_time);
+    WOFS_END_TIMING(prepare_request_t, prepare_time);
 
-    hk_request_cmt(sb, info);
-    HK_END_TIMING(request_valid_t, request_time);
+    wofs_request_cmt(sb, info);
+    WOFS_END_TIMING(request_valid_t, request_time);
 
     return 0;
 }
 
-int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
+int wofs_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk)
 {
-    struct hk_cmt_info *info;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    int pamp_id = hk_get_cpuid(sb) % HK_CMT_WORKER_NUM;
+    struct wofs_cmt_info *info;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    int pamp_id = wofs_get_cpuid(sb) % WOFS_CMT_WORKER_NUM;
 
     INIT_TIMING(request_time);
     INIT_TIMING(prepare_time);
-    HK_START_TIMING(request_valid_t, request_time);
+    WOFS_START_TIMING(request_valid_t, request_time);
 
-    HK_START_TIMING(prepare_request_t, prepare_time);
+    WOFS_START_TIMING(prepare_request_t, prepare_time);
 
-    info = hk_alloc_hk_cmt_info();
+    info = wofs_alloc_wofs_cmt_info();
     info->type = CMT_INVALID;
     info->ino = inode->i_ino;
     info->addr_start = blk_addr;
-    info->addr_end = blk_addr + HK_PBLK_SZ(sbi);
+    info->addr_end = blk_addr + WOFS_PBLK_SZ(sbi);
     info->blk_start = f_blk;
     info->tstamp = get_version(sbi);
     info->uid = i_uid_read(inode);
@@ -264,25 +264,25 @@ int hk_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 b
     info->time = inode->i_mtime.tv_sec;
     info->size = inode->i_size;
 
-    HK_END_TIMING(prepare_request_t, prepare_time);
+    WOFS_END_TIMING(prepare_request_t, prepare_time);
     
-    hk_request_cmt(sb, info);
+    wofs_request_cmt(sb, info);
 
-    HK_END_TIMING(request_invalid_t, request_time);
+    WOFS_END_TIMING(request_invalid_t, request_time);
     return 0;
 }
 
-int hk_valid_range_background(struct super_block *sb, struct inode *inode, struct hk_cmt_batch *batch)
+int wofs_valid_range_background(struct super_block *sb, struct inode *inode, struct wofs_cmt_batch *batch)
 {
-    struct hk_cmt_info *info;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_cmt_info *info;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     INIT_TIMING(request_time);
     INIT_TIMING(prepare_time);
-    HK_START_TIMING(request_valid_t, request_time);
-    HK_START_TIMING(prepare_request_t, prepare_time);
+    WOFS_START_TIMING(request_valid_t, request_time);
+    WOFS_START_TIMING(prepare_request_t, prepare_time);
     
-    info = hk_alloc_hk_cmt_info();
+    info = wofs_alloc_wofs_cmt_info();
     info->type = CMT_VALID;
     info->ino = inode->i_ino;
     info->addr_start = batch->addr_start;
@@ -295,25 +295,25 @@ int hk_valid_range_background(struct super_block *sb, struct inode *inode, struc
     info->time = inode->i_mtime.tv_sec;
     info->size = inode->i_size;
 
-    HK_END_TIMING(prepare_request_t, prepare_time);
+    WOFS_END_TIMING(prepare_request_t, prepare_time);
 
-    hk_request_cmt(sb, info);
-    HK_END_TIMING(request_valid_t, request_time);
+    wofs_request_cmt(sb, info);
+    WOFS_END_TIMING(request_valid_t, request_time);
     return 0;
 }
 
-struct hk_cmt_info *hk_grab_cmt_info(struct super_block *sb, int key)
+struct wofs_cmt_info *wofs_grab_cmt_info(struct super_block *sb, int key)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_cmt_queue *cq = sbi->cq;
-    struct hk_cmt_info *info = NULL;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_cmt_queue *cq = sbi->cq;
+    struct wofs_cmt_info *info = NULL;
     struct ch_slot *slot;
 
     slot = chash_last(cq->table, key);
     if (chash_is_sentinal(cq->table, key, slot)) {
         goto out;
     }
-    info = chlist_entry(slot, struct hk_cmt_info, slot);
+    info = chlist_entry(slot, struct wofs_cmt_info, slot);
     chash_del(&info->slot);
 out:
     if (info) {
@@ -322,13 +322,13 @@ out:
     return info;
 }
 
-int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
+int wofs_process_single_cmt_info(struct super_block *sb, struct wofs_cmt_info *info)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_header *hdr, *hdr_traverse;
-    struct hk_inode *pi;
-    struct hk_inode_state state;
-    struct hk_layout_info *layout = NULL, *layout_migrated = NULL;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_header *hdr, *hdr_traverse;
+    struct wofs_inode *pi;
+    struct wofs_inode_state state;
+    struct wofs_layout_info *layout = NULL, *layout_migrated = NULL;
     u64 addr, blk, addr_migrated;
     u64 ino = info->ino;
     u64 addr_start = info->addr_start;
@@ -339,8 +339,8 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
     layout = sm_get_layout_by_hdr(sb, hdr);
 
     use_nvm_inode(sb, ino);
-    pi = hk_get_inode_by_ino(sb, ino);
-    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += HK_PBLK_SZ(sbi), blk += 1) {
+    pi = wofs_get_inode_by_ino(sb, ino);
+    for (addr = addr_start, blk = blk_start; addr < addr_end; addr += WOFS_PBLK_SZ(sbi), blk += 1) {
         hdr = sm_get_hdr_by_addr(sb, addr);
         switch (info->type) {
         case CMT_VALID: {
@@ -356,7 +356,7 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
             */
             if ((hdr->valid && hdr->tstamp > info->tstamp) ||
                 (!hdr->valid)) {
-                hk_dbgv("hdr is migrated, in-NVM ver: %llu, in-Fly ver: %llu, valid: %d\n",
+                wofs_dbgv("hdr is migrated, in-NVM ver: %llu, in-Fly ver: %llu, valid: %d\n",
                         hdr->tstamp, info->tstamp, hdr->valid);
                 traverse_inode_hdr(sbi, pi, hdr_traverse)
                 {
@@ -366,7 +366,7 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
                         layout = sm_get_layout_by_hdr(sb, (u64)hdr);
                         layout_migrated = sm_get_layout_by_hdr(sb, hdr_traverse);
 
-                        hk_dbgv("hdr has been migrated: request at %llu in %d, newest at %llu in %d\n", hk_get_dblk_by_addr(sbi, addr), layout->cpuid, hk_get_dblk_by_addr(sbi, addr_migrated), layout_migrated->cpuid);
+                        wofs_dbgv("hdr has been migrated: request at %llu in %d, newest at %llu in %d\n", wofs_get_dblk_by_addr(sbi, addr), layout->cpuid, wofs_get_dblk_by_addr(sbi, addr_migrated), layout_migrated->cpuid);
                         /* Note that the situation below will not happen in GC-Mechnism workload. */
                         /* We must handle the situation that (Note that A and B is in the same layout)):
                             1. The target block (B) is invalid, and is migrated to a newly place A.
@@ -400,37 +400,37 @@ int hk_process_single_cmt_info(struct super_block *sb, struct hk_cmt_info *info)
     state.mode = info->mode;
     state.size = info->size;
 
-    hk_commit_inode_state(sb, &state);
+    wofs_commit_inode_state(sb, &state);
 
     unuse_nvm_inode(sb, ino);
 
-    hk_free_hk_cmt_info(info);
+    wofs_free_wofs_cmt_info(info);
 
     return 0;
 }
 
-u64 hk_get_nitems_in_cq_roughly(struct hk_cmt_queue *cq, int key)
+u64 wofs_get_nitems_in_cq_roughly(struct wofs_cmt_queue *cq, int key)
 {
     return cq->nitems[key];
 }
 
-struct hk_cmt_worker_param {
+struct wofs_cmt_worker_param {
     struct super_block *sb;
     int work_id;
 };
 
-static int hk_cmt_worker_thread(void *arg)
+static int wofs_cmt_worker_thread(void *arg)
 {
-    struct hk_cmt_worker_param *param = (struct hk_cmt_worker_param *)arg;
+    struct wofs_cmt_worker_param *param = (struct wofs_cmt_worker_param *)arg;
     struct super_block *sb = param->sb;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_cmt_info *info;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_cmt_info *info;
     int work_id = param->work_id;
     int key, start_key, end_key;
     int batch;
 
-    start_key = work_id * (1 << HK_CMT_QUEUE_BITS) / HK_CMT_WORKER_NUM;
-    end_key = (work_id + 1) * (1 << HK_CMT_QUEUE_BITS) / HK_CMT_WORKER_NUM;
+    start_key = work_id * (1 << WOFS_CMT_QUEUE_BITS) / WOFS_CMT_WORKER_NUM;
+    end_key = (work_id + 1) * (1 << WOFS_CMT_QUEUE_BITS) / WOFS_CMT_WORKER_NUM;
 
     allow_signal(SIGABRT);
 
@@ -445,11 +445,11 @@ static int hk_cmt_worker_thread(void *arg)
         for (key = start_key; key < end_key; key++) {
             /* NOTE: single lock-free consumer: make sure the number
                      items is more than per process pass */
-            if (hk_get_nitems_in_cq_roughly(sbi->cq, key) >= HK_CMT_WAKEUP_THRESHOLD) {
-                while ((info = hk_grab_cmt_info(sb, key)) != NULL) {
-                    hk_process_single_cmt_info(sb, info);
+            if (wofs_get_nitems_in_cq_roughly(sbi->cq, key) >= WOFS_CMT_WAKEUP_THRESHOLD) {
+                while ((info = wofs_grab_cmt_info(sb, key)) != NULL) {
+                    wofs_process_single_cmt_info(sb, info);
                     batch++;
-                    if (batch >= HK_CMT_MAX_PROCESS_BATCH) {
+                    if (batch >= WOFS_CMT_MAX_PROCESS_BATCH) {
                         goto again;
                     }
                     schedule();
@@ -463,92 +463,92 @@ static int hk_cmt_worker_thread(void *arg)
     if (arg)
         kfree(arg);
 
-    hk_info("cmt workers %d finished\n", work_id);
+    wofs_info("cmt workers %d finished\n", work_id);
     return 0;
 }
 
-void hk_start_cmt_workers(struct super_block *sb)
+void wofs_start_cmt_workers(struct super_block *sb)
 {
-    struct hk_cmt_worker_param *param;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_cmt_worker_param *param;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     int i;
 
-    for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
-        param = kmalloc(sizeof(struct hk_cmt_worker_param), GFP_KERNEL);
+    for (i = 0; i < WOFS_CMT_WORKER_NUM; i++) {
+        param = kmalloc(sizeof(struct wofs_cmt_worker_param), GFP_KERNEL);
         param->sb = sb;
         param->work_id = i;
 
-        sbi->cmt_workers[i] = kthread_create(hk_cmt_worker_thread,
-                                             param, "hk_cmt_worker_%d", i);
+        sbi->cmt_workers[i] = kthread_create(wofs_cmt_worker_thread,
+                                             param, "wofs_cmt_worker_%d", i);
         wake_up_process(sbi->cmt_workers[i]);
-        hk_info("start cmt workers %d\n", i);
+        wofs_info("start cmt workers %d\n", i);
     }
-    hk_info("Each worker wakes up every %d s\n", sbi->wake_up_interval);
+    wofs_info("Each worker wakes up every %d s\n", sbi->wake_up_interval);
 }
 
-void hk_stop_cmt_workers(struct super_block *sb)
+void wofs_stop_cmt_workers(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     int i;
 
-    for (i = 0; i < HK_CMT_WORKER_NUM; i++) {
+    for (i = 0; i < WOFS_CMT_WORKER_NUM; i++) {
         send_sig_info(SIGABRT, SEND_SIG_NOINFO, sbi->cmt_workers[i]);
         kthread_stop(sbi->cmt_workers[i]);
         sbi->cmt_workers[i] = NULL;
     }
 
-    hk_info("stop %d cmt workers\n", HK_CMT_WORKER_NUM);
+    wofs_info("stop %d cmt workers\n", WOFS_CMT_WORKER_NUM);
 }
 
-void hk_flush_cmt_inode_fast(struct super_block *sb, u64 ino)
+void wofs_flush_cmt_inode_fast(struct super_block *sb, u64 ino)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_cmt_queue *cq = sbi->cq;
-    struct hk_cmt_info *info;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_cmt_queue *cq = sbi->cq;
+    struct wofs_cmt_info *info;
     struct ch_slot *slot;
     struct ch_slot *slot_prev;
     int key;
 
-    key = hash_min(ino, HK_CMT_QUEUE_BITS);
+    key = hash_min(ino, WOFS_CMT_QUEUE_BITS);
 
     spin_lock(&cq->locks[key]);
     slot = chash_last(cq->table, key);
     while (!chash_is_sentinal(cq->table, key, slot)) {
-        info = chlist_entry(slot, struct hk_cmt_info, slot);
+        info = chlist_entry(slot, struct wofs_cmt_info, slot);
         slot_prev = slot->prev;
         if (info->ino == ino) {
             chash_del(&info->slot);
-            hk_process_single_cmt_info(sb, info);
+            wofs_process_single_cmt_info(sb, info);
         }
         slot = slot_prev;
     }
     spin_unlock(&cq->locks[key]);
 }
 
-void hk_flush_cmt_queue(struct super_block *sb)
+void wofs_flush_cmt_queue(struct super_block *sb)
 {
-    struct hk_cmt_info *info;
+    struct wofs_cmt_info *info;
     int key;
 
-    for (key = 0; key < (1 << HK_CMT_QUEUE_BITS); key++) {
-        while ((info = hk_grab_cmt_info(sb, key)) != NULL) {
-            hk_process_single_cmt_info(sb, info);
+    for (key = 0; key < (1 << WOFS_CMT_QUEUE_BITS); key++) {
+        while ((info = wofs_grab_cmt_info(sb, key)) != NULL) {
+            wofs_process_single_cmt_info(sb, info);
             schedule();
         }
     }
-    hk_info("flush all cmt workers\n");
+    wofs_info("flush all cmt workers\n");
 }
 
-struct hk_memory_fetcher_param {
-    struct hk_cmt_queue *cq;
+struct wofs_memory_fetcher_param {
+    struct wofs_cmt_queue *cq;
     int fetcher_id;
 };
 
-static int hk_memory_fetcher_thread(void *arg) 
+static int wofs_memory_fetcher_thread(void *arg) 
 {
-    struct hk_memory_fetcher_param *param = (struct hk_memory_fetcher_param *)arg;
+    struct wofs_memory_fetcher_param *param = (struct wofs_memory_fetcher_param *)arg;
     int fetcher_id = param->fetcher_id;
-    struct hk_cmt_queue *cq = param->cq;
+    struct wofs_cmt_queue *cq = param->cq;
 
     while (true) {
         if (kthread_should_stop())
@@ -559,29 +559,29 @@ static int hk_memory_fetcher_thread(void *arg)
 
     if (arg)
         kfree(arg);
-    hk_info("memory fetcher %d finished\n", fetcher_id);
+    wofs_info("memory fetcher %d finished\n", fetcher_id);
 }
 
-void hk_start_memory_fetchers(struct hk_cmt_queue *cq)
+void wofs_start_memory_fetchers(struct wofs_cmt_queue *cq)
 {
-    struct hk_memory_fetcher_param *param;
+    struct wofs_memory_fetcher_param *param;
     int i;
 
     for (i = 0; i < cq->nfetchers; i++) {
-        param = kmalloc(sizeof(struct hk_memory_fetcher_param), GFP_KERNEL);
+        param = kmalloc(sizeof(struct wofs_memory_fetcher_param), GFP_KERNEL);
         param->cq = cq;
         param->fetcher_id = i;
 
-        get_fetcher(cq, i)->mem_fetcher_thread = kthread_create(hk_memory_fetcher_thread,
+        get_fetcher(cq, i)->mem_fetcher_thread = kthread_create(wofs_memory_fetcher_thread,
                                                                 param, 
-                                                                "hk_fetcher_worker_%d", i);
+                                                                "wofs_fetcher_worker_%d", i);
 
         wake_up_process(get_fetcher(cq, i)->mem_fetcher_thread);
-        hk_info("start fetcher %d\n", i);
+        wofs_info("start fetcher %d\n", i);
     }
 }
 
-void hk_stop_memory_fetchers(struct hk_cmt_queue *cq)
+void wofs_stop_memory_fetchers(struct wofs_cmt_queue *cq)
 {
     int i;
 
@@ -590,23 +590,23 @@ void hk_stop_memory_fetchers(struct hk_cmt_queue *cq)
         get_fetcher(cq, i)->mem_fetcher_thread = NULL;
     }
 
-    hk_info("stop %d fetchers\n", cq->nfetchers);
+    wofs_info("stop %d fetchers\n", cq->nfetchers);
 }
 
-struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers)
+struct wofs_cmt_queue *wofs_init_cmt_queue(struct super_block *sb, int nfecthers)
 {
-    struct hk_cmt_queue *cq;
+    struct wofs_cmt_queue *cq;
     int i;
 
-    cq = kmalloc(sizeof(struct hk_cmt_queue), GFP_KERNEL);
+    cq = kmalloc(sizeof(struct wofs_cmt_queue), GFP_KERNEL);
     if (!cq) {
-        hk_warn("hk_init_cmt_queue: failed to allocate memory for cq\n");
+        wofs_warn("wofs_init_cmt_queue: failed to allocate memory for cq\n");
         return NULL;
     }
 
-    chash_init(cq->table, HK_CMT_QUEUE_BITS);
+    chash_init(cq->table, WOFS_CMT_QUEUE_BITS);
 
-    for (i = 0; i < (1 << HK_CMT_QUEUE_BITS); i++) {
+    for (i = 0; i < (1 << WOFS_CMT_QUEUE_BITS); i++) {
         spin_lock_init(&cq->locks[i]);
         cq->nitems[i] = 0;
     }
@@ -614,26 +614,26 @@ struct hk_cmt_queue *hk_init_cmt_queue(struct super_block *sb, int nfecthers)
     // cq->nfetchers = nfecthers;
     // cq->fetchers = kvmalloc(sizeof(struct memory_fetcher) * nfecthers, GFP_KERNEL);
     // if (!cq->fetchers) {
-    //     hk_warn("hk_init_cmt_queue: failed to allocate memory for fetchers\n");
+    //     wofs_warn("wofs_init_cmt_queue: failed to allocate memory for fetchers\n");
     //     return NULL;
     // }
 
     // for (i = 0; i < nfecthers; i++) {
     //     init_pre_alloc_memory_pool(sb, &get_fetcher(cq, i)->pamp, 
-    //                                sizeof(struct hk_cmt_info), 1024 * 1024 * 16,
+    //                                sizeof(struct wofs_cmt_info), 1024 * 1024 * 16,
     //                                alloc_cmt_info, free_cmt_info);
     // }
     
-    // hk_start_memory_fetchers(cq);
+    // wofs_start_memory_fetchers(cq);
 
     return cq;
 }
 
-void hk_free_cmt_queue(struct hk_cmt_queue *cq)
+void wofs_free_cmt_queue(struct wofs_cmt_queue *cq)
 {   
     int i;
     if (cq) {
-        // hk_stop_memory_fetchers(cq);
+        // wofs_stop_memory_fetchers(cq);
         // for (i = 0; i < cq->nfetchers; i++) {
         //     destroy_pre_alloc_memory_pool(&get_fetcher(cq, i)->pamp);
         // }

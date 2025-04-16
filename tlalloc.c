@@ -3,22 +3,22 @@
  *
  * Two Layer PM Allocator: allocate blocks and meta blocks/entries
  *
- * This file is part of hunter-userspace.
+ * This file is part of wofs-userspace.
  *
- * hunter-userspace is free software: you can redistribute it and/or modify
+ * wofs-userspace is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * hunter-userspace is distributed in the hope that it will be useful,
+ * wofs-userspace is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with hunter-userspace.  If not, see <http://www.gnu.org/licenses/>.
+ * along with wofs-userspace.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "hunter.h"
+#include "wofs.h"
 
 #define UINT8_SHIFT 3
 #define UINT8_MASK  0x07
@@ -181,7 +181,7 @@ u32 bm64_fast_search_consecutive_bits(u64 bm, u32 bits)
     INIT_TIMING(time);
 
     bm = ~bm;
-    HK_START_TIMING(bm_search_t, time);
+    WOFS_START_TIMING(bm_search_t, time);
     for (i = 0; i < UINT64_BITS; i += 4) {
         res1 = (bm & mask[i]) ^ mask[i];
         res2 = (bm & mask[i + 1]) ^ mask[i + 1];
@@ -189,21 +189,21 @@ u32 bm64_fast_search_consecutive_bits(u64 bm, u32 bits)
         res4 = (bm & mask[i + 3]) ^ mask[i + 3];
 
         if (!res1) {
-            HK_END_TIMING(bm_search_t, time);
+            WOFS_END_TIMING(bm_search_t, time);
             return i;
         } else if (!res2) {
-            HK_END_TIMING(bm_search_t, time);
+            WOFS_END_TIMING(bm_search_t, time);
             return i + 1;
         } else if (!res3) {
-            HK_END_TIMING(bm_search_t, time);
+            WOFS_END_TIMING(bm_search_t, time);
             return i + 2;
         } else if (!res4) {
-            HK_END_TIMING(bm_search_t, time);
+            WOFS_END_TIMING(bm_search_t, time);
             return i + 3;
         }
     }
 
-    HK_END_TIMING(bm_search_t, time);
+    WOFS_END_TIMING(bm_search_t, time);
     return UINT64_BITS;
 }
 
@@ -224,7 +224,7 @@ u8 bm_test(u8 *bm, u32 i)
 
 tl_node_t *tl_create_node(void)
 {
-    tl_node_t *node = hk_alloc_tl_node();
+    tl_node_t *node = wofs_alloc_tl_node();
     node->blk = 0;
     node->node.rb_left = NULL;
     node->node.rb_right = NULL;
@@ -271,7 +271,7 @@ __always_inline void tl_build_restore_param(tlrestore_param_t *param, u64 blk, u
 void tl_free_node(tl_node_t *node)
 {
     if (node) {
-        hk_free_tl_node(node);
+        wofs_free_tl_node(node);
     }
 }
 
@@ -303,7 +303,7 @@ static int tl_tree_insert_node(struct rb_root_cached *tree, tl_node_t *new_node)
             temp = &((*temp)->rb_right);
             left_most = false;
         } else {
-            hk_dbg("%s: node %lu - %lu already exists: "
+            wofs_dbg("%s: node %lu - %lu already exists: "
                    "%lu - %lu\n",
                    __func__, new_node->blk, new_node->dnode.num + new_node->blk - 1,
                    curr->blk, curr->blk + curr->dnode.num - 1);
@@ -363,7 +363,7 @@ static int tl_tree_find_free_slot(struct rb_root_cached *tree, u64 blk, u64 num,
 
     ret = tl_tree_find_node(tree, blk, &ret_node);
     if (ret) {
-        hk_dbg("%s ERROR: %lu - %lu already in free list\n",
+        wofs_dbg("%s ERROR: %lu - %lu already in free list\n",
                __func__, blk, blk + num - 1);
         return -EINVAL;
     }
@@ -390,7 +390,7 @@ static int tl_tree_find_free_slot(struct rb_root_cached *tree, u64 blk, u64 num,
             *prev = NULL;
         }
     } else {
-        hk_dbg("%s ERROR: %lu - %lu overlaps with existing "
+        wofs_dbg("%s ERROR: %lu - %lu overlaps with existing "
                "node %lu - %lu\n",
                __func__, rng_low, rng_high, ret_node_rng_low,
                ret_node_rng_high);
@@ -414,7 +414,7 @@ void tl_mgr_init(tl_allocator_t *alloc, u64 blk_size, u64 meta_size)
     node->dnode.num = blk;
     tl_tree_insert_node(&data_mgr->free_tree, node);
 
-    hk_dbgv("%s: free tree: %lu - %lu for cpu %d\n", __func__, node->blk, node->blk + blk - 1, alloc->cpuid);
+    wofs_dbgv("%s: free tree: %lu - %lu for cpu %d\n", __func__, node->blk, node->blk + blk - 1, alloc->cpuid);
 
     /* typed metadata managers */
     for (i = 0; i < TL_MTA_TYPE_NUM; i++) {
@@ -496,7 +496,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
             goto out;
         }
     } else if (TL_ALLOC_TYPE(flags) == TL_MTA) {
-        HK_START_TIMING(tl_alloc_meta_t, time);
+        WOFS_START_TIMING(tl_alloc_meta_t, time);
         typed_meta_mgr_t *tmeta_mgr;
         u8 idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
@@ -518,7 +518,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
                     list_del(&node->list);
                 }
                 spin_unlock(&tmeta_mgr->spin);
-                HK_END_TIMING(tl_alloc_meta_t, time);
+                WOFS_END_TIMING(tl_alloc_meta_t, time);
                 return 0;
             }
         }
@@ -541,7 +541,7 @@ s32 tlalloc(tl_allocator_t *alloc, tlalloc_param_t *param)
         spin_lock(&tmeta_mgr->spin);
         hash_add(tmeta_mgr->used_blks, &node->hnode, node->blk);
 
-        hk_dbgv("alloc blk %lu for meta type %x (%s)\n", node->blk, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)));
+        wofs_dbgv("alloc blk %lu for meta type %x (%s)\n", node->blk, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)));
 
         /* head insert */
         list_add_tail(&node->list, &tmeta_mgr->free_list);
@@ -607,16 +607,16 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         tl_node_t *next = NULL;
         int ret;
 
-        hk_dbgv("free blk %lu, num %lu\n", blk, num);
+        wofs_dbgv("free blk %lu, num %lu\n", blk, num);
         if (alloc->rng.low > blk || alloc->rng.high < blk + num - 1) {
-            hk_dbg("try free blk %lu, num %lu at %d\n", blk, num, alloc->cpuid);
+            wofs_dbg("try free blk %lu, num %lu at %d\n", blk, num, alloc->cpuid);
             BUG_ON(1);
         }
 
         spin_lock(&data_mgr->spin);
         ret = tl_tree_find_free_slot(&data_mgr->free_tree, blk, num, flags, &prev, &next);
         if (ret) {
-            hk_dbg("fail to find free data slot for [%lu, %lu] at layout %d\n", blk, blk + num - 1, alloc->cpuid);
+            wofs_dbg("fail to find free data slot for [%lu, %lu] at layout %d\n", blk, blk + num - 1, alloc->cpuid);
             BUG_ON(1);
         }
         __tl_try_insert_data_blks(&data_mgr->free_tree, prev, next, param);
@@ -639,7 +639,7 @@ void tlfree(tl_allocator_t *alloc, tlfree_param_t *param)
         tl_node_t *cur;
         int idx = meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags));
 
-        hk_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
+        wofs_dbgv("free meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
         tmeta_mgr = &meta_mgr->tmeta_mgrs[idx];
 
@@ -764,7 +764,7 @@ void tlrestore(tl_allocator_t *alloc, tlrestore_param_t *param)
         typed_meta_mgr_t *tmeta_mgr;
         tl_node_t *cur;
 
-        hk_dbgv("restore meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
+        wofs_dbgv("restore meta blk %lu, entrynr %u, entrynum %u, type %x (%s) at %d layout.\n", blk, entrynr, entrynum, TL_ALLOC_MTA_TYPE(flags), meta_type_to_str(TL_ALLOC_MTA_TYPE(flags)), alloc->cpuid);
 
         tmeta_mgr = &meta_mgr->tmeta_mgrs[meta_type_to_idx(TL_ALLOC_MTA_TYPE(flags))];
         spin_lock(&tmeta_mgr->spin);
@@ -841,14 +841,14 @@ void tl_destory(tl_allocator_t *alloc)
 static bool __tl_dump_dnode(void *key, void *value, void *data)
 {
     tl_node_t *node = value;
-    hk_info("[dnode]: start at %lu, end at %lu, len %lu\n", node->blk, node->blk + node->dnode.num - 1, node->dnode.num);
+    wofs_info("[dnode]: start at %lu, end at %lu, len %lu\n", node->blk, node->blk + node->dnode.num - 1, node->dnode.num);
     return false;
 }
 
 static bool __tl_dump_mnode(void *key, void *value, void *data)
 {
     tl_node_t *node = value;
-    hk_info("[mnode]: block %lu, alloc bitmap: 0x%lx\n", node->blk, node->mnode.bm);
+    wofs_info("[mnode]: block %lu, alloc bitmap: 0x%lx\n", node->blk, node->mnode.bm);
     return false;
 }
 

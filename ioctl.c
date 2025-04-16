@@ -1,13 +1,13 @@
-#include "hunter.h"
+#include "wofs.h"
 
-long hk_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+long wofs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
     // TODO: io control
     return 0;
 }
 
 #ifdef CONFIG_COMPAT
-long hk_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+long wofs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	switch (cmd) {
 	case FS_IOC32_GETFLAGS:
@@ -25,6 +25,6 @@ long hk_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	default:
 		return -ENOIOCTLCMD;
 	}
-	return hk_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+	return wofs_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 }
 #endif

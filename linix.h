@@ -1,7 +1,7 @@
-#ifndef _HK_LINIX_H
-#define _HK_LINIX_H
+#ifndef _WOFS_LINIX_H
+#define _WOFS_LINIX_H
 
-#include "hunter.h"
+#include "wofs.h"
 
 struct linslot;
 
@@ -16,4 +16,4 @@ struct linix {
     struct linslot *slots;
 };
 
-#endif /* _HK_LINIX_H */
+#endif /* _WOFS_LINIX_H */

@@ -1,5 +1,5 @@
 /*
- * HUNTER Recovery routines.
+ * WOFS Recovery routines.
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -18,7 +18,7 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "hunter.h"
+#include "wofs.h"
 
 int linix_init(struct linix *ix, u64 num_slots) 
 {
@@ -38,7 +38,7 @@ int linix_destroy(struct linix *ix)
         kvfree(ix->slots);
         ix->slots = NULL;
     } else {
-        hk_warn("double free in linix_destroy\n");
+        wofs_warn("double free in linix_destroy\n");
         BUG_ON(1);
     }
     return 0;
@@ -99,14 +99,14 @@ u64 linix_get(struct linix *ix, u64 index)
 {
     u64 blk_addr;
     INIT_TIMING(index_time);
-    HK_START_TIMING(linix_get_t, index_time);
+    WOFS_START_TIMING(linix_get_t, index_time);
     if (index >= ix->num_slots)
     {
-        HK_END_TIMING(linix_get_t, index_time);
+        WOFS_END_TIMING(linix_get_t, index_time);
         return 0;
     }
     blk_addr = ix->slots[index].blk_addr;
-    HK_END_TIMING(linix_get_t, index_time);
+    WOFS_END_TIMING(linix_get_t, index_time);
     return blk_addr;
 }
 
@@ -114,7 +114,7 @@ u64 linix_get(struct linix *ix, u64 index)
 int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend) 
 {
     INIT_TIMING(index_time);
-    HK_START_TIMING(linix_set_t, index_time);
+    WOFS_START_TIMING(linix_set_t, index_time);
     if (extend) {
         while (index >= ix->num_slots) {
             linix_extend(ix);
@@ -122,22 +122,22 @@ int linix_insert(struct linix *ix, u64 index, u64 blk_addr, bool extend)
     }
 
     if (index >= ix->num_slots) {
-        HK_END_TIMING(linix_set_t, index_time);
+        WOFS_END_TIMING(linix_set_t, index_time);
         return -1;
     }
 
     ix->slots[index].blk_addr = blk_addr;
-    HK_END_TIMING(linix_set_t, index_time);
+    WOFS_END_TIMING(linix_set_t, index_time);
     return 0;
 }
 
 /* last_index is the last valid index determined by user */
 int linix_delete(struct linix *ix, u64 index, u64 last_index, bool shrink) 
 {
-    struct hk_inode_info_header *sih = container_of(ix, struct hk_inode_info_header, ix);
+    struct wofs_inode_info_header *sih = container_of(ix, struct wofs_inode_info_header, ix);
     ix->slots[index].blk_addr = 0;
     
-    if (shrink && ix->num_slots > HK_LINIX_SLOTS) {
+    if (shrink && ix->num_slots > WOFS_LINIX_SLOTS) {
         if (last_index + 1 <= ix->num_slots / 2) {
             linix_shrink(ix);
         }

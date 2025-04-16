@@ -3,26 +3,26 @@
  *
  * Two Layer PM Allocator: allocate blocks and meta blocks/entries
  *
- * This file is part of hunter-userspace.
+ * This file is part of wofs-userspace.
  *
- * hunter-userspace is free software: you can redistribute it and/or modify
+ * wofs-userspace is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
- * hunter-userspace is distributed in the hope that it will be useful,
+ * wofs-userspace is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with hunter-userspace.  If not, see <http://www.gnu.org/licenses/>.
+ * along with wofs-userspace.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _HK_TLALLOC_H
-#define _HK_TLALLOC_H
+#ifndef _WOFS_TLALLOC_H
+#define _WOFS_TLALLOC_H
 
-#include "hunter.h"
+#include "wofs.h"
 
 #define TL_BLK      0x1
 #define TL_MTA      0x2
@@ -134,7 +134,7 @@ typedef struct data_mgr {
 
 typedef struct typed_meta_mgr {
     struct list_head free_list;
-    DECLARE_HASHTABLE(used_blks, HK_HASH_BITS7);
+    DECLARE_HASHTABLE(used_blks, WOFS_HASH_BITS7);
     u64 entries_perblk;
     u64 entries_mask;
     spinlock_t spin;
@@ -147,14 +147,14 @@ typedef struct meta_mgr {
 typedef struct tl_allocator {
     data_mgr_t data_manager;
     meta_mgr_t meta_manager;
-    struct hk_range_node rng;
+    struct wofs_range_node rng;
     int cpuid;
 } tl_allocator_t;
 
 typedef struct tlalloc_param {
     u32 req;
     u16 flags;
-    struct hk_range_node _ret_rng;
+    struct wofs_range_node _ret_rng;
     u32 _ret_allocated;
     tl_node_t *_ret_node;
 } tlalloc_param_t;
@@ -192,4 +192,4 @@ typedef struct tlrestore_param {
     struct list_head affected_nodes;
 } tlrestore_param_t;
 
-#endif /* _HK_TLALLOC_H */
+#endif /* _WOFS_TLALLOC_H */

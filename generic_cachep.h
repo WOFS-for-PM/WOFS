@@ -1,5 +1,5 @@
 /*
- * HUNTER Generic Cache pool Helper.
+ * WOFS Generic Cache pool Helper.
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -18,10 +18,10 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _HK_GENERIC_CACHEP_H_
-#define _HK_GENERIC_CACHEP_H_
+#ifndef _WOFS_GENERIC_CACHEP_H_
+#define _WOFS_GENERIC_CACHEP_H_
 
-#include "hunter.h"
+#include "wofs.h"
 
 #define DEFINE_GENERIC_CACHEP(type) \
     struct kmem_cache *type##_cachep;
@@ -45,14 +45,14 @@
             type##_cachep = NULL;                                                             \
         }                                                                                     \
     }                                                                                         \
-    static inline struct type *hk_alloc_##type(void)                                                            \
+    static inline struct type *wofs_alloc_##type(void)                                                            \
     {                                                                                         \
         struct type *p;                                                                       \
         p = (struct type *)                                                                   \
             kmem_cache_zalloc(type##_cachep, alloc_flags);                                    \
         return p;                                                                             \
     }                                                                                         \
-    static inline void hk_free_##type(struct type *node)                                                    \
+    static inline void wofs_free_##type(struct type *node)                                                    \
     {                                                                                         \
         kmem_cache_free(type##_cachep, node);                                                 \
     }
@@ -63,10 +63,10 @@ DECLARE_GENERIC_CACHEP(obj_ref_attr, GFP_ATOMIC);
 DECLARE_GENERIC_CACHEP(obj_ref_dentry, GFP_ATOMIC);
 DECLARE_GENERIC_CACHEP(claim_req, GFP_ATOMIC);
 
-DECLARE_GENERIC_CACHEP(hk_range_node, GFP_ATOMIC);
-DECLARE_GENERIC_CACHEP(hk_dentry_info, GFP_ATOMIC);
-DECLARE_GENERIC_CACHEP(hk_cmt_info, GFP_ATOMIC);
-DECLARE_GENERIC_CACHEP(hk_inode_info_header, GFP_ATOMIC);
+DECLARE_GENERIC_CACHEP(wofs_range_node, GFP_ATOMIC);
+DECLARE_GENERIC_CACHEP(wofs_dentry_info, GFP_ATOMIC);
+DECLARE_GENERIC_CACHEP(wofs_cmt_info, GFP_ATOMIC);
+DECLARE_GENERIC_CACHEP(wofs_inode_info_header, GFP_ATOMIC);
 
 DECLARE_GENERIC_CACHEP(tl_node, GFP_ATOMIC);
 

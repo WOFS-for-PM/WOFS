@@ -14,4 +14,4 @@ LOG
 tests/bin
 tests/.vscode
 build_log
-hunter.S
+wofs.S

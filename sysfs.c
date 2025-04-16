@@ -18,21 +18,21 @@
  * warranty of any kind, whether express or implied.
  */
 
-#include "hunter.h"
+#include "wofs.h"
 #include "inode.h"
 
-const char *proc_dirname = "fs/HUNTER";
-struct proc_dir_entry *hk_proc_root;
+const char *proc_dirname = "fs/WOFS";
+struct proc_dir_entry *wofs_proc_root;
 
 // TODO: Modify these functions
 /* ====================== Statistics ======================== */
-static int hk_seq_timing_show(struct seq_file *seq, void *v)
+static int wofs_seq_timing_show(struct seq_file *seq, void *v)
 {
     int i;
 
-    hk_get_timing_stats();
+    wofs_get_timing_stats();
 
-    seq_puts(seq, "=========== HUNTER kernel timing stats ===========\n");
+    seq_puts(seq, "=========== WOFS kernel timing stats ===========\n");
     for (i = 0; i < TIMING_NUM; i++) {
         /* Title */
         if (Timingstring[i][0] == '=') {
@@ -57,39 +57,39 @@ static int hk_seq_timing_show(struct seq_file *seq, void *v)
     return 0;
 }
 
-static int hk_seq_timing_open(struct inode *inode, struct file *file)
+static int wofs_seq_timing_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, hk_seq_timing_show, PDE_DATA(inode));
+    return single_open(file, wofs_seq_timing_show, PDE_DATA(inode));
 }
 
-ssize_t hk_seq_clear_stats(struct file *filp, const char __user *buf,
+ssize_t wofs_seq_clear_stats(struct file *filp, const char __user *buf,
                            size_t len, loff_t *ppos)
 {
     struct address_space *mapping = filp->f_mapping;
     struct inode *inode = mapping->host;
     struct super_block *sb = PDE_DATA(inode);
 
-    hk_clear_stats(sb);
+    wofs_clear_stats(sb);
     return len;
 }
 
-static const struct file_operations hk_seq_timing_fops = {
+static const struct file_operations wofs_seq_timing_fops = {
     .owner = THIS_MODULE,
-    .open = hk_seq_timing_open,
+    .open = wofs_seq_timing_open,
     .read = seq_read,
-    .write = hk_seq_clear_stats,
+    .write = wofs_seq_clear_stats,
     .llseek = seq_lseek,
     .release = single_release,
 };
 
-static int hk_seq_IO_show(struct seq_file *seq, void *v)
+static int wofs_seq_IO_show(struct seq_file *seq, void *v)
 {
     struct super_block *sb = seq->private;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     int i;
 
-    hk_get_timing_stats();
-    hk_get_IO_stats();
+    wofs_get_timing_stats();
+    wofs_get_IO_stats();
 
     seq_puts(seq, "============ HK allocation stats ============\n\n");
 
@@ -125,45 +125,45 @@ static int hk_seq_IO_show(struct seq_file *seq, void *v)
     return 0;
 }
 
-static int hk_seq_IO_open(struct inode *inode, struct file *file)
+static int wofs_seq_IO_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, hk_seq_IO_show, PDE_DATA(inode));
+    return single_open(file, wofs_seq_IO_show, PDE_DATA(inode));
 }
 
-static const struct file_operations hk_seq_IO_fops = {
+static const struct file_operations wofs_seq_IO_fops = {
     .owner = THIS_MODULE,
-    .open = hk_seq_IO_open,
+    .open = wofs_seq_IO_open,
     .read = seq_read,
-    .write = hk_seq_clear_stats,
+    .write = wofs_seq_clear_stats,
     .llseek = seq_lseek,
     .release = single_release,
 };
 
 /* ====================== Setup/teardown======================== */
-void hk_sysfs_init(struct super_block *sb)
+void wofs_sysfs_init(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
-    if (hk_proc_root)
+    if (wofs_proc_root)
         sbi->s_proc = proc_mkdir(sbi->s_bdev->bd_disk->disk_name,
-                                 hk_proc_root);
+                                 wofs_proc_root);
 
     if (sbi->s_proc) {
         proc_create_data("timing_stats", 0444, sbi->s_proc,
-                         &hk_seq_timing_fops, sb);
+                         &wofs_seq_timing_fops, sb);
         proc_create_data("IO_stats", 0444, sbi->s_proc,
-                         &hk_seq_IO_fops, sb);
+                         &wofs_seq_IO_fops, sb);
     }
 }
 
-void hk_sysfs_exit(struct super_block *sb)
+void wofs_sysfs_exit(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
 
     if (sbi->s_proc) {
         remove_proc_entry("timing_stats", sbi->s_proc);
         remove_proc_entry("IO_stats", sbi->s_proc);
         remove_proc_entry(sbi->s_bdev->bd_disk->disk_name,
-                          hk_proc_root);
+                          wofs_proc_root);
     }
 }

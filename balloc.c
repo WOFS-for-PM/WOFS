@@ -1,6 +1,6 @@
-#include "hunter.h"
+#include "wofs.h"
 
-u64 get_version(struct hk_sb_info *sbi)
+u64 get_version(struct wofs_sb_info *sbi)
 {
     u64 tstamp;
     spin_lock(&sbi->norm_layout.ts_lock);
@@ -9,7 +9,7 @@ u64 get_version(struct hk_sb_info *sbi)
     return tstamp;
 }
 
-int up_version(struct hk_sb_info *sbi)
+int up_version(struct wofs_sb_info *sbi)
 {
     spin_lock(&sbi->norm_layout.ts_lock);
     sbi->norm_layout.tstamp++;
@@ -17,11 +17,11 @@ int up_version(struct hk_sb_info *sbi)
     return 0;
 }
 
-int hk_find_gaps(struct super_block *sb, int cpuid)
+int wofs_find_gaps(struct super_block *sb, int cpuid)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout = &sbi->layouts[cpuid];
-    struct hk_header *hdr;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_layout_info *layout = &sbi->layouts[cpuid];
+    struct wofs_header *hdr;
     u64 addr;
     u64 blk;
     unsigned long irq_flags = 0;
@@ -30,61 +30,61 @@ int hk_find_gaps(struct super_block *sb, int cpuid)
         return -1;
     }
 
-    hk_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+    wofs_memunlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
     traverse_layout_blks_reverse(addr, layout)
     {
         hdr = sm_get_hdr_by_addr(sb, addr);
         if (hdr->valid == HDR_INVALID) {
-            blk = hk_get_dblk_by_addr(sbi, addr);
-            hk_range_insert_value(sb, &layout->gaps_list, blk);
+            blk = wofs_get_dblk_by_addr(sbi, addr);
+            wofs_range_insert_value(sb, &layout->gaps_list, blk);
             layout->num_gaps_indram++;
             hdr->valid = HDR_PENDING;
-            hk_flush_buffer(hdr, sizeof(struct hk_header), false);
+            wofs_flush_buffer(hdr, sizeof(struct wofs_header), false);
         }
-        if (layout->num_gaps_indram > HK_MAX_GAPS_INRAM) {
+        if (layout->num_gaps_indram > WOFS_MAX_GAPS_INRAM) {
             break;
         }
     }
-    hk_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
+    wofs_memlock_range(sb, (void *)sbi->norm_layout.sm_addr, sbi->norm_layout.sm_size, &irq_flags);
     PERSISTENT_BARRIER();
     return 0;
 }
 
-u64 hk_prepare_gap_in_layout(struct super_block *sb, int cpuid, u64 blks,
+u64 wofs_prepare_gap_in_layout(struct super_block *sb, int cpuid, u64 blks,
                              u64 *blks_prepared, bool zero)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout = &sbi->layouts[cpuid];
-    struct hk_header *hdr;
-    struct hk_range_node *range;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_layout_info *layout = &sbi->layouts[cpuid];
+    struct wofs_header *hdr;
+    struct wofs_range_node *range;
     u64 blk_start;
     u64 addr;
 
     /* TODO: remove this from critical path */
-    hk_find_gaps(sb, cpuid);
+    wofs_find_gaps(sb, cpuid);
 
     if (layout->num_gaps_indram == 0) {
-        hk_info("%s: No more invalid blks in cpuid: %d \n", __func__, cpuid);
+        wofs_info("%s: No more invalid blks in cpuid: %d \n", __func__, cpuid);
         return 0;
     }
 
-    blk_start = hk_range_pop(&layout->gaps_list, &blks);
+    blk_start = wofs_range_pop(&layout->gaps_list, &blks);
     if (!blk_start) {
-        hk_info("%s: No Gaps in %d\n", __func__, blk_start);
+        wofs_info("%s: No Gaps in %d\n", __func__, blk_start);
         BUG_ON(1);
     }
     *blks_prepared = blks;
     layout->num_gaps_indram -= blks;
 
-    addr = hk_get_addr_by_dblk(sbi, blk_start);
+    addr = wofs_get_addr_by_dblk(sbi, blk_start);
     return addr;
 }
 
-u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layout_type type,
+u64 wofs_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum wofs_layout_type type,
                       u64 *blks_prepared, bool zero)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout = &sbi->layouts[cpuid];
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_layout_info *layout = &sbi->layouts[cpuid];
     u64 target_addr = layout->layout_start;
     unsigned long irq_flags = 0;
 
@@ -92,21 +92,21 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
     case LAYOUT_APPEND: {
         up_version(sbi);
         if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
-            hk_info("%s: layout_lock is not locked\n", __func__);
+            wofs_info("%s: layout_lock is not locked\n", __func__);
             BUG_ON(1);
         }
-        hk_dbgv("%s: layout start @0x%llx, layout tail @0x%llx", __func__, target_addr, layout->atomic_counter);
+        wofs_dbgv("%s: layout start @0x%llx, layout tail @0x%llx", __func__, target_addr, layout->atomic_counter);
         target_addr += layout->atomic_counter;
 
-        if (unlikely(target_addr + (blks * HK_PBLK_SZ(sbi)) >= layout->layout_end)) {
-            blks = (layout->layout_end - target_addr) / HK_PBLK_SZ(sbi);
+        if (unlikely(target_addr + (blks * WOFS_PBLK_SZ(sbi)) >= layout->layout_end)) {
+            blks = (layout->layout_end - target_addr) / WOFS_PBLK_SZ(sbi);
         }
 
         if (unlikely(blks <= 0)) {
             return 0;
         }
 
-        layout->atomic_counter += (blks * HK_PBLK_SZ(sbi));
+        layout->atomic_counter += (blks * WOFS_PBLK_SZ(sbi));
         if (blks_prepared != NULL) {
             *blks_prepared = blks;
         }
@@ -115,10 +115,10 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
     case LAYOUT_GAP: {
         up_version(sbi);
         if (unlikely(!mutex_is_locked(&layout->layout_lock))) {
-            hk_info("%s: layout_lock is not locked\n", __func__);
+            wofs_info("%s: layout_lock is not locked\n", __func__);
             BUG_ON(1);
         }
-        target_addr = hk_prepare_gap_in_layout(sb, cpuid, blks, blks_prepared, zero);
+        target_addr = wofs_prepare_gap_in_layout(sb, cpuid, blks, blks_prepared, zero);
         if (target_addr == 0) {
             return 0;
         }
@@ -135,7 +135,7 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
             return 0;
         }
 
-        hk_dbgv("%s: alloc blk range: %llu - %llu\n", __func__, param._ret_rng.low, param._ret_rng.high);
+        wofs_dbgv("%s: alloc blk range: %llu - %llu\n", __func__, param._ret_rng.low, param._ret_rng.high);
 
         target_addr = get_pm_blk_addr(sbi, param._ret_rng.low);
         if (blks_prepared != NULL) {
@@ -144,45 +144,45 @@ u64 hk_prepare_layout(struct super_block *sb, int cpuid, u64 blks, enum hk_layou
         break;
     }
     default:
-        hk_dbgv("%s: not support args\n", __func__);
+        wofs_dbgv("%s: not support args\n", __func__);
         return 0;
         break;
     }
 
     if (zero) {
-        hk_memunlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
-        memset_nt((void *)target_addr, 0, blks * HK_PBLK_SZ(sbi));
-        hk_memlock_range(sb, (void *)target_addr, blks * HK_PBLK_SZ(sbi), &irq_flags);
+        wofs_memunlock_range(sb, (void *)target_addr, blks * WOFS_PBLK_SZ(sbi), &irq_flags);
+        memset_nt((void *)target_addr, 0, blks * WOFS_PBLK_SZ(sbi));
+        wofs_memlock_range(sb, (void *)target_addr, blks * WOFS_PBLK_SZ(sbi), &irq_flags);
     }
 
     if (ENABLE_META_LOCAL(sb)) {
-        if (!IS_ALIGNED(TRANS_ADDR_TO_OFS(sbi, target_addr), HK_LBLK_SZ(sbi))) {
-            hk_warn("%s: target_addr [%llu] is not aligned to BLOCK\n", __func__, TRANS_ADDR_TO_OFS(sbi, target_addr));
+        if (!IS_ALIGNED(TRANS_ADDR_TO_OFS(sbi, target_addr), WOFS_LBLK_SZ(sbi))) {
+            wofs_warn("%s: target_addr [%llu] is not aligned to BLOCK\n", __func__, TRANS_ADDR_TO_OFS(sbi, target_addr));
         }
     } else {
         if (!IS_ALIGNED(TRANS_ADDR_TO_OFS(sbi, target_addr), CACHELINE_SIZE)) {
-            hk_warn("%s: target_addr [%llu] is not aligned to CACHELINE\n", __func__, TRANS_ADDR_TO_OFS(sbi, target_addr));
+            wofs_warn("%s: target_addr [%llu] is not aligned to CACHELINE\n", __func__, TRANS_ADDR_TO_OFS(sbi, target_addr));
         }
     }
 
-    hk_dbgv("%s: prepare addr 0x%llx, virt addr start @0x%llx", __func__, target_addr, sbi->virt_addr);
+    wofs_dbgv("%s: prepare addr 0x%llx, virt addr start @0x%llx", __func__, target_addr, sbi->virt_addr);
 
     return target_addr;
 }
 
-int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, struct hk_layout_prep *prep)
+int wofs_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, struct wofs_layout_prep *prep)
 {
-    struct hk_layout_info *layout;
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_layout_info *layout;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     int i, cpuid;
     int start_cpuid;
     u64 blks_prepared = 0;
     u64 target_addr;
     int tries = 0;
     INIT_TIMING(alloc_time);
-    HK_START_TIMING(new_data_blocks_t, alloc_time);
+    WOFS_START_TIMING(new_data_blocks_t, alloc_time);
 
-    start_cpuid = hk_get_cpuid(sb);
+    start_cpuid = wofs_get_cpuid(sb);
 
     prep->blks_prepared = 0;
     prep->cpuid = -1;
@@ -193,7 +193,7 @@ int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, stru
             cpuid = (start_cpuid + i) % sbi->num_layout;
             layout = &sbi->layouts[cpuid];
 
-            target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_PACK, &blks_prepared, zero);
+            target_addr = wofs_prepare_layout(sb, cpuid, *blks, LAYOUT_PACK, &blks_prepared, zero);
             if (target_addr == 0) {
                 continue;
             }
@@ -212,9 +212,9 @@ int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, stru
 
             use_layout(layout);
             if (tries == 0) {
-                target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_APPEND, &blks_prepared, zero);
+                target_addr = wofs_prepare_layout(sb, cpuid, *blks, LAYOUT_APPEND, &blks_prepared, zero);
             } else if (tries == 1) {
-                target_addr = hk_prepare_layout(sb, cpuid, *blks, LAYOUT_GAP, &blks_prepared, zero);
+                target_addr = wofs_prepare_layout(sb, cpuid, *blks, LAYOUT_GAP, &blks_prepared, zero);
             }
             unuse_layout(layout);
 
@@ -231,33 +231,33 @@ int hk_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, stru
         if (tries < 1) {
             tries++;
             if (prep->target_addr == 0) {
-                hk_info("%s: No space in layout, try to use gap\n", __func__);
+                wofs_info("%s: No space in layout, try to use gap\n", __func__);
                 goto retry;
             }
         }
     }
-    HK_END_TIMING(new_data_blocks_t, alloc_time);
+    WOFS_END_TIMING(new_data_blocks_t, alloc_time);
     return prep->blks_prepared == 0 ? -1 : 0;
 }
 
-int hk_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all)
+int wofs_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout = &sbi->layouts[cpuid];
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_layout_info *layout = &sbi->layouts[cpuid];
 
     if (rls_all) {
         layout->atomic_counter = 0;
     } else {
-        layout->atomic_counter -= (blks * HK_PBLK_SZ(sbi));
+        layout->atomic_counter -= (blks * WOFS_PBLK_SZ(sbi));
     }
 
     return 0;
 }
 
-unsigned long hk_count_free_blocks(struct super_block *sb)
+unsigned long wofs_count_free_blocks(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_layout_info *layout;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_layout_info *layout;
     unsigned long num_free_blocks = 0;
     int i;
 
@@ -275,19 +275,19 @@ unsigned long hk_count_free_blocks(struct super_block *sb)
     return num_free_blocks;
 }
 
-int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
+int wofs_layouts_init(struct wofs_sb_info *sbi, int cpus)
 {
     struct super_block *sb = sbi->sb;
-    struct hk_layout_info *layout;
+    struct wofs_layout_info *layout;
     int cpuid;
     u64 size_per_layout;
     u64 blks_per_layout;
     int ret = 0;
 
-    size_per_layout = _round_down(sbi->d_size / cpus, HK_PBLK_SZ(sbi));
-    sbi->per_layout_blks = size_per_layout / HK_PBLK_SZ(sbi);
+    size_per_layout = _round_down(sbi->d_size / cpus, WOFS_PBLK_SZ(sbi));
+    sbi->per_layout_blks = size_per_layout / WOFS_PBLK_SZ(sbi);
     sbi->num_layout = cpus;
-    sbi->layouts = (struct hk_layout_info *)kcalloc(cpus, sizeof(struct hk_layout_info), GFP_KERNEL);
+    sbi->layouts = (struct wofs_layout_info *)kcalloc(cpus, sizeof(struct wofs_layout_info), GFP_KERNEL);
     if (sbi->layouts == NULL) {
         ret = -ENOMEM;
         goto out;
@@ -297,29 +297,29 @@ int hk_layouts_init(struct hk_sb_info *sbi, int cpus)
         layout = &sbi->layouts[cpuid];
         layout->layout_start = sbi->d_addr + size_per_layout * cpuid;
         if (cpuid == cpus - 1) {
-            size_per_layout = _round_down((sbi->d_size - cpuid * size_per_layout), HK_PBLK_SZ(sbi));
+            size_per_layout = _round_down((sbi->d_size - cpuid * size_per_layout), WOFS_PBLK_SZ(sbi));
         }
-        blks_per_layout = size_per_layout / HK_PBLK_SZ(sbi);
+        blks_per_layout = size_per_layout / WOFS_PBLK_SZ(sbi);
         layout->cpuid = cpuid;
         layout->layout_blks = blks_per_layout;
         layout->layout_end = layout->layout_start + size_per_layout;
         mutex_init(&layout->layout_lock);
         if (ENABLE_META_PACK(sb)) {
-            tl_alloc_init(&layout->allocator, cpuid, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, HK_PBLK_SZ(sbi), HUNTER_MTA_SIZE);
+            tl_alloc_init(&layout->allocator, cpuid, get_pm_blk(sbi, layout->layout_start), layout->layout_blks, WOFS_PBLK_SZ(sbi), WOFS_MTA_SIZE);
         } else {
             layout->atomic_counter = 0;
             layout->num_gaps_indram = 0;
             INIT_LIST_HEAD(&layout->gaps_list);
         }
-        hk_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
+        wofs_dbgv("layout[%d]: 0x%llx-0x%llx, total_blks: %llu\n", cpuid, layout->layout_start, layout->layout_end, layout->layout_blks);
     }
 out:
     return ret;
 }
 
-int hk_layouts_free(struct hk_sb_info *sbi)
+int wofs_layouts_free(struct wofs_sb_info *sbi)
 {
-    struct hk_layout_info *layout;
+    struct wofs_layout_info *layout;
 
     int cpuid;
     if (sbi->layouts) {
@@ -328,7 +328,7 @@ int hk_layouts_free(struct hk_sb_info *sbi)
             if (ENABLE_META_PACK(sbi->sb)) {
                 tl_destory(&layout->allocator);
             } else {
-                hk_range_free_all(&layout->gaps_list);
+                wofs_range_free_all(&layout->gaps_list);
             }
         }
         kfree(sbi->layouts);

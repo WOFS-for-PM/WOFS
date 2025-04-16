@@ -80,10 +80,10 @@ echo "umounting..."
 sudo umount $MNT_POINT
 
 echo "Removing the old kernel module..."
-sudo rmmod hunter > /dev/null 2>&1
+sudo rmmod wofs > /dev/null 2>&1
 
 echo "Inserting the new kernel module..."
-sudo insmod hunter.ko \
+sudo insmod wofs.ko \
     measure_timing="$(get_modules_options measure_timing)" \
     wprotect="$(get_modules_options wprotect)" \
 
@@ -91,8 +91,8 @@ sleep 1
 
 echo "Mounting..."
 
-sudo mount -t HUNTER -o "$init_str" -o dax /dev/pmem0 $MNT_POINT
+sudo mount -t WOFS -o "$init_str" -o dax /dev/pmem0 $MNT_POINT
 echo "Mount with configs: "
 echo "$config_json" | jq
-echo -e "$CLR_GREEN""> HUNTER Mounted!""$CLR_END" 
+echo -e "$CLR_GREEN""> WOFS Mounted!""$CLR_END" 
 cd "$ORIGINAL" || exit

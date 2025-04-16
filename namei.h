@@ -1,9 +1,9 @@
-#ifndef _HK_NAMEI_H
-#define _HK_NAMEI_H
+#ifndef _WOFS_NAMEI_H
+#define _WOFS_NAMEI_H
 
-#include "hunter.h"
+#include "wofs.h"
 
-struct hk_dentry {
+struct wofs_dentry {
 	u8	    name_len;		        /* length of the dentry name */
 	u8	    valid;		            /* Invalid now? */
 	__le16	links_count;
@@ -12,15 +12,15 @@ struct hk_dentry {
     __le64  tstamp;					/* FIXME: tstamp should be used to append */
     //! We don't need this now
 	__le32	csum;			        /* entry checksum */
-	u8	    name[HK_NAME_LEN + 1];	/* File name */
+	u8	    name[WOFS_NAME_LEN + 1];	/* File name */
 } __attribute((__packed__));
 
-struct hk_dentry_info {
+struct wofs_dentry_info {
 	struct hlist_node node;
 	unsigned long hash;
-	struct hk_dentry *direntry;	
+	struct wofs_dentry *direntry;	
 };
 
-#define MAX_DENTRY_PER_BLK (HK_PBLK_SZ(sbi) / sizeof(struct hk_dentry))
+#define MAX_DENTRY_PER_BLK (WOFS_PBLK_SZ(sbi) / sizeof(struct wofs_dentry))
 
-#endif /* _HK_NAMEI_H */
+#endif /* _WOFS_NAMEI_H */

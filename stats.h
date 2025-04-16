@@ -1,5 +1,5 @@
 /*
- * HUNTER File System statistics
+ * WOFS File System statistics
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -18,11 +18,11 @@
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _HK_STATS_H
-#define _HK_STATS_H
+#ifndef _WOFS_STATS_H
+#define _WOFS_STATS_H
 
-#include "hunter.h"
-// TODO: Timing statistics for HUNTER
+#include "wofs.h"
+// TODO: Timing statistics for WOFS
 /* ======================= Timing ========================= */
 enum timing_category {
     /* Init */
@@ -102,7 +102,7 @@ enum timing_category {
     delete_file_tree_t,
     delete_dir_tree_t,
     new_vfs_inode_t,
-    new_HK_inode_t,
+    new_WOFS_inode_t,
     free_inode_t,
     free_inode_log_t,
     evict_inode_t,
@@ -191,13 +191,13 @@ typedef struct timespec timing_t;
 
 #define INIT_TIMING(X) timing_t X = {0}
 
-#define HK_START_TIMING(name, start) \
+#define WOFS_START_TIMING(name, start) \
     {                                \
         if (measure_timing)          \
             getrawmonotonic(&start); \
     }
 
-#define HK_END_TIMING(name, start)                                    \
+#define WOFS_END_TIMING(name, start)                                    \
     {                                                                 \
         if (measure_timing) {                                         \
             INIT_TIMING(end);                                         \
@@ -209,9 +209,9 @@ typedef struct timespec timing_t;
         }                                                             \
     }
 
-#define HK_STATS_ADD(name, value)                    \
+#define WOFS_STATS_ADD(name, value)                    \
     {                                                \
         __this_cpu_add(IOstats_percpu[name], value); \
     }
 
-#endif /* _HK_STATS_H */
+#endif /* _WOFS_STATS_H */

@@ -1,7 +1,7 @@
 /*
  * BRIEF DESCRIPTION
  *
- * HUNTER Inode rebuild methods.
+ * WOFS Inode rebuild methods.
  *
  * Copyright 2022-2023 Regents of the University of Harbin Institute of Technology, Shenzhen
  * Computer science and technology, Yanqi Pan <deadpoolmine@qq.com>
@@ -18,9 +18,9 @@
  * warranty of any kind, whether express or implied.
  */
 
-#include "hunter.h"
+#include "wofs.h"
 
-struct hk_inode_rebuild {
+struct wofs_inode_rebuild {
     u64 i_size;
     u32 i_flags;       /* Inode flags */
     u32 i_ctime;       /* Inode modification time */
@@ -35,8 +35,8 @@ struct hk_inode_rebuild {
     u64 tstamp;
 };
 
-static void hk_update_inode_with_rebuild(struct super_block *sb, struct hk_inode_rebuild *reb,
-                                         struct hk_inode *pi)
+static void wofs_update_inode_with_rebuild(struct super_block *sb, struct wofs_inode_rebuild *reb,
+                                         struct wofs_inode *pi)
 {
     pi->i_size = cpu_to_le64(reb->i_size);
     pi->i_flags = cpu_to_le32(reb->i_flags);
@@ -50,8 +50,8 @@ static void hk_update_inode_with_rebuild(struct super_block *sb, struct hk_inode
     pi->i_mode = cpu_to_le16(reb->i_mode);
 }
 
-static int hk_init_inode_rebuild(struct super_block *sb, struct hk_inode_rebuild *reb,
-                                 struct hk_inode *pi)
+static int wofs_init_inode_rebuild(struct super_block *sb, struct wofs_inode_rebuild *reb,
+                                 struct wofs_inode *pi)
 {
     reb->i_num_entrys = 0;
     reb->i_size = le64_to_cpu(pi->i_size);
@@ -68,21 +68,21 @@ static int hk_init_inode_rebuild(struct super_block *sb, struct hk_inode_rebuild
     return 0;
 }
 
-static int hk_guess_slots(struct super_block *sb)
+static int wofs_guess_slots(struct super_block *sb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
     size_t avg_size;
     int slots;
 
-    avg_size = hk_dw_stat_avg(&sbi->dw);
-    slots = avg_size / HK_LBLK_SZ(sbi) == 0 ? 1 : avg_size / HK_LBLK_SZ(sbi);
+    avg_size = wofs_dw_stat_avg(&sbi->dw);
+    slots = avg_size / WOFS_LBLK_SZ(sbi) == 0 ? 1 : avg_size / WOFS_LBLK_SZ(sbi);
     return slots;
 }
 
-void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
+void wofs_init_header(struct super_block *sb, struct wofs_inode_info_header *sih,
                     u16 i_mode)
 {
-    int slots = HK_LINIX_SLOTS;
+    int slots = WOFS_LINIX_SLOTS;
 
     sih->i_size = 0;
     sih->ino = 0;
@@ -94,7 +94,7 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
         linix_init(&sih->ix, 0);
     } else if (!S_ISLNK(i_mode)) {
         if (ENABLE_HISTORY_W(sb)) {
-            slots = hk_guess_slots(sb);
+            slots = wofs_guess_slots(sb);
         }
         linix_init(&sih->ix, slots);
     } else { /* symlink only need one block */
@@ -125,26 +125,26 @@ void hk_init_header(struct super_block *sb, struct hk_inode_info_header *sih,
     return 0;
 }
 
-static int hk_rebuild_dir_table_for_blk(struct super_block *sb, u64 f_blk, struct hk_inode_info_header *sih,
-                                        struct hk_inode_rebuild *reb)
+static int wofs_rebuild_dir_table_for_blk(struct super_block *sb, u64 f_blk, struct wofs_inode_info_header *sih,
+                                        struct wofs_inode_rebuild *reb)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_dentry *direntry;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_dentry *direntry;
     u16 i;
     u64 blk_addr;
     for (i = 0; i < MAX_DENTRY_PER_BLK; i++) {
         blk_addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, f_blk));
-        direntry = hk_dentry_by_ix_from_blk(blk_addr, i);
+        direntry = wofs_dentry_by_ix_from_blk(blk_addr, i);
         if (direntry->valid) {
             reb->i_num_entrys += 1;
-            hk_insert_dir_table(sb, sih, direntry->name, direntry->name_len, direntry);
+            wofs_insert_dir_table(sb, sih, direntry->name, direntry->name_len, direntry);
         }
     }
 }
 
-extern void *hk_lookup_d_obj_ref_lists(d_root_t *root, u32 ino, u8 type);
+extern void *wofs_lookup_d_obj_ref_lists(d_root_t *root, u32 ino, u8 type);
 
-static int hk_rebuild_data(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u32 ino)
+static int wofs_rebuild_data(struct wofs_sb_info *sbi, struct wofs_inode_info_header *sih, u32 ino)
 {
     obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     d_root_t *root;
@@ -156,12 +156,12 @@ static int hk_rebuild_data(struct hk_sb_info *sbi, struct hk_inode_info_header *
     int i;
     int ret = 0;
 
-    HK_ASSERT(S_ISREG(sih->i_mode));
+    WOFS_ASSERT(S_ISREG(sih->i_mode));
 
     if (!sih->ix.slots) {
-        ret = linix_init(&sih->ix, HK_LINIX_SLOTS); 
+        ret = linix_init(&sih->ix, WOFS_LINIX_SLOTS); 
         if (ret) {
-            hk_err(sb, "Init inode data index failed\n");
+            wofs_err(sb, "Init inode data index failed\n");
             return ret;
         }
     } else {
@@ -172,7 +172,7 @@ static int hk_rebuild_data(struct hk_sb_info *sbi, struct hk_inode_info_header *
     for (i = 0; i < obj_mgr->num_d_roots; i++) {
         root = &obj_mgr->d_roots[i];
         use_droot(root, data);
-        data_list = hk_lookup_d_obj_ref_lists(root, ino, OBJ_DATA);
+        data_list = wofs_lookup_d_obj_ref_lists(root, ino, OBJ_DATA);
         if (data_list) {
             list_for_each(pos, &data_list->list) {
                 ref = list_entry(pos, obj_ref_data_t, node);
@@ -196,34 +196,34 @@ out:
     return ret;
 }
 
-int hk_rebuild_dirs(struct hk_sb_info *sbi, struct hk_inode_info_header *sih, u32 ino)
+int wofs_rebuild_dirs(struct wofs_sb_info *sbi, struct wofs_inode_info_header *sih, u32 ino)
 {
     obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
     d_root_t *root;
     d_obj_ref_list_t *dentry_list;
     struct list_head *pos;
-    struct hk_obj_dentry *obj_dentry;
+    struct wofs_obj_dentry *obj_dentry;
     obj_ref_dentry_t *ref;
     struct super_block *sb = sbi->sb;
     int i, ret = 0;
 
-    HK_ASSERT(S_ISDIR(sih->i_mode));
+    WOFS_ASSERT(S_ISDIR(sih->i_mode));
     
     /* TODO: check opened ? */
 
     for (i = 0; i < obj_mgr->num_d_roots; i++) {
         root = &obj_mgr->d_roots[i];
         use_droot(root, dentry);
-        dentry_list = hk_lookup_d_obj_ref_lists(root, ino, OBJ_DENTRY);
+        dentry_list = wofs_lookup_d_obj_ref_lists(root, ino, OBJ_DENTRY);
         if (dentry_list) {
             list_for_each(pos, &dentry_list->list) {
                 ref = list_entry(pos, obj_ref_dentry_t, node);
                 obj_dentry = get_pm_addr(sbi, ref->hdr.addr);
-                if (ref->target_ino == ino && ino == HUNTER_ROOT_INO) /* root */
+                if (ref->target_ino == ino && ino == WOFS_ROOT_INO) /* root */
                     continue;
-                ret = hk_insert_dir_table(sb, sih, obj_dentry->name, strlen(obj_dentry->name), ref);
+                ret = wofs_insert_dir_table(sb, sih, obj_dentry->name, strlen(obj_dentry->name), ref);
                 if (ret) {
-                    hk_err(sb, "insert ref %p into dir table failed, ret %d\n", ref, ret);
+                    wofs_err(sb, "insert ref %p into dir table failed, ret %d\n", ref, ret);
                     return ret;
                 }
             }
@@ -235,47 +235,47 @@ out:
     return ret;
 }
 
-static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
-                                 struct hk_inode_info_header *sih)
+static int wofs_rebuild_inode_blks(struct super_block *sb, struct wofs_inode *pi,
+                                 struct wofs_inode_info_header *sih)
 {
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode_rebuild rebuild, *reb;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_inode_rebuild rebuild, *reb;
     u64 ino = sih->ino;
     u64 addr;
 
     INIT_TIMING(rebuild_time);
     int ret;
 
-    HK_START_TIMING(rebuild_blks_t, rebuild_time);
-    hk_dbg_verbose("Rebuild file inode %llu tree\n", ino);
+    WOFS_START_TIMING(rebuild_blks_t, rebuild_time);
+    wofs_dbg_verbose("Rebuild file inode %llu tree\n", ino);
     
     if (ENABLE_META_PACK(sb)) {
         switch (__le16_to_cpu(sih->i_mode) & S_IFMT) {
         case S_IFLNK:
         case S_IFREG:
-            ret = hk_rebuild_data(sbi, sih, ino);
+            ret = wofs_rebuild_data(sbi, sih, ino);
             break;
         case S_IFDIR:
-            ret = hk_rebuild_dirs(sbi, sih, ino);
+            ret = wofs_rebuild_dirs(sbi, sih, ino);
             break;
         default:
             break;
         }
     } else {
-        struct hk_header *hdr;
-        struct hk_header *conflict_hdr;
+        struct wofs_header *hdr;
+        struct wofs_header *conflict_hdr;
         unsigned long irq_flags = 0;
 
         reb = &rebuild;
         sih->norm_spec.h_addr = le64_to_cpu(pi->h_addr);
 
-        ret = hk_init_inode_rebuild(sb, reb, pi);
+        ret = wofs_init_inode_rebuild(sb, reb, pi);
         if (ret)
             return ret;
 
         sih->norm_spec.pi_addr = (u64)pi;
 
-        hk_dbg_verbose("Blk Summary head 0x%llx\n",
+        wofs_dbg_verbose("Blk Summary head 0x%llx\n",
                     sih->norm_spec.h_addr);
 
         if (ret)
@@ -310,7 +310,7 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
             case S_IFREG:
                 break;
             case S_IFDIR:
-                hk_rebuild_dir_table_for_blk(sb, hdr->f_blk, sih, reb);
+                wofs_rebuild_dir_table_for_blk(sb, hdr->f_blk, sih, reb);
                 break;
             default:
                 break;
@@ -323,37 +323,37 @@ static int hk_rebuild_inode_blks(struct super_block *sb, struct hk_inode *pi,
         sih->i_num_dentrys = le64_to_cpu(reb->i_num_entrys);
         sih->norm_spec.tstamp = reb->tstamp;
 
-        hk_memunlock_inode(sb, pi, &irq_flags);
-        hk_update_inode_with_rebuild(sb, reb, pi);
-        hk_memlock_inode(sb, pi, &irq_flags);
+        wofs_memunlock_inode(sb, pi, &irq_flags);
+        wofs_update_inode_with_rebuild(sb, reb, pi);
+        wofs_memlock_inode(sb, pi, &irq_flags);
 
-        hk_flush_buffer(pi, sizeof(struct hk_inode), true);
+        wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
     }
-    sih->i_blocks = sih->i_size / HK_LBLK_SZ(sbi);
+    sih->i_blocks = sih->i_size / WOFS_LBLK_SZ(sbi);
 
 out:
-    HK_END_TIMING(rebuild_blks_t, rebuild_time);
+    WOFS_END_TIMING(rebuild_blks_t, rebuild_time);
     return ret;
 }
 
-int hk_check_inode(struct super_block *sb, u64 ino)
+int wofs_check_inode(struct super_block *sb, u64 ino)
 {
     int ret;
-    struct hk_inode *pi;
+    struct wofs_inode *pi;
 
     // TODO: Check Inode Integrity
-    pi = hk_get_inode_by_ino(sb, ino);
+    pi = wofs_get_inode_by_ino(sb, ino);
     ret = pi->valid == 1 ? 0 : -ESTALE;
 
     return ret;
 }
 
-/* initialize hunter inode header and other DRAM data structures */
-int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, bool build_blks)
+/* initialize wofs inode header and other DRAM data structures */
+int wofs_rebuild_inode(struct super_block *sb, struct wofs_inode_info *si, u32 ino, bool build_blks)
 {
-    struct hk_inode_info_header *sih = si->header;
-    struct hk_sb_info *sbi = HK_SB(sb);
-    struct hk_inode *pi = NULL;
+    struct wofs_inode_info_header *sih = si->header;
+    struct wofs_sb_info *sbi = WOFS_SB(sb);
+    struct wofs_inode *pi = NULL;
     unsigned long irq_flags = 0;
     int ret = 0;
 
@@ -366,38 +366,38 @@ int hk_rebuild_inode(struct super_block *sb, struct hk_inode_info *si, u32 ino, 
         si->header = sih;
         pi = NULL;
     } else {
-        ret = hk_check_inode(sb, ino);
+        ret = wofs_check_inode(sb, ino);
         if (ret) {
-            pi = hk_get_inode_by_ino(sb, ino);
-            hk_dump_inode(sb, pi);
-            hk_warn("%s: Invalid inode: %llu, %d\n", __func__, ino, ret);
+            pi = wofs_get_inode_by_ino(sb, ino);
+            wofs_dump_inode(sb, pi);
+            wofs_warn("%s: Invalid inode: %llu, %d\n", __func__, ino, ret);
             return ret;
         }
 
-        pi = (struct hk_inode *)hk_get_inode_by_ino(sb, ino);
+        pi = (struct wofs_inode *)wofs_get_inode_by_ino(sb, ino);
 
         if (ENABLE_META_ASYNC(sb)) {
-            hk_flush_cmt_inode_fast(sb, ino);
+            wofs_flush_cmt_inode_fast(sb, ino);
         }
 
-        hk_applying_region_to_inode(sb, pi);
+        wofs_applying_region_to_inode(sb, pi);
 
         // We need this valid in case we need to evict the inode.
-        hk_init_header(sb, sih, le16_to_cpu(pi->i_mode));
+        wofs_init_header(sb, sih, le16_to_cpu(pi->i_mode));
         sih->norm_spec.pi_addr = (u64)pi;
 
         if (pi->valid == 0) {
-            hk_dbg("%s: inode %llu is invalid or deleted.\n", __func__, ino);
+            wofs_dbg("%s: inode %llu is invalid or deleted.\n", __func__, ino);
             return -ESTALE;
         }
 
-        hk_dbgv("%s: inode %llu, addr 0x%llx, valid %d, head 0x%llx\n",
+        wofs_dbgv("%s: inode %llu, addr 0x%llx, valid %d, head 0x%llx\n",
                 __func__, ino, sih->norm_spec.pi_addr, pi->valid, pi->h_addr);
     }
 
     sih->ino = ino;
     if (build_blks)
-        ret = hk_rebuild_inode_blks(sb, pi, sih);
+        ret = wofs_rebuild_inode_blks(sb, pi, sih);
 
     return ret;
 }

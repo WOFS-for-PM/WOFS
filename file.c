@@ -475,12 +475,12 @@ static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                 }
             } else {
                 if (out_size > 2 * HK_LBLK_SZ(sbi)) {
-                    __copy_from_user(addr + each_ofs, content, each_size);
-                    hk_flush_buffer(addr + each_ofs, each_size, true);
-                    // memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
+                    // __copy_from_user(addr + each_ofs, content, each_size);
+                    // hk_flush_buffer(addr + each_ofs, each_size, true);
+                    memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
                 } else {
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-                    // memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
+                    // memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                    memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
                 }
             }
         } else {

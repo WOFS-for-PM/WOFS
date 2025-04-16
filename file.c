@@ -84,30 +84,20 @@ static ssize_t do_dax_mapping_read(struct file *filp, char __user *buf,
                 goto out;
         }
 
-        if (ENABLE_META_PACK(sb)) {
-            obj_ref_data_t *ref = NULL;
-            ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
-            if (unlikely(ref == NULL)) {
-                wofs_dbgv("%s: index: %d, ref is NULL\n", __func__, index);
-                nr = PAGE_SIZE;
-                zero = true;
-            } else {
-                blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
-                if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
-                    zero = true;
-                } else {
-                    dax_mem = blk_addr;
-                }
-                nr = (((u64)ref->num) - (index - (ref->ofs >> PAGE_SHIFT))) * WOFS_LBLK_SZ(sbi);
-            }
+        obj_ref_data_t *ref = NULL;
+        ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
+        if (unlikely(ref == NULL)) {
+            wofs_dbgv("%s: index: %d, ref is NULL\n", __func__, index);
+            nr = PAGE_SIZE;
+            zero = true;
         } else {
-            blk_addr = (u64)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
-            if (blk_addr == 0) { /* It's a file hole */
+            blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
+            if (DATA_IS_HOLE(ref->type)) { /* It's a file hole */
                 zero = true;
             } else {
                 dax_mem = blk_addr;
             }
-            nr = nr <= WOFS_LBLK_SZ(sbi) ? nr : WOFS_LBLK_SZ(sbi);
+            nr = (((u64)ref->num) - (index - (ref->ofs >> PAGE_SHIFT))) * WOFS_LBLK_SZ(sbi);
         }
 
         nr = nr - offset;
@@ -239,33 +229,28 @@ static size_t wofs_try_in_place_append_write(struct wofs_inode_info *si, loff_t 
             BUG_ON(1);
         }
 
-        if (ENABLE_META_PACK(sb)) {
-            obj_ref_data_t *ref_data = (obj_ref_data_t *)ref;
-            void *target = get_pm_addr_by_data_ref(sbi, ref_data, pos);
+        obj_ref_data_t *ref_data = (obj_ref_data_t *)ref;
+        void *target = get_pm_addr_by_data_ref(sbi, ref_data, pos);
 
-            WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-            wofs_memunlock_range(sb, target, out_size, &irq_flags);
-            if (out_size > 2 * WOFS_LBLK_SZ(sbi)) {
-                // __copy_from_user(target, content, out_size);
-                // wofs_flush_buffer(target, out_size, true);
-                memcpy_to_pmem_avx_nocache(target, content, out_size);
-            } else {
-                memcpy_to_pmem_nocache(target, content, out_size);
-            }
-            wofs_memlock_range(sb, target, out_size, &irq_flags);
-            WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-            /* NOTE: we delay cross-block write to newly allocated block. Thus achieving WO. */
-            /*       atomicity can be guaranteed since either the append is OK or not. */
-            if (overflow == false) {
-                update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE_FOR_APPEND, pos + out_size);
-            }
-
-            sih->last_end = pos + out_size;
+        WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+        wofs_memunlock_range(sb, target, out_size, &irq_flags);
+        if (out_size > 2 * WOFS_LBLK_SZ(sbi)) {
+            // __copy_from_user(target, content, out_size);
+            // wofs_flush_buffer(target, out_size, true);
+            memcpy_to_pmem_avx_nocache(target, content, out_size);
         } else {
-            /* Not support now */
-            BUG_ON(1);
+            memcpy_to_pmem_nocache(target, content, out_size);
         }
+        wofs_memlock_range(sb, target, out_size, &irq_flags);
+        WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+        /* NOTE: we delay cross-block write to newly allocated block. Thus achieving WO. */
+        /*       atomicity can be guaranteed since either the append is OK or not. */
+        if (overflow == false) {
+            update_data_pkg(sbi, sih, get_pm_addr(sbi, ref_data->hdr.addr), 1, UPDATE_SIZE_FOR_APPEND, pos + out_size);
+        }
+
+        sih->last_end = pos + out_size;
     }
 
     return out_size;
@@ -288,92 +273,58 @@ static bool wofs_try_perform_cow(struct wofs_inode_info *si, u64 cur_addr, u64 i
     WOFS_START_TIMING(partial_block_t, partial_time);
     is_overlay = wofs_check_overlay(si, index);
 
-    if (ENABLE_META_PACK(sb)) {
-        if (is_overlay) {
-            if (index == start_index) {
-                if (each_ofs) {
-                    obj_ref_data_t *ref = NULL;
-                    ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
-                    blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
-                    wofs_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
-                    wofs_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    *each_size -= each_ofs;
-                }
-            }
-            blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
-            index += blks_to_write;
-            /* possible addr of end_index */
-            cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
-            if (index == end_index) {
-                each_ofs = (offset + len) & (WOFS_LBLK_SZ(sbi) - 1);
-                if (each_ofs) {
-                    obj_ref_data_t *ref = NULL;
-                    ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, offset + len);
-                    if (ref) {
-                        blk_addr = get_pm_addr_by_data_ref(sbi, ref, offset + len);
-                        wofs_memunlock_range(sb, cur_addr + each_ofs, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                        memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, WOFS_LBLK_SZ(sbi) - each_ofs);
-                        wofs_memlock_range(sb, cur_addr, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    } else {
-                        wofs_memunlock_range(sb, cur_addr + each_ofs, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                        memset_nt(cur_addr + each_ofs, 0, WOFS_LBLK_SZ(sbi) - each_ofs);
-                        wofs_memlock_range(sb, cur_addr, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    }
-                    *each_size -= (WOFS_LBLK_SZ(sbi) - each_ofs);
-                }
-            }
-        } else {
-            if (index == start_index && each_ofs != 0) {
+    if (is_overlay) {
+        if (index == start_index) {
+            if (each_ofs) {
+                obj_ref_data_t *ref = NULL;
+                ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
+                blk_addr = get_pm_addr_by_data_ref(sbi, ref, (index << PAGE_SHIFT));
                 wofs_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                memset_nt(cur_addr, 0, each_ofs);
+                memcpy_to_pmem_nocache(cur_addr, blk_addr, each_ofs);
                 wofs_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
                 *each_size -= each_ofs;
             }
-            blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
-            index += blks_to_write;
-            /* possible addr of end_index */
-            cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
-            if (index == end_index) {
-                each_ofs = (offset + len) & (WOFS_LBLK_SZ(sbi) - 1);
-                if (each_ofs) {
+        }
+        blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
+        index += blks_to_write;
+        /* possible addr of end_index */
+        cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
+        if (index == end_index) {
+            each_ofs = (offset + len) & (WOFS_LBLK_SZ(sbi) - 1);
+            if (each_ofs) {
+                obj_ref_data_t *ref = NULL;
+                ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, offset + len);
+                if (ref) {
+                    blk_addr = get_pm_addr_by_data_ref(sbi, ref, offset + len);
+                    wofs_memunlock_range(sb, cur_addr + each_ofs, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                    memcpy_to_pmem_nocache(cur_addr + each_ofs, blk_addr, WOFS_LBLK_SZ(sbi) - each_ofs);
+                    wofs_memlock_range(sb, cur_addr, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                } else {
                     wofs_memunlock_range(sb, cur_addr + each_ofs, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
                     memset_nt(cur_addr + each_ofs, 0, WOFS_LBLK_SZ(sbi) - each_ofs);
                     wofs_memlock_range(sb, cur_addr, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
-                    *each_size -= (WOFS_LBLK_SZ(sbi) - each_ofs);
                 }
+                *each_size -= (WOFS_LBLK_SZ(sbi) - each_ofs);
             }
         }
-    } else { /* 4KB  */
-        if (is_overlay) {
-            if (index == start_index || index == end_index) { /* Might perform cow */
-                if (index == start_index && each_ofs != 0) {
-                    blk_addr = (u64)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
-                    *each_size = min(WOFS_LBLK_SZ(sbi) - each_ofs, len);
-                    wofs_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr, wofs_get_block(sb, blk_addr), each_ofs);
-                    wofs_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                }
-                if (index == end_index && len < WOFS_LBLK_SZ(sbi)) {
-                    blk_addr = (u64)wofs_inode_get_slot(sih, (index << PAGE_SHIFT));
-                    *each_size = len;
-                    wofs_memunlock_range(sb, cur_addr + (len + each_ofs), WOFS_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                    memcpy_to_pmem_nocache(cur_addr + (len + each_ofs), wofs_get_block(sb, blk_addr) + (len + each_ofs), WOFS_LBLK_SZ(sbi) - (len + each_ofs));
-                    wofs_memlock_range(sb, cur_addr + (len + each_ofs), WOFS_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                }
-            }
-        } else { /* Set to zero */
-            if (index == start_index && each_ofs != 0) {
-                *each_size = min(WOFS_LBLK_SZ(sbi) - each_ofs, len);
-                wofs_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
-                memset_nt(cur_addr, 0, each_ofs);
-                wofs_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
-            }
-            if (index == end_index && len < WOFS_LBLK_SZ(sbi)) {
-                *each_size = len;
-                wofs_memunlock_range(sb, cur_addr + (len + each_ofs), WOFS_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
-                memset_nt(cur_addr + (len + each_ofs), 0, WOFS_LBLK_SZ(sbi) - (len + each_ofs));
-                wofs_memlock_range(sb, cur_addr + (len + each_ofs), WOFS_LBLK_SZ(sbi) - (len + each_ofs), &irq_flags);
+    } else {
+        if (index == start_index && each_ofs != 0) {
+            wofs_memunlock_range(sb, cur_addr, each_ofs, &irq_flags);
+            memset_nt(cur_addr, 0, each_ofs);
+            wofs_memlock_range(sb, cur_addr, each_ofs, &irq_flags);
+            *each_size -= each_ofs;
+        }
+        blks_to_write = GET_ALIGNED_BLKNR(*each_size + each_ofs - 1);
+        index += blks_to_write;
+        /* possible addr of end_index */
+        cur_addr += ((u64)blks_to_write << PAGE_SHIFT);
+        if (index == end_index) {
+            each_ofs = (offset + len) & (WOFS_LBLK_SZ(sbi) - 1);
+            if (each_ofs) {
+                wofs_memunlock_range(sb, cur_addr + each_ofs, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                memset_nt(cur_addr + each_ofs, 0, WOFS_LBLK_SZ(sbi) - each_ofs);
+                wofs_memlock_range(sb, cur_addr, WOFS_LBLK_SZ(sbi) - each_ofs, &irq_flags);
+                *each_size -= (WOFS_LBLK_SZ(sbi) - each_ofs);
             }
         }
     }
@@ -403,8 +354,6 @@ static int do_perform_write(struct inode *inode, struct wofs_layout_prep *prep,
     struct wofs_sb_info *sbi = WOFS_SB(sb);
     struct wofs_inode_info *si = WOFS_I(inode);
     struct wofs_inode_info_header *sih = si->header;
-    /* for background commit, i.e., async */
-    struct wofs_cmt_batch batch;
     /* for pack, i.e., write-once */
     in_pkg_param_t in_param;
     out_pkg_param_t out_param;
@@ -420,249 +369,83 @@ static int do_perform_write(struct inode *inode, struct wofs_layout_prep *prep,
     *out_size = 0;
 
     num_writers = atomic64_add_return_relaxed(1, &sbi->num_writers);
-    if (ENABLE_META_PACK(sb)) {
-        each_ofs = ofs & (WOFS_LBLK_SZ(sbi) - 1);
-        each_size = blks_prep_to_use * WOFS_LBLK_SZ(sbi);
-        is_overlay = wofs_try_perform_cow(si, addr, index_cur,
-                                        start_index, end_index,
-                                        each_ofs, &each_size,
-                                        ofs, size);
-        WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-        wofs_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-        if (likely(each_size >= WOFS_LBLK_SZ(sbi))) {
-            if (num_writers > 1) {
-                // regulate only if this is a sequential write pattern
-                // since 3000 latency is for 4KiB sequential write
-                if (each_size == WOFS_LBLK_SZ(sbi)) {
-                    struct timespec ts, te;
-                    unsigned long threshold = 0;
-                    getrawmonotonic(&ts);
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-                    getrawmonotonic(&te);
+    each_ofs = ofs & (WOFS_LBLK_SZ(sbi) - 1);
+    each_size = blks_prep_to_use * WOFS_LBLK_SZ(sbi);
+    is_overlay = wofs_try_perform_cow(si, addr, index_cur,
+                                    start_index, end_index,
+                                    each_ofs, &each_size,
+                                    ofs, size);
+    WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
+    wofs_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+    if (likely(each_size >= WOFS_LBLK_SZ(sbi))) {
+        if (num_writers > 1) {
+            // regulate only if this is a sequential write pattern
+            // since 3000 latency is for 4KiB sequential write
+            if (each_size == WOFS_LBLK_SZ(sbi)) {
+                struct timespec ts, te;
+                unsigned long threshold = 0;
+                getrawmonotonic(&ts);
+                memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                getrawmonotonic(&te);
 
 #if FIO_REGULATE
+                if (ofs == sih->last_end) {
+                    threshold = 3000;
+                } else {
+                    threshold = 25000;
+                }
+
+                // too much pressure for PM (multi-thread)
+                if (te.tv_nsec - ts.tv_nsec > threshold) {
+                    // wofs_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
+                    usleep_range(10000, 12000);
+                }
+#elif FILESERVER_REGULATE
+                if (num_writers > 4) {
                     if (ofs == sih->last_end) {
-                        threshold = 3000;
+                        threshold = 10000;
                     } else {
                         threshold = 25000;
                     }
 
+                    // wofs_info("duration: %ld\n", te.tv_nsec - ts.tv_nsec);
                     // too much pressure for PM (multi-thread)
                     if (te.tv_nsec - ts.tv_nsec > threshold) {
                         // wofs_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
-                        usleep_range(10000, 12000);
+                        usleep_range(5000, 7000);
                     }
-#elif FILESERVER_REGULATE
-                    if (num_writers > 4) {
-                        if (ofs == sih->last_end) {
-                            threshold = 10000;
-                        } else {
-                            threshold = 25000;
-                        }
-
-                        // wofs_info("duration: %ld\n", te.tv_nsec - ts.tv_nsec);
-                        // too much pressure for PM (multi-thread)
-                        if (te.tv_nsec - ts.tv_nsec > threshold) {
-                            // wofs_warn("memcpy_to_pmem_nocache too much pressure for PM, %ld\n", te.tv_nsec - ts.tv_nsec);
-                            usleep_range(5000, 7000);
-                        }
-                    }
+                }
 #endif
-                } else {
-                    // TODO: larger than 4-KiB
-                    __copy_from_user(addr + each_ofs, content, each_size);
-                    wofs_flush_buffer(addr + each_ofs, each_size, true);
-                }
             } else {
-                if (out_size > 2 * WOFS_LBLK_SZ(sbi)) {
-                    // __copy_from_user(addr + each_ofs, content, each_size);
-                    // wofs_flush_buffer(addr + each_ofs, each_size, true);
-                    memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
-                } else {
-                    // memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-                    memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
-                }
+                // TODO: larger than 4-KiB
+                __copy_from_user(addr + each_ofs, content, each_size);
+                wofs_flush_buffer(addr + each_ofs, each_size, true);
             }
         } else {
-            copy_from_user(addr + each_ofs, content, each_size);
-            wofs_flush_buffer(addr + each_ofs, each_size, false);
-        }
-        wofs_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-        WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-        in_param.bin = false;
-        ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), each_size, blks_prepared, &in_param, &out_param);
-        if (ret) {
-            return ret;
-        }
-
-        *out_size = each_size;
-    } else {
-        struct wofs_inode *pi = wofs_get_inode(sb, inode);
-        for (i = 0; i < prep->blks_prepared; i++) {
-            each_size = WOFS_LBLK_SZ(sbi);
-            each_ofs = ofs & (WOFS_LBLK_SZ(sbi) - 1);
-
-            if (ENABLE_META_LOCAL(sb)) {
-                if (i == 0 || i == prep->blks_prepared - 1) {
-                    is_overlay = wofs_try_perform_cow(si, addr, index_cur,
-                                                    start_index, end_index,
-                                                    each_ofs, &each_size,
-                                                    ofs, size);
-
-                    /* try prefetch hdr/region before writing it */
-                    prefetcht2(sm_get_hdr_by_addr(sb, addr));
-                    /* Prefetch Region */
-                    /* prefetcht2((void *)wofs_get_region_by_ino(sb, inode->i_ino)); */
-
-                    WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-                    wofs_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                    /* Make sure Align 64 */
-                    memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-                    wofs_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                    WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-                    if (ENABLE_META_ASYNC(sb)) {
-                        wofs_valid_hdr_background(sb, inode, addr, index_cur);
-                        if (is_overlay) {
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                            wofs_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
-                        }
-                    } else {
-                        use_layout_for_addr(sb, addr);
-                        sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
-                        unuse_layout_for_addr(sb, addr);
-                        if (is_overlay) {
-                            /* commit the inode */
-                            wofs_commit_newattr_indram(sb, inode);
-
-                            addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-
-                            /* invalid the old one */
-                            use_layout_for_addr(sb, addr_overlayed);
-                            sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
-                            unuse_layout_for_addr(sb, addr_overlayed);
-
-                            wofs_dbgv("Invalid Blk %llu\n", wofs_get_dblk_by_addr(sbi, addr_overlayed));
-                        }
-                    }
-
-                    linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
-
-                    addr += WOFS_PBLK_SZ(sbi);
-                    index_cur += 1;
-                } else {
-                    if (prep->blks_prepared - 2 <= 0) {
-                        continue;
-                    } else {
-                        dst_blks = prep->blks_prepared - 2;
-                        each_size = (dst_blks * WOFS_LBLK_SZ(sbi));
-                    }
-
-                    WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-                    wofs_memunlock_range(sb, addr, each_size, &irq_flags);
-                    memcpy_to_pmem_nocache(addr, content, each_size);
-                    wofs_memlock_range(sb, addr, each_size, &irq_flags);
-                    WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-                    /* minus 1 due to i++ in the for loop */
-                    i += (dst_blks - 1);
-
-                    wofs_init_cmt_batch(sb, &batch, addr, index_cur, dst_blks);
-
-                    while (dst_blks) {
-                        is_overlay = wofs_check_overlay(si, index_cur);
-
-                        wofs_inc_cmt_batch(sb, &batch);
-
-                        if (ENABLE_META_ASYNC(sb)) {
-                            /* do nothing */
-                            if (is_overlay) {
-                                wofs_valid_range_background(sb, inode, &batch);
-                                wofs_next_cmt_batch(sb, &batch);
-
-                                addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                                wofs_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
-                            }
-                        } else {
-                            use_layout_for_addr(sb, addr);
-                            sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
-                            unuse_layout_for_addr(sb, addr);
-                            if (is_overlay) {
-                                wofs_commit_newattr_indram(sb, inode);
-
-                                addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                                /* invalid the old one */
-                                use_layout_for_addr(sb, addr_overlayed);
-                                sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
-                                unuse_layout_for_addr(sb, addr_overlayed);
-
-                                wofs_dbgv("Invalid Blk %llu\n", wofs_get_dblk_by_addr(sbi, addr_overlayed));
-                            }
-                        }
-
-                        linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
-
-                        dst_blks -= 1;
-
-                        addr += WOFS_PBLK_SZ(sbi);
-                        index_cur += 1;
-                    }
-
-                    if (ENABLE_META_ASYNC(sb)) {
-                        if (wofs_is_cmt_batch_valid(sb, &batch)) {
-                            wofs_valid_range_background(sb, inode, &batch);
-                        }
-                    }
-                }
-            } else { /* Default is LFS */
-                is_overlay = wofs_try_perform_cow(si, addr, index_cur,
-                                                start_index, end_index,
-                                                each_ofs, &each_size,
-                                                ofs, size);
-
-                WOFS_START_TIMING(memcpy_w_nvmm_t, memcpy_time);
-                wofs_memunlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
-                wofs_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
-                WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
-
-                if (ENABLE_META_ASYNC(sb)) {
-                    wofs_valid_hdr_background(sb, inode, addr, index_cur);
-                    if (is_overlay) {
-                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-                        wofs_invalid_hdr_background(sb, inode, addr_overlayed, index_cur);
-                    }
-                } else {
-                    use_layout_for_addr(sb, addr);
-                    sm_valid_hdr(sb, addr, sih->ino, index_cur, get_version(sbi));
-                    unuse_layout_for_addr(sb, addr);
-                    if (is_overlay) {
-                        wofs_commit_newattr_indram(sb, inode);
-
-                        addr_overlayed = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, (index_cur << PAGE_SHIFT)));
-
-                        /* invalid the old one */
-                        use_layout_for_addr(sb, addr_overlayed);
-                        sm_invalid_hdr(sb, addr_overlayed, sih->ino); /* Then invalid the old */
-                        unuse_layout_for_addr(sb, addr_overlayed);
-
-                        wofs_dbgv("Invalid Blk %llu\n", wofs_get_dblk_by_addr(sbi, addr_overlayed));
-                    }
-                }
-
-                linix_insert(&sih->ix, index_cur, TRANS_ADDR_TO_OFS(sbi, addr), true);
-
-                addr += WOFS_PBLK_SZ(sbi);
-                index_cur += 1;
+            if (out_size > 2 * WOFS_LBLK_SZ(sbi)) {
+                // __copy_from_user(addr + each_ofs, content, each_size);
+                // wofs_flush_buffer(addr + each_ofs, each_size, true);
+                memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
+            } else {
+                // memcpy_to_pmem_nocache(addr + each_ofs, content, each_size);
+                memcpy_to_pmem_avx_nocache(addr + each_ofs, content, each_size);
             }
-
-            content += each_size;
-            ofs += each_size;
-            size -= each_size;
-            *out_size += each_size;
         }
+    } else {
+        copy_from_user(addr + each_ofs, content, each_size);
+        wofs_flush_buffer(addr + each_ofs, each_size, false);
     }
+    wofs_memlock_range(sb, addr + each_ofs, each_size, &irq_flags);
+    WOFS_END_TIMING(memcpy_w_nvmm_t, memcpy_time);
+
+    in_param.bin = false;
+    ret = create_data_pkg(sbi, sih, addr, (index_cur << PAGE_SHIFT), each_size, blks_prepared, &in_param, &out_param);
+    if (ret) {
+        return ret;
+    }
+
+    *out_size = each_size;
+
     sih->last_end = ofs + size;
     atomic64_fetch_sub_relaxed(1, &sbi->num_writers);
     return 0;
@@ -802,17 +585,6 @@ ssize_t do_wofs_file_write(struct file *filp, const char __user *buf,
     }
 
 out:
-    if (ENABLE_META_ASYNC(sb)) {
-        /* do nothing */
-    } else {
-        if (ENABLE_META_PACK(sb)) {
-            /* Write-Once */
-            /* do nothing */
-        } else {
-            wofs_commit_newattr_indram(sb, inode);
-        }
-    }
-
     WOFS_END_TIMING(write_t, write_time);
     return written ? written : error;
 }
@@ -890,9 +662,6 @@ static int wofs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
     WOFS_START_TIMING(fsync_t, fsync_time);
 
     ret = generic_file_fsync(file, start, end, datasync);
-    if (ENABLE_META_ASYNC(sb)) {
-        wofs_flush_cmt_inode_fast(sb, inode->i_ino);
-    }
 
 persist:
     PERSISTENT_BARRIER();

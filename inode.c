@@ -16,42 +16,6 @@
  */
 #include "wofs.h"
 
-#ifndef CONFIG_PERCORE_IALLOCATOR
-int wofs_init_free_inode_list(struct super_block *sb, bool is_init)
-{
-    struct wofs_inode *pi;
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-    inode_mgr_t *mgr = sbi->inode_mgr;
-    imap_t *imap = &sbi->pack_layout.obj_mgr.prealloc_imap;
-    struct hlist_head *map = imap->map;
-    struct wofs_inode_info_header *cur;
-    int bkt;
-    int i;
-
-    if (is_init) {
-        wofs_range_insert_range(sb, &mgr->ilist, 0, WOFS_NUM_INO - 1);
-    } else {
-        if (ENABLE_META_PACK(sb)) {
-            /* First insert all values */
-            wofs_init_free_inode_list(sb, true);
-            /* Second filter out those existing value */
-            hash_for_each(map, bkt, cur, hnode)
-            {
-                inode_mgr_restore(mgr, cur->ino);
-            }
-        } else {
-            for (i = WOFS_NUM_INO - 1; i >= 0; i--) {
-                pi = wofs_get_inode_by_ino(sb, i);
-                if (!pi->valid) {
-                    wofs_range_insert_value(sb, &sbi->ilist, i);
-                }
-            }
-        }
-    }
-
-    return 0;
-}
-#else
 int wofs_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is_init)
 {
     struct wofs_inode *pi;
@@ -75,21 +39,12 @@ int wofs_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is
     if (is_init) {
         wofs_range_insert_range(sb, &mgr->ilists[cpuid], start_ino, end_ino);
     } else {
-        if (ENABLE_META_PACK(sb)) {
-            /* First insert all values */
-            wofs_init_free_inode_list_percore(sb, cpuid, true);
-            /* Second filter out those existing value */
-            hash_for_each(imap->map, bkt, cur, hnode)
-            {
-                inode_mgr_restore(mgr, cur->ino);
-            }
-        } else {
-            for (i = end_ino; i >= start_ino; i--) {
-                pi = wofs_get_inode_by_ino(sb, i);
-                if (!pi->valid) {
-                    wofs_range_insert_value(sb, &mgr->ilists[cpuid], i);
-                }
-            }
+        /* First insert all values */
+        wofs_init_free_inode_list_percore(sb, cpuid, true);
+        /* Second filter out those existing value */
+        hash_for_each(imap->map, bkt, cur, hnode)
+        {
+            inode_mgr_restore(mgr, cur->ino);
         }
     }
 
@@ -97,7 +52,6 @@ int wofs_init_free_inode_list_percore(struct super_block *sb, int cpuid, bool is
 
     return 0;
 }
-#endif
 
 static int wofs_free_dram_resource(struct super_block *sb,
                                  struct wofs_inode_info_header *sih)
@@ -126,7 +80,6 @@ static int wofs_free_dram_resource(struct super_block *sb,
 int __wofs_free_inode_blks(struct super_block *sb, struct wofs_inode *pi,
                          struct wofs_inode_info_header *sih)
 {
-    int freed = 0;
     u64 blk_addr;
     unsigned long irq_flags = 0;
     struct wofs_sb_info *sbi = WOFS_SB(sb);
@@ -136,38 +89,20 @@ int __wofs_free_inode_blks(struct super_block *sb, struct wofs_inode *pi,
     /* TODO: pass in wofs_inode_info instead of wofs_inode_info_header */
     // si = container_of(sih, struct wofs_inode_info, header);
     // inode = &si->vfs_inode;
-    if (ENABLE_META_PACK(sb)) {
-        /* Do Nothing */
-        obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
-        data_update_t update;
+    /* Do Nothing */
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
+    data_update_t update;
 
-        update.ofs = 0;
-        update.num = ((sih->i_size - 1) >> PAGE_SHIFT) + 1;
+    update.ofs = 0;
+    update.num = ((sih->i_size - 1) >> PAGE_SHIFT) + 1;
 
-        wofs_dbgv("free %d pages for ino %lu\n", update.num, sih->ino);
-        
-        while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
-            ;
-        }
-
-        freed = update.num;
-    } else {
-        traverse_inode_hdr(sbi, pi, hdr)
-        {
-            if (ENABLE_META_ASYNC(sb)) {
-                blk_addr = sm_get_addr_by_hdr(sb, hdr);
-                wofs_invalid_hdr_background(sb, inode, blk_addr, hdr->f_blk);
-            } else {
-                wofs_memunlock_hdr(sb, hdr, &irq_flags);
-                hdr->valid = 0;
-                wofs_memlock_hdr(sb, hdr, &irq_flags);
-                wofs_flush_buffer(hdr, sizeof(struct wofs_header), false);
-            }
-            freed += WOFS_PBLK_SZ(sbi);
-        }
+    wofs_dbgv("free %d pages for ino %lu\n", update.num, sih->ino);
+    
+    while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
+        ;
     }
-
-    return freed;
+ 
+    return update.num;
 }
 
 int wofs_free_inode_blks(struct super_block *sb, struct wofs_inode *pi,
@@ -206,16 +141,12 @@ static int wofs_free_inode(struct super_block *sb, struct wofs_inode_info_header
     WOFS_START_TIMING(free_inode_t, free_time);
 
     sih->i_mode = 0;
-    if (ENABLE_META_PACK(sb)) {
-        if (sih->pack_spec.latest_fop.latest_attr)
-            ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
-        if (sih->pack_spec.latest_fop.latest_inode)
-            ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
-        sih->pack_spec.latest_fop.latest_attr = NULL;
-        sih->pack_spec.latest_fop.latest_inode = NULL;
-    } else {
-        sih->norm_spec.pi_addr = 0;
-    }
+    if (sih->pack_spec.latest_fop.latest_attr)
+        ref_attr_destroy(sih->pack_spec.latest_fop.latest_attr);
+    if (sih->pack_spec.latest_fop.latest_inode)
+        ref_inode_destroy(sih->pack_spec.latest_fop.latest_inode);
+    sih->pack_spec.latest_fop.latest_attr = NULL;
+    sih->pack_spec.latest_fop.latest_inode = NULL;
     sih->i_size = 0;
     sih->i_blocks = 0;
 
@@ -232,22 +163,7 @@ static int wofs_free_inode_resource(struct super_block *sb, struct wofs_inode *p
     int freed = 0;
     unsigned long irq_flags = 0;
 
-    if (ENABLE_META_PACK(sb)) {
-        wofs_free_inode_blks(sb, NULL, sih);
-    } else {
-        wofs_memunlock_inode(sb, pi, &irq_flags);
-        pi->valid = 0;
-        if (pi->valid) {
-            wofs_dbg("%s: inode %lu still valid\n",
-                __func__, sih->ino);
-            pi->valid = 0;
-        }
-        wofs_flush_buffer(pi, sizeof(struct wofs_inode), false);
-        wofs_memlock_inode(sb, pi, &irq_flags);
-
-        /* invalid blks hdr belongs to inode */
-        wofs_free_inode_blks(sb, pi, sih);
-    }
+    wofs_free_inode_blks(sb, NULL, sih);
     
     freed = wofs_free_dram_resource(sb, sih);
 
@@ -256,10 +172,8 @@ static int wofs_free_inode_resource(struct super_block *sb, struct wofs_inode *p
     /* NOTE: we must unload sih first, or wofs_create() will re-hold */ 
     /* the sih if wofs_free_inode() is called first since inode number */
     /* does not be held by sih, and can be allocated. */
-    if (ENABLE_META_PACK(sb)) {
-        obj_mgr_t *obj_mgr = WOFS_SB(sb)->pack_layout.obj_mgr;
-        obj_mgr_unload_imap_control(obj_mgr, sih);
-    }
+    obj_mgr_t *obj_mgr = WOFS_SB(sb)->pack_layout.obj_mgr;
+    obj_mgr_unload_imap_control(obj_mgr, sih);
 
     sih->si->header = NULL;
     /* Then we can free the inode */
@@ -304,48 +218,18 @@ void wofs_evict_inode(struct inode *inode)
 
     wofs_dbgv("%s: %lu\n", __func__, inode->i_ino);
     
-    if (ENABLE_META_PACK(sb)) {
-        if (!inode->i_nlink && !is_bad_inode(inode)) {
-            if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
-                goto out;
+    if (!inode->i_nlink && !is_bad_inode(inode)) {
+        if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+            goto out;
 
-            ret = wofs_free_inode_resource(sb, NULL, sih);
-            if (ret)
-                goto out;
+        ret = wofs_free_inode_resource(sb, NULL, sih);
+        if (ret)
+            goto out;
 
-            destroy = 1;
+        destroy = 1;
 
-            inode->i_mtime = inode->i_ctime = current_time(inode);
-            inode->i_size = 0;
-        }
-    } else {
-        struct wofs_inode *pi = wofs_get_inode(sb, inode);
-        // pi can be NULL if the file has already been deleted, but a handle
-        // remains.
-        if (pi && pi->ino != inode->i_ino) {
-            wofs_err(sb, "%s: inode %lu ino does not match: %llu\n",
-                __func__, inode->i_ino, pi->ino);
-            wofs_dbg("sih: ino %lu, inode size %lu, mode %u, inode mode %u\n",
-                sih->ino, sih->i_size,
-                sih->i_mode, inode->i_mode);
-        }
-
-        if (!inode->i_nlink && !is_bad_inode(inode)) {
-            if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
-                goto out;
-
-            if (pi) {
-                ret = wofs_free_inode_resource(sb, pi, sih);
-                if (ret)
-                    goto out;
-            }
-
-            destroy = 1;
-            pi = NULL; /* we no longer own the wofs_inode */
-
-            inode->i_mtime = inode->i_ctime = current_time(inode);
-            inode->i_size = 0;
-        }
+        inode->i_mtime = inode->i_ctime = current_time(inode);
+        inode->i_size = 0;
     }
 out:
     if (destroy == 0) {
@@ -458,53 +342,28 @@ static int wofs_build_vfs_inode(struct super_block *sb, struct inode *inode,
     dev_t rdev;
     int ret = -EIO;
 
-    if (ENABLE_META_PACK(sb)) {
-        u64 create_pkg_addr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr);
-        struct wofs_obj_inode *obj_inode = (struct wofs_obj_inode *)create_pkg_addr;
+    u64 create_pkg_addr = get_pm_addr(sbi, sih->pack_spec.latest_fop.latest_inode->hdr.addr);
+    struct wofs_obj_inode *obj_inode = (struct wofs_obj_inode *)create_pkg_addr;
 
-        inode->i_mode = sih->i_mode;
-        i_uid_write(inode, sih->i_uid);
-        i_gid_write(inode, sih->i_gid);
+    inode->i_mode = sih->i_mode;
+    i_uid_write(inode, sih->i_uid);
+    i_gid_write(inode, sih->i_gid);
 
-        inode->i_generation = obj_inode->i_generation;
-        wofs_set_inode_flags(inode, obj_inode->i_xattr, le32_to_cpu(obj_inode->i_flags));
+    inode->i_generation = obj_inode->i_generation;
+    wofs_set_inode_flags(inode, obj_inode->i_xattr, le32_to_cpu(obj_inode->i_flags));
 
-        inode->i_blocks = sih->i_blocks;
-        inode->i_mapping->a_ops = &wofs_aops_dax;
+    inode->i_blocks = sih->i_blocks;
+    inode->i_mapping->a_ops = &wofs_aops_dax;
 
-        /* Update size and time after rebuild the tree */
-        inode->i_size = le64_to_cpu(sih->i_size);
-        inode->i_atime.tv_sec = (__s32)le32_to_cpu(sih->i_atime);
-        inode->i_ctime.tv_sec = (__s32)le32_to_cpu(sih->i_ctime);
-        inode->i_mtime.tv_sec = (__s32)le32_to_cpu(sih->i_mtime);
-        inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
-            inode->i_ctime.tv_nsec = 0;
-        set_nlink(inode, le16_to_cpu(sih->i_links_count));
-        rdev = le32_to_cpu(obj_inode->dev.rdev);
-    } else {
-        struct wofs_inode *pi;
-        pi = wofs_get_inode_by_ino(sb, ino);
-
-        inode->i_mode = sih->i_mode;
-        i_uid_write(inode, le32_to_cpu(pi->i_uid));
-        i_gid_write(inode, le32_to_cpu(pi->i_gid));
-
-        inode->i_generation = le32_to_cpu(pi->i_generation);
-        wofs_set_inode_flags(inode, pi->i_xattr, le32_to_cpu(pi->i_flags));
-
-        inode->i_blocks = sih->i_blocks;
-        inode->i_mapping->a_ops = &wofs_aops_dax;
-
-        /* Update size and time after rebuild the tree */
-        inode->i_size = le64_to_cpu(sih->i_size);
-        inode->i_atime.tv_sec = (__s32)le32_to_cpu(pi->i_atime);
-        inode->i_ctime.tv_sec = (__s32)le32_to_cpu(pi->i_ctime);
-        inode->i_mtime.tv_sec = (__s32)le32_to_cpu(pi->i_mtime);
-        inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
-            inode->i_ctime.tv_nsec = 0;
-        set_nlink(inode, le16_to_cpu(pi->i_links_count));
-        rdev = le32_to_cpu(pi->dev.rdev);
-    }
+    /* Update size and time after rebuild the tree */
+    inode->i_size = le64_to_cpu(sih->i_size);
+    inode->i_atime.tv_sec = (__s32)le32_to_cpu(sih->i_atime);
+    inode->i_ctime.tv_sec = (__s32)le32_to_cpu(sih->i_ctime);
+    inode->i_mtime.tv_sec = (__s32)le32_to_cpu(sih->i_mtime);
+    inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec =
+        inode->i_ctime.tv_nsec = 0;
+    set_nlink(inode, le16_to_cpu(sih->i_links_count));
+    rdev = le32_to_cpu(obj_inode->dev.rdev);
 
     switch (inode->i_mode & S_IFMT) {
     case S_IFREG:
@@ -530,55 +389,6 @@ bad_inode:
     make_bad_inode(inode);
     return ret;
 }
-
-#if 0
-u64 wofs_get_new_ino(struct super_block *sb)
-{
-    u64 ino = (u64)-1;
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-	u64 len = 1;
-
-    INIT_TIMING(new_wofs_ino_time);
-
-    WOFS_START_TIMING(new_WOFS_inode_t, new_wofs_ino_time);
-
-#ifndef CONFIG_PERCORE_IALLOCATOR
-    mutex_lock(&sbi->ilist_lock);
-    if (unlikely(list_empty(&sbi->ilist))) {
-        wofs_init_free_inode_list(sb, false);
-    }
-    ino = wofs_range_pop(&sbi->ilist);
-    mutex_unlock(&sbi->ilist_lock);
-#else
-    int cpuid, start_cpuid;
-
-    cpuid = wofs_get_cpuid(sb);
-    start_cpuid = cpuid;
-
-    do {
-        mutex_lock(&sbi->ilist_locks[cpuid]);
-        if (unlikely(sbi->ilist_init[cpuid] == false)) {
-            wofs_init_free_inode_list_percore(sb, cpuid, false);
-        }
-        if (!list_empty(&sbi->ilists[cpuid])) {
-            ino = wofs_range_pop(&sbi->ilists[cpuid], &len);
-            mutex_unlock(&sbi->ilist_locks[cpuid]);
-            break;
-        }
-        mutex_unlock(&sbi->ilist_locks[cpuid]);
-        cpuid = (cpuid + 1) % sbi->cpus;
-    } while (cpuid != start_cpuid);
-
-#endif
-    if (ino == (u64)-1) {
-        wofs_info("No free inode\n");
-        BUG_ON(1);
-    }
-
-    WOFS_END_TIMING(new_WOFS_inode_t, new_wofs_ino_time);
-    return ino;
-}
-#endif
 
 /* lazy allocator */
 int inode_mgr_init(struct wofs_sb_info *sbi, inode_mgr_t *mgr)
@@ -794,36 +604,9 @@ struct inode *wofs_create_inode(enum wofs_new_inode_type type, struct inode *dir
     sih->si = si;
     sih->i_flags = le32_to_cpu(i_flags);
 
-    if (ENABLE_META_PACK(sb)) {
-        i_xattr = 0;
-        sih->i_uid = i_uid_read(inode);
-        sih->i_gid = i_gid_read(inode);
-    } else {
-        struct wofs_inode *diri = NULL;
-        struct wofs_inode *pi;
-
-        diri = wofs_get_inode(sb, dir);
-        if (!diri) {
-            errval = -EACCES;
-            goto fail1;
-        }
-
-        pi = (struct wofs_inode *)wofs_get_inode_by_ino(sb, ino);
-        wofs_dbg_verbose("%s: allocating inode %llu @ 0x%llx\n",
-                       __func__, ino, (u64)pi);
-
-        wofs_memunlock_inode(sb, pi, &irq_flags);
-        pi->i_flags = wofs_mask_flags(mode, diri->i_flags);
-        pi->ino = ino;
-        pi->i_create_time = current_time(inode).tv_sec;
-        wofs_init_inode(inode, pi);
-        wofs_flush_buffer(pi, sizeof(struct wofs_inode), false);
-        wofs_memlock_inode(sb, pi, &irq_flags);
-
-        sih->norm_spec.pi_addr = (u64)pi;
-        sih->norm_spec.tstamp = le64_to_cpu(pi->tstamp);
-        i_xattr = 0;
-    }
+    i_xattr = 0;
+    sih->i_uid = i_uid_read(inode);
+    sih->i_gid = i_gid_read(inode);
 
     wofs_set_inode_flags(inode, i_xattr, le32_to_cpu(i_flags));
 
@@ -851,20 +634,15 @@ static int wofs_handle_setattr_operation(struct super_block *sb, struct inode *i
     struct wofs_inode_info *si = WOFS_I(inode);
     struct wofs_inode_info_header *sih = si->header;
     struct wofs_sb_info *sbi = WOFS_SB(sb);
+    in_pkg_param_t param;
+    out_pkg_param_t out_param;
     int ret = 0;
 
     if (ia_valid & ATTR_MODE)
         sih->i_mode = inode->i_mode;
-    if (ENABLE_META_PACK(sb)) {
-        in_pkg_param_t param;
-        out_pkg_param_t out_param;
 
-        ret = create_attr_pkg(sbi, sih, 0, attr->ia_size - inode->i_size,
-                              &param, &out_param);
-    } else {
-        ret = wofs_commit_sizechange(sb, inode, attr->ia_size);
-    }
-
+    ret = create_attr_pkg(sbi, sih, 0, attr->ia_size - inode->i_size,
+                            &param, &out_param);
     return ret;
 }
 
@@ -882,6 +660,7 @@ void wofs_prepare_truncate(struct super_block *sb,
     unsigned long offset = newsize & (sb->s_blocksize - 1);
     unsigned long index, length;
     unsigned long irq_flags = 0;
+    obj_ref_data_t *ref = NULL;
 
     if (offset == 0 || newsize > inode->i_size)
         return;
@@ -889,13 +668,8 @@ void wofs_prepare_truncate(struct super_block *sb,
     length = sb->s_blocksize - offset;
     index = newsize >> sb->s_blocksize_bits;
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_ref_data_t *ref = NULL;
-        ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, index << PAGE_SHIFT);
-        addr = get_pm_addr_by_data_ref(sbi, ref, index << PAGE_SHIFT);
-    } else {
-        addr = TRANS_OFS_TO_ADDR(sbi, (u64)wofs_inode_get_slot(sih, index << PAGE_SHIFT));
-    }
+    ref = (obj_ref_data_t *)wofs_inode_get_slot(sih, index << PAGE_SHIFT);
+    addr = get_pm_addr_by_data_ref(sbi, ref, index << PAGE_SHIFT);
 
     if (addr == 0)
         return;
@@ -935,34 +709,17 @@ static void wofs_truncate_file_blocks(struct inode *inode, loff_t start, loff_t 
     if (start_index > end_index)
         return;
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
-        data_update_t update;
+    obj_mgr_t *obj_mgr = sbi->pack_layout.obj_mgr;
+    data_update_t update;
 
-        update.ofs = start_index << PAGE_SHIFT;
-        update.num = end_index - start_index + 1;
+    update.ofs = start_index << PAGE_SHIFT;
+    update.num = end_index - start_index + 1;
 
-        while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
-            ;
-        }
-
-        freed = update.num;
-    } else {
-        /* the inode lock is already held */
-        /* It's OK to not use invalidator because it's in reverse order  */
-        for (index = end_index; index >= start_index; index--) {
-            addr = TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, index));
-            linix_delete(&sih->ix, index, index, true);
-            if (ENABLE_META_ASYNC(sb)) {
-                wofs_invalid_hdr_background(sb, inode, addr, index);
-            } else {
-                use_layout_for_addr(sb, addr);
-                sm_invalid_hdr(sb, addr, sih->ino);
-                unuse_layout_for_addr(sb, addr);
-            }
-            freed++;
-        }
+    while (reclaim_dram_data(obj_mgr, sih, &update) == -EAGAIN) {
+        ;
     }
+
+    freed = update.num;
 
     inode->i_blocks -= (freed * (1 << (data_bits -
                                        sb->s_blocksize_bits)));
@@ -1104,19 +861,6 @@ struct inode *wofs_iget(struct super_block *sb, unsigned long ino)
 
     wofs_dbgv("%s: inode %lu\n", __func__, ino);
 
-    if (ENABLE_META_PACK(sb)) {
-        /* Do nothing */
-    } else {
-        struct wofs_inode *pi;
-        pi = wofs_get_inode_by_ino(sb, ino);
-        if (!pi) {
-            wofs_dbg("%s: failed to get inode %lu, only supports up to %lu\n",
-                   __func__, ino, WOFS_NUM_INO - 1);
-            err = -EACCES;
-            goto fail;
-        }
-    }
-
     err = wofs_rebuild_inode(sb, si, ino, true);
     if (err) {
         wofs_dbg("%s: failed to rebuild inode %lu, ret %d\n", __func__, ino, err);
@@ -1145,25 +889,21 @@ void *wofs_inode_get_slot(struct wofs_inode_info_header *sih, u64 offset)
     struct super_block *sb = si->vfs_inode.i_sb;
     u32 ofs_blk = GET_ALIGNED_BLKNR(offset);
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_ref_data_t *ref = NULL;
-        u32 blk;
+    obj_ref_data_t *ref = NULL;
+    u32 blk;
 
-        ref = (obj_ref_data_t *)linix_get(&sih->ix, ofs_blk);
-        if (!ref) {
-            return NULL;
-        }
-
-        /* check if offset is in ref */
-        if (offset >= ref->ofs && offset < ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT)) {
-            return ref;
-        }
-
-        wofs_dbg("offset %lu (%lu) is not in ref [%lu, %lu] ([%lu, %lu]), inconsistency happened\n", offset, ofs_blk, ref->ofs, ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT), GET_ALIGNED_BLKNR(ref->ofs), GET_ALIGNED_BLKNR(ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT)));
-        BUG_ON(1);
-    } else {
-        return (void *)linix_get(&sih->ix, ofs_blk);
+    ref = (obj_ref_data_t *)linix_get(&sih->ix, ofs_blk);
+    if (!ref) {
+        return NULL;
     }
+
+    /* check if offset is in ref */
+    if (offset >= ref->ofs && offset < ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT)) {
+        return ref;
+    }
+
+    wofs_dbg("offset %lu (%lu) is not in ref [%lu, %lu] ([%lu, %lu]), inconsistency happened\n", offset, ofs_blk, ref->ofs, ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT), GET_ALIGNED_BLKNR(ref->ofs), GET_ALIGNED_BLKNR(ref->ofs + ((u64)ref->num << WOFS_BLK_SHIFT)));
+    BUG_ON(1);
 
     return NULL;
 }

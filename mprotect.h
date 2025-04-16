@@ -153,58 +153,6 @@ static inline void wofs_memlock_super(struct super_block *sb, int n, unsigned lo
 		__wofs_memlock_range(ps, WOFS_SB_SIZE(sbi), flags);
 }
 
-static inline void wofs_memunlock_hdr(struct super_block *sb, 
-									struct wofs_header *hdr, unsigned long *flags)
-{
-	if (wofs_range_check(sb, hdr, sizeof(struct wofs_header)))
-		return;
-
-	if (wofs_is_protected(sb))
-		__wofs_memunlock_range(hdr, sizeof(struct wofs_header), flags);
-}
-
-static inline void wofs_memlock_hdr(struct super_block *sb,
-				       			  struct wofs_header *hdr, unsigned long *flags)
-{
-	if (wofs_is_protected(sb))
-		__wofs_memlock_range(hdr, sizeof(struct wofs_header), flags);
-}
-
-static inline void wofs_memunlock_mregion(struct super_block *sb, 
-									struct wofs_mregion *rg, unsigned long *flags)
-{
-	if (wofs_range_check(sb, rg, sizeof(struct wofs_mregion)))
-		return;
-
-	if (wofs_is_protected(sb))
-		__wofs_memunlock_range(rg, sizeof(struct wofs_mregion), flags);
-}
-
-static inline void wofs_memlock_mregion(struct super_block *sb,
-				       			  struct wofs_mregion *rg, unsigned long *flags)
-{
-	if (wofs_is_protected(sb))
-		__wofs_memlock_range(rg, sizeof(struct wofs_mregion), flags);
-}
-
-static inline void wofs_memunlock_journal(struct super_block *sb, 
-									struct wofs_journal *jnl, unsigned long *flags)
-{
-	if (wofs_range_check(sb, jnl, sizeof(struct wofs_journal)))
-		return;
-
-	if (wofs_is_protected(sb))
-		__wofs_memunlock_range(jnl, sizeof(struct wofs_journal), flags);
-}
-
-static inline void wofs_memlock_journal(struct super_block *sb,
-				       			  struct wofs_journal *jnl, unsigned long *flags)
-{
-	if (wofs_is_protected(sb))
-		__wofs_memlock_range(jnl, sizeof(struct wofs_journal), flags);
-}
-
-
 static inline void wofs_memunlock_dentry(struct super_block *sb, 
 									   struct wofs_dentry *direntry, unsigned long *flags)
 {

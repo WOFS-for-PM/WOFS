@@ -69,17 +69,8 @@ static struct inode *wofs_alloc_inode(struct super_block *sb)
     if (!vi)
         return NULL;
     
-    if (ENABLE_META_PACK(sb)) {
-        vi->layout_type = WOFS_MOUNT_META_PACK;
-        vi->header = NULL;
-    } else {
-        vi->layout_type = ~WOFS_MOUNT_META_PACK;
-        vi->header = wofs_alloc_wofs_inode_info_header();
-        if (!vi->header) {
-            kmem_cache_free(wofs_inode_cachep, vi);
-            return NULL;
-        }
-    }
+    vi->layout_type = WOFS_MOUNT_META_PACK;
+    vi->header = NULL;
 
     atomic64_set(&vi->vfs_inode.i_version, 1);
 
@@ -446,15 +437,10 @@ static inline void wofs_mount_over(struct super_block *sb)
 static inline void wofs_umount_over(struct super_block *sb)
 {
     struct wofs_sb_info *sbi = WOFS_SB(sb);
-    
-    if (ENABLE_META_PACK(sb)) {
-        struct wofs_pack_data *pd;
-        pd = (struct wofs_pack_data *)(sbi->wofs_sb + sizeof(struct wofs_super_block));
-    } else {
-        struct wofs_normal_data *nd;
-        nd = (struct wofs_normal_data *)(sbi->wofs_sb + sizeof(struct wofs_super_block));
-        nd->s_tstamp = sbi->norm_layout.tstamp;
-    }
+    struct wofs_pack_data *pd;
+
+    pd = (struct wofs_pack_data *)(sbi->wofs_sb + sizeof(struct wofs_super_block));
+
     sbi->wofs_sb->s_valid_umount = cpu_to_le32(WOFS_VALID_UMOUNT);
     wofs_update_super_crc(sb);
 
@@ -525,50 +511,25 @@ static struct wofs_inode *wofs_init(struct super_block *sb,
     /* Flush In-DRAM superblock into NVM */
     wofs_sync_super(sb);
 
-    if (ENABLE_META_PACK(sb)) {
-        in_pkg_param_t create_param;
-        in_create_pkg_param_t in_create_param;
-        out_pkg_param_t out_param;
-        out_create_pkg_param_t out_create_param;
-        
-        inode_mgr_restore(sbi->inode_mgr, WOFS_ROOT_INO);
-        in_create_param.create_type = CREATE_FOR_NORMAL;
-        in_create_param.new_ino = WOFS_ROOT_INO;
-        create_param.private = &in_create_param;
-        out_param.private = &out_create_param;
-        create_param.cur_pkg_addr = 0;
-        create_param.bin = false;
-        ret = create_new_inode_pkg(sbi, cpu_to_le16(sbi->mode | S_IFDIR), "/", sbi->pack_layout.rih, NULL, &create_param, &out_param);
+    in_pkg_param_t create_param;
+    in_create_pkg_param_t in_create_param;
+    out_pkg_param_t out_param;
+    out_create_pkg_param_t out_create_param;
+    
+    inode_mgr_restore(sbi->inode_mgr, WOFS_ROOT_INO);
+    in_create_param.create_type = CREATE_FOR_NORMAL;
+    in_create_param.new_ino = WOFS_ROOT_INO;
+    create_param.private = &in_create_param;
+    out_param.private = &out_create_param;
+    create_param.cur_pkg_addr = 0;
+    create_param.bin = false;
+    ret = create_new_inode_pkg(sbi, cpu_to_le16(sbi->mode | S_IFDIR), "/", sbi->pack_layout.rih, NULL, &create_param, &out_param);
 
-        if (ret) {
-            wofs_err(sb, "Create root inode failed\n");
-            return ERR_PTR(ret);
-        }
-        wofs_info("Root Inode is initialized at %lx\n", get_pm_offset(sbi, out_param.addr));
-    } else {
-        root_pi = wofs_get_inode_by_ino(sb, WOFS_ROOT_INO);
-        wofs_dbgv("%s: Allocate root inode @ 0x%p\n", __func__, root_pi);
-
-        wofs_memunlock_inode(sb, root_pi, &irq_flags);
-        root_pi->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
-        root_pi->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
-        root_pi->i_gid = cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
-        root_pi->i_links_count = cpu_to_le16(2);
-        root_pi->i_flags = 0;
-        root_pi->i_size = cpu_to_le64(sb->s_blocksize);
-        root_pi->i_atime = root_pi->i_mtime = root_pi->i_ctime = cpu_to_le32(get_seconds());
-#ifndef CONFIG_PERCORE_IALLOCATOR
-        inode_mgr_alloc(&sbi->inode_mgr, &root_pi->ino);
-#else
-        root_pi->ino = cpu_to_le64(0);
-#endif
-        root_pi->valid = 1;
-        wofs_memlock_inode(sb, root_pi, &irq_flags);
-
-        /* We don't care the order */
-        wofs_flush_buffer(root_pi, sizeof(struct wofs_inode), false);
-        PERSISTENT_BARRIER();
+    if (ret) {
+        wofs_err(sb, "Create root inode failed\n");
+        return ERR_PTR(ret);
     }
+    wofs_info("Root Inode is initialized at %lx\n", get_pm_offset(sbi, out_param.addr));
 
     WOFS_END_TIMING(new_init_t, init_time);
     wofs_info("hk initialization finish\n");
@@ -639,49 +600,11 @@ static int wofs_super_constants_init(struct wofs_sb_info *sbi)
     int i;
     
     sbi->lblk_sz = PAGE_SIZE;
-    if (ENABLE_META_PACK(sb)) {
-        sbi->pblk_sz = PAGE_SIZE;
-        sbi->m_addr = sbi->pack_layout.bm_start = _round_up((u64)sbi->virt_addr + WOFS_SUPER_BLKS * WOFS_SB_SIZE(sbi), PAGE_SIZE);
-        sbi->pack_layout.tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
-        sbi->m_size = sbi->pack_layout.bm_size = wofs_get_bm_size(sb);
-        sbi->pack_layout.fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
-    } else {
-        sbi->pblk_sz = ENABLE_META_LOCAL(sb) ? PAGE_SIZE : PAGE_SIZE + sizeof(struct wofs_header);
-
-        /* Layout Related */
-        sbi->m_addr = _round_up((u64)sbi->virt_addr + WOFS_SUPER_BLKS * WOFS_SB_SIZE(sbi), PAGE_SIZE);
-
-        /* Build Inode Table */
-        sbi->norm_layout.ino_tab_addr = sbi->m_addr;
-        sbi->norm_layout.ino_tab_slots = WOFS_NUM_INO;
-        sbi->norm_layout.ino_tab_size = _round_up(sbi->norm_layout.ino_tab_slots * sizeof(struct wofs_inode), PAGE_SIZE);
-
-        /* Build Summary Header */
-        sbi->norm_layout.sm_addr = sbi->norm_layout.ino_tab_addr + sbi->norm_layout.ino_tab_size;
-        if (ENABLE_META_LOCAL(sb)) {
-            sbi->norm_layout.sm_slots = sbi->initsize / WOFS_PBLK_SZ(sbi);
-            sbi->norm_layout.sm_size = _round_up(sbi->norm_layout.sm_slots * sizeof(struct wofs_header), PAGE_SIZE);
-        } else {
-            sbi->norm_layout.sm_slots = 0;
-            sbi->norm_layout.sm_size = 0;
-        }
-
-        /* Build Journal */
-        sbi->norm_layout.j_addr = sbi->norm_layout.sm_addr + sbi->norm_layout.sm_size;
-        sbi->norm_layout.j_slots = sbi->cpus * WOFS_PERCORE_JSLOTS;
-        sbi->norm_layout.j_size = _round_up(sbi->norm_layout.j_slots * WOFS_JOURNAL_SIZE, PAGE_SIZE);
-        sbi->norm_layout.j_locks = kcalloc(sbi->norm_layout.j_slots, sizeof(struct mutex), GFP_KERNEL);
-        for (i = 0; i < sbi->norm_layout.j_slots; i++)
-            mutex_init(&sbi->norm_layout.j_locks[i]);
-
-        /* Build Meta Region */
-        sbi->norm_layout.rg_addr = sbi->norm_layout.j_addr + sbi->norm_layout.j_size;
-        sbi->norm_layout.rg_slots = WOFS_RG_SLOTS > WOFS_NUM_INO ? WOFS_NUM_INO : WOFS_RG_SLOTS;
-        sbi->pack_layout.obj_mgr = _round_up(sbi->norm_layout.rg_slots * sizeof(struct wofs_mregion), PAGE_SIZE);
-
-        /* Calc Meta Size and Data Size */
-        sbi->m_size = _round_up(sbi->norm_layout.rg_addr - sbi->m_addr + sbi->pack_layout.obj_mgr, PAGE_SIZE);
-    }
+    sbi->pblk_sz = PAGE_SIZE;
+    sbi->m_addr = sbi->pack_layout.bm_start = _round_up((u64)sbi->virt_addr + WOFS_SUPER_BLKS * WOFS_SB_SIZE(sbi), PAGE_SIZE);
+    sbi->pack_layout.tl_per_type_bm_reserved_blks = (_round_up(((sbi->initsize >> PAGE_SHIFT) >> 3), PAGE_SIZE) >> PAGE_SHIFT);
+    sbi->m_size = sbi->pack_layout.bm_size = wofs_get_bm_size(sb);
+    sbi->pack_layout.fs_start = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
 
     sbi->d_addr = _round_up(sbi->m_addr + sbi->m_size, PAGE_SIZE);
     sbi->d_size = sbi->initsize - (sbi->d_addr - (u64)sbi->virt_addr);
@@ -719,34 +642,17 @@ static int wofs_features_init(struct wofs_sb_info *sbi)
     if (ret < 0)
         return ret;
     
-    if (ENABLE_META_PACK(sb)) {
-        /* zero out vtail */
-        atomic64_and(0, &sbi->pack_layout.vtail);
-        sbi->pack_layout.obj_mgr = (struct obj_mgr *)kmalloc(sizeof(struct obj_mgr), GFP_KERNEL);
-        if (!sbi->pack_layout.obj_mgr) {
-            inode_mgr_destroy(sbi->inode_mgr);
-            return -ENOMEM;
-        }
-        ret = obj_mgr_init(sbi, sbi->cpus, sbi->pack_layout.obj_mgr);
-        if (ret) {
-            inode_mgr_destroy(sbi->inode_mgr);
-            return ret;
-        }
-    } else
-    {    
-        sbi->norm_layout.irange_locks = kcalloc(sbi->cpus, sizeof(struct mutex), GFP_KERNEL);
-        for (i = 0; i < sbi->cpus; i++)
-            mutex_init(&sbi->norm_layout.irange_locks[i]);
-        /* Version Related */
-        sbi->norm_layout.tstamp = 0;
-        spin_lock_init(&sbi->norm_layout.ts_lock);
+    /* zero out vtail */
+    atomic64_and(0, &sbi->pack_layout.vtail);
+    sbi->pack_layout.obj_mgr = (struct obj_mgr *)kmalloc(sizeof(struct obj_mgr), GFP_KERNEL);
+    if (!sbi->pack_layout.obj_mgr) {
+        inode_mgr_destroy(sbi->inode_mgr);
+        return -ENOMEM;
     }
-
-    /* Background Commit Related */
-    if (ENABLE_META_ASYNC(sb)) {
-        sbi->cq = wofs_init_cmt_queue(sb, 4);
-        if (!sbi->cq)
-            return -ENOMEM;
+    ret = obj_mgr_init(sbi, sbi->cpus, sbi->pack_layout.obj_mgr);
+    if (ret) {
+        inode_mgr_destroy(sbi->inode_mgr);
+        return ret;
     }
 
     if (ENABLE_HISTORY_W(sb)) {
@@ -761,11 +667,7 @@ static int wofs_features_exit(struct wofs_sb_info *sbi)
 {
     struct super_block *sb = sbi->sb;
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_mgr_destroy(sbi->pack_layout.obj_mgr);
-    } else {
-        kfree(sbi->norm_layout.irange_locks);
-    }
+    obj_mgr_destroy(sbi->pack_layout.obj_mgr);
 
     inode_mgr_destroy(sbi->inode_mgr);
 
@@ -781,21 +683,17 @@ static int wofs_misc_init(struct wofs_sb_info *sbi)
 
     sbi->wofs_sb->s_private_data = sizeof(struct wofs_super_block);
     sbi->pack_layout.rih = NULL;
-    if (ENABLE_META_PACK(sb)) {
-        sbi->wofs_sb->s_private_data_len = sizeof(struct wofs_pack_data);
-        if (sbi->s_mount_opt & WOFS_MOUNT_FORMAT) {
-            sbi->pack_layout.rih = wofs_alloc_wofs_inode_info_header();
-            if (!sbi->pack_layout.rih)
-                return -ENOMEM;
-            /* do not init dyn array */
-            wofs_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
-            /* reinit modes */
-            sbi->pack_layout.rih->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
-            sbi->pack_layout.rih->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
-            sbi->pack_layout.rih->i_gid= cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
-        }
-    } else {
-        sbi->wofs_sb->s_private_data_len = sizeof(struct wofs_normal_data);
+    sbi->wofs_sb->s_private_data_len = sizeof(struct wofs_pack_data);
+    if (sbi->s_mount_opt & WOFS_MOUNT_FORMAT) {
+        sbi->pack_layout.rih = wofs_alloc_wofs_inode_info_header();
+        if (!sbi->pack_layout.rih)
+            return -ENOMEM;
+        /* do not init dyn array */
+        wofs_init_header(sb, sbi->pack_layout.rih, S_IFPSEUDO);
+        /* reinit modes */
+        sbi->pack_layout.rih->i_mode = cpu_to_le16(sbi->mode | S_IFDIR);
+        sbi->pack_layout.rih->i_uid = cpu_to_le32(from_kuid(&init_user_ns, sbi->uid));
+        sbi->pack_layout.rih->i_gid= cpu_to_le32(from_kgid(&init_user_ns, sbi->gid));
     }
     
     wofs_sb = kvrealloc(sbi->wofs_sb, sizeof(struct wofs_super_block), WOFS_SB_SIZE(sbi), GFP_KERNEL);
@@ -983,10 +881,6 @@ setup_sb:
 #endif
 #endif
 
-    if (ENABLE_META_ASYNC(sb)) {
-        wofs_start_cmt_workers(sb);
-    }
-
     retval = 0;
     WOFS_END_TIMING(mount_t, mount_time);
     return retval;
@@ -1078,25 +972,8 @@ static void wofs_put_super(struct super_block *sb)
     struct wofs_super_block *super;
     int i;
 
-#if 0
-#ifdef CONFIG_ENABLE_EQUALIZER
-    wofs_terminal_equalizer(sb);
-#endif
-#endif
-
-    if (ENABLE_META_ASYNC(sb)) {
-        wofs_stop_cmt_workers(sb);
-        wofs_flush_cmt_queue(sb);
-        /* destory cmt queue */
-        wofs_free_cmt_queue(sbi->cq);
-        wofs_stablisze_meta(sb);
-    }
-
     /* It's unmount time, so unmap the hk memory */
     if (sbi->virt_addr) {
-        if (!ENABLE_META_PACK(sb)) {
-            wofs_save_regions(sb);
-        }
         wofs_save_layouts(sb);
         wofs_umount_over(sb);
         sbi->virt_addr = NULL;
@@ -1195,7 +1072,6 @@ void wofs_destory_slab_caches(void)
 {
     destroy_wofs_range_node_cache();
     destroy_wofs_dentry_info_cache();
-    destroy_wofs_cmt_info_cache();
     destroy_obj_ref_inode_cache();
     destroy_obj_ref_attr_cache();
     destroy_obj_ref_dentry_cache();
@@ -1214,10 +1090,6 @@ static int __init wofs_create_slab_caches(void)
         goto out;
 
     rc = init_wofs_dentry_info_cache();
-    if (rc)
-        goto out;
-
-    rc = init_wofs_cmt_info_cache();
     if (rc)
         goto out;
     

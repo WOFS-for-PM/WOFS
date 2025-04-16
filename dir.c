@@ -26,45 +26,21 @@ static int wofs_readdir(struct file *file, struct dir_context *ctx)
     if (!dir_emit_dots(file, ctx))
         return 0;
 
-    if (ENABLE_META_PACK(sb)) {
-        obj_ref_dentry_t *ref_dentry;
-        struct wofs_obj_dentry *obj_dentry;
-        struct wofs_inode_info_header *sih;
+    obj_ref_dentry_t *ref_dentry;
+    struct wofs_obj_dentry *obj_dentry;
+    struct wofs_inode_info_header *sih;
 
-        hash_for_each(psih->dirs, bkt, ref_dentry, hnode)
-        {
-            obj_dentry = (struct wofs_obj_dentry *)get_pm_addr(sbi, ref_dentry->hdr.addr);
-            sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ref_dentry->target_ino);
-            if (!dir_emit(ctx, obj_dentry->name, strlen(obj_dentry->name),
-                          sih->ino,
-                          IF2DT(sih->i_mode))) {
-                wofs_dbg("%s: dir_emit failed\n", __func__);
-                return -EIO;
-            }
+    hash_for_each(psih->dirs, bkt, ref_dentry, hnode)
+    {
+        obj_dentry = (struct wofs_obj_dentry *)get_pm_addr(sbi, ref_dentry->hdr.addr);
+        sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ref_dentry->target_ino);
+        if (!dir_emit(ctx, obj_dentry->name, strlen(obj_dentry->name),
+                        sih->ino,
+                        IF2DT(sih->i_mode))) {
+            wofs_dbg("%s: dir_emit failed\n", __func__);
+            return -EIO;
         }
-
-    } else {
-        struct wofs_inode *pidir;
-        struct wofs_inode *child_pi;
-        struct wofs_dentry_info *cur;
-        u64 pi_addr;
-
-        pidir = wofs_get_inode(sb, inode);
-        wofs_dbgv("%s: ino %llu, size %llu, pos 0x%llx\n",
-                __func__, (u64)inode->i_ino,
-                pidir->i_size, ctx->pos);
-
-        hash_for_each(psih->dirs, bkt, cur, node)
-        {
-            child_pi = wofs_get_inode_by_ino(sb, cur->direntry->ino);
-            if (!dir_emit(ctx, cur->direntry->name, cur->direntry->name_len,
-                          cur->direntry->ino,
-                          IF2DT(le16_to_cpu(child_pi->i_mode)))) {
-                wofs_dbg("%s: dir_emit failed\n", __func__);
-                return -EIO;
-            }
-        }
-    }
+    } 
 
     ctx->pos = READDIR_END;
 

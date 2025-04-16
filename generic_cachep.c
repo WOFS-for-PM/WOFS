@@ -28,7 +28,6 @@ DEFINE_GENERIC_CACHEP(claim_req);
 
 DEFINE_GENERIC_CACHEP(wofs_range_node);
 DEFINE_GENERIC_CACHEP(wofs_dentry_info);
-DEFINE_GENERIC_CACHEP(wofs_cmt_info);
 DEFINE_GENERIC_CACHEP(wofs_inode_info_header);
 
 DEFINE_GENERIC_CACHEP(tl_node);

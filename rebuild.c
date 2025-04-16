@@ -111,15 +111,10 @@ void wofs_init_header(struct super_block *sb, struct wofs_inode_info_header *sih
     sih->i_mode = i_mode;
     sih->i_flags = 0;
 
-    if (ENABLE_META_PACK(sb)) {
-        sih->pack_spec.latest_fop.latest_attr = NULL;
-        sih->pack_spec.latest_fop.latest_inode = NULL;
-        sih->pack_spec.latest_fop.latest_inline_attr = 0;
-    } else {
-        sih->norm_spec.tstamp = 0;
-        sih->norm_spec.h_addr = 0;
-    }
-
+    sih->pack_spec.latest_fop.latest_attr = NULL;
+    sih->pack_spec.latest_fop.latest_inode = NULL;
+    sih->pack_spec.latest_fop.latest_inline_attr = 0;
+    
     sih->si = NULL;
 
     return 0;
@@ -249,86 +244,18 @@ static int wofs_rebuild_inode_blks(struct super_block *sb, struct wofs_inode *pi
     WOFS_START_TIMING(rebuild_blks_t, rebuild_time);
     wofs_dbg_verbose("Rebuild file inode %llu tree\n", ino);
     
-    if (ENABLE_META_PACK(sb)) {
-        switch (__le16_to_cpu(sih->i_mode) & S_IFMT) {
-        case S_IFLNK:
-        case S_IFREG:
-            ret = wofs_rebuild_data(sbi, sih, ino);
-            break;
-        case S_IFDIR:
-            ret = wofs_rebuild_dirs(sbi, sih, ino);
-            break;
-        default:
-            break;
-        }
-    } else {
-        struct wofs_header *hdr;
-        struct wofs_header *conflict_hdr;
-        unsigned long irq_flags = 0;
-
-        reb = &rebuild;
-        sih->norm_spec.h_addr = le64_to_cpu(pi->h_addr);
-
-        ret = wofs_init_inode_rebuild(sb, reb, pi);
-        if (ret)
-            return ret;
-
-        sih->norm_spec.pi_addr = (u64)pi;
-
-        wofs_dbg_verbose("Blk Summary head 0x%llx\n",
-                    sih->norm_spec.h_addr);
-
-        if (ret)
-            goto out;
-
-        traverse_inode_hdr(sbi, pi, hdr)
-        {
-            /* Hdr Conflict */
-            if (hdr->f_blk < sih->ix.num_slots && linix_get(&sih->ix, hdr->f_blk) != 0) {
-                conflict_hdr = sm_get_hdr_by_addr(sb, TRANS_OFS_TO_ADDR(sbi, linix_get(&sih->ix, hdr->f_blk)));
-                if (hdr->tstamp >= conflict_hdr->tstamp) { /* Insert New, Evict Old */
-                    addr = sm_get_addr_by_hdr(sb, conflict_hdr);
-
-                    use_layout_for_addr(sb, addr);
-                    sm_invalid_hdr(sb, addr, conflict_hdr->ino);
-                    unuse_layout_for_addr(sb, addr);
-
-                    linix_insert(&sih->ix, hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, sm_get_addr_by_hdr(sb, hdr)), true);
-                } else { /* Not Insert */
-                    addr = sm_get_addr_by_hdr(sb, hdr);
-
-                    use_layout_for_addr(sb, addr);
-                    sm_invalid_hdr(sb, addr, hdr->ino);
-                    unuse_layout_for_addr(sb, addr);
-                }
-            } else {
-                linix_insert(&sih->ix, hdr->f_blk, TRANS_ADDR_TO_OFS(sbi, sm_get_addr_by_hdr(sb, hdr)), true);
-            }
-
-            switch (__le16_to_cpu(pi->i_mode) & S_IFMT) {
-            case S_IFLNK:
-            case S_IFREG:
-                break;
-            case S_IFDIR:
-                wofs_rebuild_dir_table_for_blk(sb, hdr->f_blk, sih, reb);
-                break;
-            default:
-                break;
-            }
-        }
-
-        sih->i_size = le64_to_cpu(reb->i_size);
-        sih->i_mode = le64_to_cpu(reb->i_mode);
-        sih->i_flags = le32_to_cpu(reb->i_flags);
-        sih->i_num_dentrys = le64_to_cpu(reb->i_num_entrys);
-        sih->norm_spec.tstamp = reb->tstamp;
-
-        wofs_memunlock_inode(sb, pi, &irq_flags);
-        wofs_update_inode_with_rebuild(sb, reb, pi);
-        wofs_memlock_inode(sb, pi, &irq_flags);
-
-        wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
+    switch (__le16_to_cpu(sih->i_mode) & S_IFMT) {
+    case S_IFLNK:
+    case S_IFREG:
+        ret = wofs_rebuild_data(sbi, sih, ino);
+        break;
+    case S_IFDIR:
+        ret = wofs_rebuild_dirs(sbi, sih, ino);
+        break;
+    default:
+        break;
     }
+
     sih->i_blocks = sih->i_size / WOFS_LBLK_SZ(sbi);
 
 out:
@@ -357,43 +284,13 @@ int wofs_rebuild_inode(struct super_block *sb, struct wofs_inode_info *si, u32 i
     unsigned long irq_flags = 0;
     int ret = 0;
 
-    if (ENABLE_META_PACK(sb)) {
-		BUG_ON(sih);
-        sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
-        if (!sih) {
-            return -ENOENT;
-        }
-        si->header = sih;
-        pi = NULL;
-    } else {
-        ret = wofs_check_inode(sb, ino);
-        if (ret) {
-            pi = wofs_get_inode_by_ino(sb, ino);
-            wofs_dump_inode(sb, pi);
-            wofs_warn("%s: Invalid inode: %llu, %d\n", __func__, ino, ret);
-            return ret;
-        }
-
-        pi = (struct wofs_inode *)wofs_get_inode_by_ino(sb, ino);
-
-        if (ENABLE_META_ASYNC(sb)) {
-            wofs_flush_cmt_inode_fast(sb, ino);
-        }
-
-        wofs_applying_region_to_inode(sb, pi);
-
-        // We need this valid in case we need to evict the inode.
-        wofs_init_header(sb, sih, le16_to_cpu(pi->i_mode));
-        sih->norm_spec.pi_addr = (u64)pi;
-
-        if (pi->valid == 0) {
-            wofs_dbg("%s: inode %llu is invalid or deleted.\n", __func__, ino);
-            return -ESTALE;
-        }
-
-        wofs_dbgv("%s: inode %llu, addr 0x%llx, valid %d, head 0x%llx\n",
-                __func__, ino, sih->norm_spec.pi_addr, pi->valid, pi->h_addr);
+    BUG_ON(sih);
+    sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, ino);
+    if (!sih) {
+        return -ENOENT;
     }
+    si->header = sih;
+    pi = NULL;
 
     sih->ino = ino;
     if (build_blks)

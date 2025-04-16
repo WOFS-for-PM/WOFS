@@ -15,16 +15,6 @@ static inline void wofs_dump_inode(struct super_block *sb, struct wofs_inode *pi
     wofs_info("tstamp: 0x%llx\n", pi->tstamp);
 }
 
-static inline void wofs_dump_layout_info(struct wofs_layout_info *layout)
-{
-    struct wofs_indicator *ind = &layout->ind;
-    wofs_info("layout: %d===>\n", layout->cpuid);
-    wofs_info("-----------------------------------\n");
-    wofs_info("tail: 0x%llx\n", layout->atomic_counter);
-    wofs_info("valid_blks: %llu, invalid_blks: %llu, free_blks: %llu, prep_blks: %llu, total: %llu\n",
-            ind->valid_blks, ind->invalid_blks, ind->free_blks, ind->prep_blks, ind->total_blks);
-}
-
 static inline void wofs_dump_mentry(struct super_block *sb, struct wofs_mentry *entry)
 {
     switch (entry->type) {

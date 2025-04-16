@@ -926,6 +926,7 @@ static int __wofs_recovery_from_attr_pkg(struct wofs_sb_info *sbi, u64 in_buf_at
     u64 data_vtail;
     int ret = 0, cpuid;
 
+    attr = (struct wofs_obj_attr *)in_buf_attr;
     sih = obj_mgr_get_imap_inode(sbi->pack_layout.obj_mgr, attr->ino);
     if (!sih) {
         wofs_warn("Can't find inode %lu in imap\n", attr->ino);
@@ -1054,12 +1055,7 @@ out:
 
 unsigned long wofs_get_bm_size(struct super_block *sb)
 {
-    if (ENABLE_META_PACK(sb)) {
-        return BMBLK_SIZE(WOFS_SB(sb)) * BMBLK_NUM;
-    } else {
-        wofs_warn("meta pack is disabled, no need to allocate bitmap");
-        return 0;
-    }
+    return BMBLK_SIZE(WOFS_SB(sb)) * BMBLK_NUM;
 }
 
 void wofs_set_bm(struct wofs_sb_info *sbi, u16 bmblk, u64 blk)
@@ -1158,238 +1154,17 @@ int wofs_save_layouts(struct super_block *sb)
     int ret = 0;
     int cpuid;
 
-    if (ENABLE_META_PACK(sb)) {
-        pd = (struct wofs_pack_data *)(((void *)wofs_sb) + sizeof(struct wofs_super_block));
-        pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->pack_layout.vtail));
-        wofs_dump_bm(sbi, BMBLK_ATTR);
-        wofs_dump_bm(sbi, BMBLK_UNLINK);
-        wofs_dump_bm(sbi, BMBLK_CREATE);
-        wofs_dump_bm(sbi, BMBLK_DATA);
-    } else {
-        for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-            layout = &sbi->layouts[cpuid];
-
-            if (layout->ind.prep_blks != 0) {
-                wofs_dump_layout_info(layout);
-            }
-            nd = (struct wofs_normal_data *)(((void *)wofs_sb) + sizeof(struct wofs_super_block));
-            nd->s_layout->s_atomic_counter = cpu_to_le64(layout->atomic_counter);
-            nd->s_layout->s_ind.free_blks = cpu_to_le64(layout->ind.free_blks);
-            nd->s_layout->s_ind.invalid_blks = cpu_to_le64(layout->ind.invalid_blks);
-            nd->s_layout->s_ind.prep_blks = cpu_to_le64(layout->ind.prep_blks);
-            WOFS_ASSERT(nd->s_layout->s_ind.prep_blks == 0);
-            nd->s_layout->s_ind.valid_blks = cpu_to_le64(layout->ind.valid_blks);
-            nd->s_layout->s_ind.total_blks = cpu_to_le64(layout->ind.total_blks);
-        }
-    }
+    pd = (struct wofs_pack_data *)(((void *)wofs_sb) + sizeof(struct wofs_super_block));
+    pd->s_vtail = cpu_to_le64(atomic64_read(&sbi->pack_layout.vtail));
+    wofs_dump_bm(sbi, BMBLK_ATTR);
+    wofs_dump_bm(sbi, BMBLK_UNLINK);
+    wofs_dump_bm(sbi, BMBLK_CREATE);
+    wofs_dump_bm(sbi, BMBLK_DATA);
 
     wofs_update_super_crc(sb);
 
     wofs_sync_super(sb);
     wofs_info("layouts dumped OK\n");
-    return ret;
-}
-
-/* Apply all regions to inode */
-int wofs_save_regions(struct super_block *sb)
-{
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-    struct wofs_mregion *rg;
-    int rgid;
-
-    for (rgid = 0; rgid < sbi->norm_layout.rg_slots; rgid++) {
-        rg = wofs_get_region_by_rgid(sb, rgid);
-        if (le64_to_cpu(rg->ino) != (u64)-1) {
-            wofs_applying_region(sb, rg);
-        }
-    }
-    wofs_info("regions dumped OK\n");
-
-    return 0;
-}
-
-static int wofs_inode_recovery_from_jentry(struct super_block *sb, struct wofs_jentry *je)
-{
-    struct wofs_inode *pi;
-
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-    pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je->jinode.ino));
-    pi->i_flags = je->jinode.i_flags;
-    pi->i_size = je->jinode.i_size;
-    pi->i_ctime = je->jinode.i_ctime;
-    pi->i_mtime = je->jinode.i_mtime;
-    pi->i_atime = je->jinode.i_atime;
-    pi->i_mode = je->jinode.i_mode;
-    pi->i_links_count = je->jinode.i_links_count;
-    pi->i_xattr = je->jinode.i_xattr;
-    pi->i_uid = je->jinode.i_uid;
-    pi->i_gid = je->jinode.i_gid;
-    pi->i_generation = je->jinode.i_generation;
-    pi->i_create_time = je->jinode.i_create_time;
-    pi->ino = je->jinode.ino;
-    pi->h_addr = je->jinode.h_addr;
-    pi->tstamp = je->jinode.tstamp;
-    pi->dev.rdev = je->jinode.dev.rdev;
-#else
-    // TODO: Fine-grain inode recovery
-#endif
-    return 0;
-}
-
-static int wofs_inode_recovery(struct super_block *sb, struct wofs_inode *pi, struct wofs_jentry *je_pi,
-                             bool create, bool invalidate)
-{
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-    unsigned long irq_flags = 0;
-
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-    wofs_memunlock_inode(sb, pi, &irq_flags);
-    if (!invalidate) {
-        wofs_inode_recovery_from_jentry(sb, je_pi);
-        if (create) {
-            pi->tstamp = get_version(sbi);
-            wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
-            pi->valid = 1;
-            /* FIXME: Change len to CACHELINE_SIZE */
-            wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
-        }
-    } else {
-        pi->valid = 0;
-        wofs_flush_buffer(pi, sizeof(struct wofs_inode), true);
-    }
-    wofs_memlock_inode(sb, pi, &irq_flags);
-#else
-    // TODO: Fine-grain inode recovery
-#endif
-    return 0;
-}
-
-static int wofs_dentry_recovery(struct super_block *sb, u64 dir_ino, struct wofs_jentry *je_pd, bool invalidate)
-{
-    struct inode *dir;
-    const char *name;
-    int name_len;
-    u64 ino;
-    u16 link_change = 0;
-
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-    name_len = je_pd->jdentry.name_len;
-    name = je_pd->jdentry.name;
-
-    if (!invalidate) {
-        link_change = je_pd->jdentry.links_count;
-        ino = le64_to_cpu(je_pd->jdentry.ino);
-    } else {
-        link_change = 0;
-        ino = 0;
-    }
-
-    dir = wofs_iget(sb, dir_ino);
-    wofs_append_dentry_innvm(sb, dir, name, name_len, ino, link_change, NULL);
-    iput(dir);
-#else
-    // TODO: Fine-grain dentry recovery
-#endif
-    return 0;
-}
-
-/* Re-do Recovery (Redo Journal) */
-static int wofs_journal_recovery(struct super_block *sb, int txid, struct wofs_journal *jnl)
-{
-    int ret = 0;
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-    struct wofs_jentry *je_pi;
-    struct wofs_jentry *je_pd;
-    struct wofs_jentry *je_pd_new;
-    struct wofs_jentry *je_pi_par;
-    struct wofs_jentry *je_pi_new;
-    struct wofs_jentry *je_pd_sym; /* only for symlink */
-
-    struct wofs_inode *pi;
-
-    struct inode *dir, *inode;
-    const char *symname;
-    int symlen;
-    unsigned long irq_flags = 0;
-    u8 jtype = jnl->jhdr.jtype;
-
-#ifndef CONFIG_FINEGRAIN_JOURNAL
-    switch (jtype) {
-    case IDLE:
-        goto out;
-    case CREATE:
-    case MKDIR:
-    case LINK:
-    case SYMLINK:
-        /* fall thru */
-        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);
-        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);
-        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 2);
-
-        /* 1. fix inode */
-        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
-        if (jtype != LINK) {
-            wofs_inode_recovery(sb, pi, je_pi, true, false);
-        }
-
-        /* 2. re-append dentry to directory */
-        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, false);
-
-        /* 3. if it is a symlink, then re-build the block sym link */
-        if (jtype == SYMLINK) {
-            je_pd_sym = wofs_get_jentry_by_slotid(sb, txid, 3);
-            symname = je_pd_sym->jdentry.name;
-            symlen = je_pd_sym->jdentry.name_len;
-
-            inode = wofs_iget(sb, le64_to_cpu(pi->ino));
-            wofs_block_symlink(sb, inode, symname, symlen, NULL);
-            iput(inode);
-        }
-
-        break;
-    case UNLINK:
-        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);
-        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);
-        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 2);
-
-        /* 1. re-remove denrty from directory */
-        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
-
-        /* 2. invalid inode */
-        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
-        wofs_inode_recovery(sb, pi, je_pi, false, true);
-
-        /* 3. invalid blks belongs to inode, we don't need invalidators */
-        wofs_free_inode_blks_no_invalidators(sb, pi, NULL);
-
-        break;
-    case RENAME:
-        je_pi = wofs_get_jentry_by_slotid(sb, txid, 0);     /* self */
-        je_pd = wofs_get_jentry_by_slotid(sb, txid, 1);     /* self-dentry */
-        je_pd_new = wofs_get_jentry_by_slotid(sb, txid, 2); /* new-dentry */
-        je_pi_par = wofs_get_jentry_by_slotid(sb, txid, 3); /* parent */
-        je_pi_new = wofs_get_jentry_by_slotid(sb, txid, 4); /* new-parent */
-
-        /* 1. fix inode */
-        pi = wofs_get_inode_by_ino(sb, le64_to_cpu(je_pi->jinode.ino));
-        wofs_inode_recovery(sb, pi, je_pi, false, false);
-
-        /* 2. re-remove from parent */
-        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_par->jinode.ino), je_pd, true);
-
-        /* 3. re-add to new parent */
-        wofs_dentry_recovery(sb, le64_to_cpu(je_pi_new->jinode.ino), je_pd_new, false);
-
-        break;
-    default:
-        break;
-    }
-#else
-    // TODO: Fine-grain journal recovery
-#endif
-
-    wofs_finish_tx(sb, txid);
-out:
     return ret;
 }
 
@@ -1423,46 +1198,31 @@ static bool wofs_try_normal_recovery(struct super_block *sb, int recovery_flags)
         is_failure = true;
     }
 
-    /* TODO: Handle RENAME and SYMLINK  */
+    /* TODO: Handle SYMLINK  */
     if (recovery_flags == NEED_FORCE_NORMAL_RECOVERY || !is_failure) {
-        if (ENABLE_META_PACK(sb)) {
-            pd = (struct wofs_pack_data *)((char *)sbi->wofs_sb + sizeof(struct wofs_super_block));
-            wofs_create_dram_bufs_normal(sbi);
-            /* Traverse create pkg */
-            wofs_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
-            /* Traverse unlink pkg */
-            wofs_recovery_unlink_pkgs(sbi, &recovery_param, &cur_vtail);
-            /* Traverse data pkg */
-            wofs_recovery_data_pkgs(sbi, &recovery_param, &cur_vtail);
-            /* Traverse attr pkg */
-            wofs_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
+        pd = (struct wofs_pack_data *)((char *)sbi->wofs_sb + sizeof(struct wofs_super_block));
+        wofs_create_dram_bufs_normal(sbi);
+        /* Traverse create pkg */
+        wofs_recovery_create_pkgs(sbi, &recovery_param, &cur_vtail);
+        /* Traverse unlink pkg */
+        wofs_recovery_unlink_pkgs(sbi, &recovery_param, &cur_vtail);
+        /* Traverse data pkg */
+        wofs_recovery_data_pkgs(sbi, &recovery_param, &cur_vtail);
+        /* Traverse attr pkg */
+        wofs_recovery_attr_pkgs(sbi, &recovery_param, &cur_vtail);
 
-            destroy_min_data_vtail_table(&recovery_param);
-            wofs_destroy_dram_bufs_normal();
+        destroy_min_data_vtail_table(&recovery_param);
+        wofs_destroy_dram_bufs_normal();
 
-            atomic64_and(0, &sbi->pack_layout.vtail);
-            if (is_failure) {
-                atomic64_add(cur_vtail, &sbi->pack_layout.vtail);
-            } else {
-                /* check version */
-                BUG_ON(cur_vtail != le64_to_cpu(pd->s_vtail));
-                atomic64_add(le64_to_cpu(pd->s_vtail), &sbi->pack_layout.vtail);
-            }
+        atomic64_and(0, &sbi->pack_layout.vtail);
+        if (is_failure) {
+            atomic64_add(cur_vtail, &sbi->pack_layout.vtail);
         } else {
-            nd = (struct wofs_normal_data *)((char *)sbi->wofs_sb + sizeof(struct wofs_super_block));
-            sbi->norm_layout.tstamp = le64_to_cpu(nd->s_tstamp);
-            for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-                layout = &sbi->layouts[cpuid];
-                layout->atomic_counter = le64_to_cpu(nd->s_layout->s_atomic_counter);
-
-                layout->ind.free_blks = le64_to_cpu(nd->s_layout->s_ind.free_blks);
-                layout->ind.invalid_blks = le64_to_cpu(nd->s_layout->s_ind.invalid_blks);
-                layout->ind.prep_blks = le64_to_cpu(nd->s_layout->s_ind.prep_blks);
-                layout->ind.valid_blks = le64_to_cpu(nd->s_layout->s_ind.valid_blks);
-                layout->ind.total_blks = le64_to_cpu(nd->s_layout->s_ind.total_blks);
-            }
+            /* check version */
+            BUG_ON(cur_vtail != le64_to_cpu(pd->s_vtail));
+            atomic64_add(le64_to_cpu(pd->s_vtail), &sbi->pack_layout.vtail);
         }
-    }
+}
     return is_failure;
 }
 
@@ -1761,78 +1521,7 @@ out:
 
 int wofs_failure_recovery(struct super_block *sb)
 {
-    struct wofs_sb_info *sbi = WOFS_SB(sb);
-    struct wofs_super_block *wofs_sb = sbi->wofs_sb;
-    struct wofs_layout_info *layout;
-    struct wofs_journal *jnl;
-    struct wofs_mregion *rg;
-    struct wofs_header *hdr;
-    struct wofs_inode *pi;
-    u64 not_free_blks = 0;
-    u64 blk = 0;
-    u64 addr = 0;
-    int cpuid, rgid, txid;
-    unsigned long irq_flags = 0;
-    int ret = NEED_NO_FURTHER_RECOVERY;
-
-    if (ENABLE_META_PACK(sb)) {
-        ret = NEED_FORCE_NORMAL_RECOVERY;
-        // wofs_rescue_bm(sb);
-    } else {
-        ret = NEED_NO_FURTHER_RECOVERY;
-        /* Revisiting Meta Regions Here */
-        for (rgid = 0; rgid < sbi->norm_layout.rg_slots; rgid++) {
-            rg = wofs_get_region_by_rgid(sb, rgid);
-            if (rg->applying || le64_to_cpu(rg->ino) != (u64)-1) {
-                wofs_applying_region(sb, rg);
-            }
-        }
-
-        /* Recovery Layouts And Indicators Here */
-        for (cpuid = 0; cpuid < sbi->num_layout; cpuid++) {
-            layout = &sbi->layouts[cpuid];
-            not_free_blks = 0;
-            blk = 0;
-
-            use_layout(layout);
-            layout->atomic_counter = (layout->layout_blks * WOFS_PBLK_SZ(sbi));
-
-            traverse_layout_blks(addr, layout)
-            {
-                hdr = sm_get_hdr_by_addr(sb, addr);
-                if (hdr->valid) {
-                    pi = wofs_get_inode_by_ino(sb, hdr->ino);
-                    /* Remove The Invalid Hdr */
-                    if (!pi->valid || hdr->tstamp > pi->tstamp) {
-                        wofs_memunlock_hdr(sb, hdr, &irq_flags);
-                        hdr->valid = 0;
-                        wofs_memlock_hdr(sb, hdr, &irq_flags);
-
-                        sm_remove_hdr(sb, pi, hdr);
-                    } else { /* Re insert */
-                        sbi->norm_layout.tstamp = le64_to_cpu(pi->tstamp);
-                        not_free_blks = blk + 1;
-
-                        sm_remove_hdr(sb, pi, hdr);
-                        sm_insert_hdr(sb, pi, hdr);
-                    }
-                }
-                blk++;
-            }
-            wofs_release_layout(sb, cpuid, layout->layout_blks - not_free_blks, false);
-            unuse_layout(layout);
-        }
-
-        /* Redo Journal Here */
-        for (txid = 0; txid < sbi->norm_layout.j_slots; txid++) {
-            jnl = wofs_get_journal_by_txid(sb, txid);
-            if (jnl->jhdr.jofs_head != jnl->jhdr.jofs_tail) {
-                wofs_journal_recovery(sb, txid, jnl);
-            }
-        }
-    }
-
-    return ret;
+    return NEED_FORCE_NORMAL_RECOVERY;
 }
 
 int wofs_recovery(struct super_block *sb)

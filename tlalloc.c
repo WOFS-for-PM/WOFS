@@ -699,7 +699,7 @@ static bool __tl_try_restore_data_blks(void *key, void *value, void *data)
         list_add_tail(&anode->list, &param->affected_nodes);
     }
 
-    if (param->blk > blk + num) {
+    if (param->blk < blk + num) {
         return true;
     }
 

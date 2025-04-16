@@ -155,11 +155,8 @@ struct wofs_range_node {
 #include "inode.h"
 #include "config.h"
 #include "balloc.h"
-#include "meta.h"
 #include "mprotect.h"
-#include "cmt.h"
 #include "generic_cachep.h"
-#include "dbg.h"
 #include "formater.h"
 
 static inline void prefetcht0(const void *x) {
@@ -422,10 +419,8 @@ int wofs_save_regions(struct super_block *sb);
 u64 get_version(struct wofs_sb_info *sbi);
 int wofs_layouts_init(struct wofs_sb_info *sbi, int cpus);
 int wofs_layouts_free(struct wofs_sb_info *sbi);
-int wofs_find_gaps(struct super_block *sb, int cpuid);
 unsigned long wofs_count_free_blocks(struct super_block *sb);
 int wofs_alloc_blocks(struct super_block *sb, unsigned long *blks, bool zero, struct wofs_layout_prep *prep);
-int wofs_release_layout(struct super_block *sb, int cpuid, u64 blks, bool rls_all);
 
 /* ======================= ANCHOR: file.c ========================= */
 extern const struct inode_operations wofs_file_inode_operations;
@@ -473,8 +468,6 @@ int wofs_free_inode_blks(struct super_block *sb, struct wofs_inode *pi,
 extern const struct inode_operations wofs_dir_inode_operations;
 extern const struct inode_operations wofs_special_inode_operations;
 struct wofs_dentry *wofs_dentry_by_ix_from_blk(u64 blk_addr, u16 ix);
-int wofs_append_dentry_innvm(struct super_block *sb, struct inode *dir, const char *name, 
-						   int namelen, u64 ino, u16 link_change, struct wofs_dentry **out_direntry);
 struct dentry *wofs_get_parent(struct dentry *child);
 int wofs_insert_dir_table(struct super_block *sb, struct wofs_inode_info_header *sih, const char *name, 
 				  	    int namelen, void *direntry);
@@ -484,31 +477,6 @@ void wofs_destory_dir_table(struct super_block *sb, struct wofs_inode_info_heade
 
 /* ======================= ANCHOR: meta.c ========================= */
 int wofs_format_meta(struct super_block *sb);
-int wofs_stablisze_meta(struct super_block *sb);
-bool wofs_get_cur_commit(struct super_block *sb, struct wofs_inode *pi, enum wofs_entry_type type, 
-					   struct wofs_mentry *entry);
-struct wofs_mregion* wofs_get_region_by_rgid(struct super_block *sb, int rgid);
-int wofs_applying_region(struct super_block *sb, struct wofs_mregion *rg);
-int wofs_applying_region_to_inode(struct super_block *sb, struct wofs_inode *pi);
-int wofs_commit_newattr(struct super_block *sb, u64 ino);
-int wofs_commit_newattr_indram(struct super_block *sb, struct inode *inode);
-int wofs_commit_newattr_innvm(struct super_block *sb, struct wofs_inode *pi);
-int wofs_commit_linkchange(struct super_block *sb, u64 ino);
-int wofs_commit_linkchange_indram(struct super_block *sb, struct inode *inode);
-int wofs_commit_linkchange_innvm(struct super_block *sb, struct wofs_inode *pi);
-int wofs_commit_sizechange(struct super_block *sb, struct inode *inode, loff_t ia_size);
-int wofs_commit_inode_state(struct super_block *sb, struct wofs_inode_state *state);
-u64 sm_get_addr_by_hdr(struct super_block *sb, u64 hdr);
-struct wofs_header *sm_get_hdr_by_addr(struct super_block *sb, u64 addr);
-struct wofs_layout_info *sm_get_layout_by_hdr(struct super_block *sb, u64 hdr);
-int sm_remove_hdr(struct super_block *sb, struct wofs_inode *pi, struct wofs_header *hdr);
-int sm_insert_hdr(struct super_block *sb, struct wofs_inode *pi, struct wofs_header *hdr);
-int sm_invalid_hdr(struct super_block *sb, u64 blk_addr, u64 ino);
-int sm_valid_hdr(struct super_block *sb, u64 blk_addr, u64 ino, u64 f_blk, u64 tstamp);
-struct wofs_journal* wofs_get_journal_by_txid(struct super_block *sb, int txid);
-struct wofs_jentry* wofs_get_jentry_by_slotid(struct super_block *sb, int txid, int slotid);
-int wofs_start_tx(struct super_block *sb, enum wofs_journal_type jtype, ...);
-int wofs_finish_tx(struct super_block *sb, int txid);
 
 /* ======================= ANCHOR: objm.c ========================= */
 obj_ref_inode_t *ref_inode_create(u64 addr, u32 ino);
@@ -556,17 +524,6 @@ int create_rename_pkg(struct wofs_sb_info *sbi, const char *new_name,
 int create_symlink_pkg(struct wofs_sb_info *sbi, u16 mode, const char *name, const char *symname, u32 ino,
                        u64 symaddr, struct wofs_inode_info_header *sih, struct wofs_inode_info_header *psih,
                        out_pkg_param_t *data_out_param, out_pkg_param_t *create_out_param);
-
-/* ======================= ANCHOR: cmt.c ========================= */
-int wofs_valid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
-int wofs_invalid_hdr_background(struct super_block *sb, struct inode *inode, u64 blk_addr, u64 f_blk);
-int wofs_valid_range_background(struct super_block *sb, struct inode *inode, struct wofs_cmt_batch *batch);
-void wofs_start_cmt_workers(struct super_block *sb);
-void wofs_stop_cmt_workers(struct super_block *sb);
-void wofs_flush_cmt_inode_fast(struct super_block *sb, u64 ino);
-void wofs_flush_cmt_queue(struct super_block *sb);
-struct wofs_cmt_queue *wofs_init_cmt_queue(struct super_block *sb, int nfecthers);
-void wofs_free_cmt_queue(struct wofs_cmt_queue *cq);
 
 /* ======================= ANCHOR: rebuild.c ========================= */
 int wofs_rebuild_inode(struct super_block *sb, struct wofs_inode_info *si, u32 ino, bool build_blks);
@@ -677,86 +634,6 @@ static inline unsigned long BKDRHash(const char *str, int length)
 
 #define use_pending_list(pending_list) (spin_lock(pending_list->lock))
 #define rls_pending_list(pending_list) (spin_unlock(pending_list->lock))
-
-static inline void use_layout(struct wofs_layout_info* layout)
-{
-	mutex_lock(&layout->layout_lock);
-}
-
-static inline void unuse_layout(struct wofs_layout_info* layout)
-{
-	mutex_unlock(&layout->layout_lock);
-}
-
-static inline void use_layout_id(struct super_block *sb, u64 id)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	use_layout(&sbi->layouts[id]);
-}
-
-static inline void unuse_layout_id(struct super_block *sb, u64 id)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	unuse_layout(&sbi->layouts[id]);
-}
-
-static inline void use_layout_for_addr(struct super_block *sb, u64 addr)
-{
-	int cpuid;
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, WOFS_PBLK_SZ(sbi));
-    cpuid = (addr - sbi->d_addr) / size_per_layout;
-	cpuid = cpuid >= sbi->num_layout ? cpuid - 1 : cpuid;
-    use_layout_id(sb, cpuid);
-}
-
-static inline void unuse_layout_for_addr(struct super_block *sb, u64 addr)
-{
-	int cpuid;
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-    u64 size_per_layout = _round_down(sbi->d_size / sbi->num_layout, WOFS_PBLK_SZ(sbi));
-    cpuid = (addr - sbi->d_addr) / size_per_layout;
-	cpuid = cpuid >= sbi->num_layout ? cpuid - 1 : cpuid;
-    unuse_layout_id(sb, cpuid);
-}
-
-static inline void use_layout_for_hdr(struct super_block *sb, u64 hdr)
-{
-	struct wofs_layout_info *layout;
-	layout = sm_get_layout_by_hdr(sb, hdr);
-	use_layout(layout);
-}
-
-static inline void unuse_layout_for_hdr(struct super_block *sb, u64 hdr)
-{
-	struct wofs_layout_info *layout;
-	layout = sm_get_layout_by_hdr(sb, hdr);
-	unuse_layout(layout);
-}
-
-static inline void use_journal(struct super_block *sb, int txid)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	mutex_lock(&sbi->norm_layout.j_locks[txid]);
-}
-
-static inline void unuse_journal(struct super_block *sb, int txid)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	mutex_unlock(&sbi->norm_layout.j_locks[txid]);
-}
-
-static inline void use_nvm_inode(struct super_block *sb, u64 ino)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	mutex_lock(&sbi->norm_layout.irange_locks[ino % sbi->cpus]);
-}
-
-static inline void unuse_nvm_inode(struct super_block *sb, u64 ino)
-{
-	struct wofs_sb_info *sbi = WOFS_SB(sb);
-	mutex_unlock(&sbi->norm_layout.irange_locks[ino % sbi->cpus]);
-}
 
 static inline void wofs_sync_super(struct super_block *sb)
 {

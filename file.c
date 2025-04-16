@@ -385,7 +385,7 @@ static bool hk_try_perform_cow(struct hk_inode_info *si, u64 cur_addr, u64 index
 extern struct hk_mregion *hk_get_region_by_ino(struct super_block *sb, u64 ino);
 
 #define FIO_REGULATE 0
-#define FILESERVER_REGULATE 0
+#define FILESERVER_REGULATE 1
 
 static int do_perform_write(struct inode *inode, struct hk_layout_prep *prep,
                             loff_t ofs, size_t size, unsigned char *content,

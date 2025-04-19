@@ -183,7 +183,8 @@ enum stats_category {
 	file_read,
 	file_write,
 	
-	mem_usage,
+	ptl_mem_usage,
+	idx_mem_usage,
 
 	equalizer_migrated_blocks,
 	self_gc_migrated_blocks,

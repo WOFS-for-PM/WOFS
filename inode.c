@@ -786,6 +786,9 @@ struct inode *hk_create_inode(enum hk_new_inode_type type, struct inode *dir,
             errval = -ENOMEM;
             goto fail1;
         }
+        if (type == TYPE_MKDIR) {
+            HK_STATS_ADD(idx_mem_usage, 128 * sizeof(struct hlist_node));
+        }
         hk_dbgv("%s: allocate new sih for inode %llu\n", __func__, ino);
         si->header = sih;
     }

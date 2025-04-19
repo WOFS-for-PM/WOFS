@@ -67,8 +67,6 @@ static struct inode *hk_alloc_inode(struct super_block *sb)
     vi = kmem_cache_alloc(hk_inode_cachep, GFP_NOFS);
     if (!vi)
         return NULL;
-    
-    HK_STATS_ADD(mem_usage, sizeof(struct hk_inode_info));
 
     if (ENABLE_META_PACK(sb)) {
         vi->layout_type = HUNTER_MOUNT_META_PACK;
@@ -97,7 +95,6 @@ static void hk_i_callback(struct rcu_head *head)
         hk_free_hk_inode_info_header(vi->header);
     }
     kmem_cache_free(hk_inode_cachep, vi);
-    HK_STATS_ADD(mem_usage, -sizeof(struct hk_inode_info));
 }
 
 static void hk_destroy_inode(struct inode *inode)

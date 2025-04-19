@@ -56,7 +56,8 @@ static int hk_seq_timing_show(struct seq_file *seq, void *v)
     seq_puts(seq, "\n");
 
     hk_get_IO_stats();
-    seq_printf(seq, "mem_usage: %llu\n", IOstats[mem_usage]);
+    seq_printf(seq, "PTL mem_usage: %llu\n", IOstats[ptl_mem_usage]);
+    seq_printf(seq, "IDX mem_usage: %llu\n", IOstats[idx_mem_usage]);
     return 0;
 }
 

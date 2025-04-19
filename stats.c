@@ -170,7 +170,8 @@ void hk_print_meta_stats(struct super_block *sb) {
 	pr_info("data_read_time: %llu\n", Timingstats[memcpy_r_nvmm_t]);
 	pr_info("COW_time: %llu\n", Timingstats[write_t]);
 
-	pr_info("mem_usage: %llu\n", IOstats[mem_usage]);
+	pr_info("PTL mem_usage: %llu\n", IOstats[ptl_mem_usage]);
+	pr_info("IDX mem_usage: %llu\n", IOstats[idx_mem_usage]);
 }
 
 void hk_print_timing_stats(struct super_block *sb)

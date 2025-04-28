@@ -1,6 +1,8 @@
 # WOFS
 
-This repository contains the code base for Wolves atop Optane DCPMM. Our paper "Fast and Synchronous Crash Consistency with Metadata Write-Once File System" is accepted by OSDI'25. Our AE code is currently based on the HUNTER file system, wrapped with `ENABLE_META_PACK(sb)` if-branch. We are working on a new version of the code that will be more modular and easier to use (i.e., the `wofs` branch). The artifact evaluation steps can be obtained from [our AE repository](https://github.com/WOFS-for-PM/tests). We now introduce the code base and the branches corresponding to the paper.
+This repository contains the code base for Wolves atop Optane DCPMM. Our paper **"Fast and Synchronous Crash Consistency with Metadata Write-Once File System"** is accepted by OSDI'25. 
+
+Our AE code is currently based on the HUNTER file system, wrapped with `ENABLE_META_PACK(sb)` if-branch. We are working on a new version of the code that will be more modular and easier to use (i.e., the `wofs` branch). The artifact evaluation steps can be obtained from [our AE repository](https://github.com/WOFS-for-PM/tests). We now introduce the code base and the branches corresponding to the paper.
 
 - [WOFS](#wofs)
   - [Code Organization](#code-organization)
